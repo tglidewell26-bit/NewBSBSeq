@@ -499,7 +499,7 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
   });
 
   const availableInstruments = packet.assessment?.instruments
-    .filter((i) => i.fit !== "INSUFFICIENT_EVIDENCE" && i.evidenceIds.length > 0)
+    .filter((i) => ["STRONG_FIT", "POTENTIAL_FIT"].includes(i.fit) && i.evidenceIds.length > 0)
     .map(i => i.instrument) || [];
 
   const handleToggleInst = (inst: string) => {

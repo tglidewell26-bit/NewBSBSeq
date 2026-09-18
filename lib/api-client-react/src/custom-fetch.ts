@@ -163,6 +163,20 @@ function buildErrorMessage(response: Response, data: unknown): string {
     getStringField(data, "error_description") ??
     getStringField(data, "error");
 
+  const issues = data && typeof data === "object"
+    ? (data as Record<string, unknown>).issues : undefined;
+  if (Array.isArray(issues)) {
+    const findings = issues.flatMap((issue) => {
+      const explanation = getStringField(issue, "message");
+      if (!explanation) return [];
+      const path = getStringField(issue, "path");
+      return [path ? `${path}: ${explanation}` : explanation];
+    });
+    if (findings.length) {
+      return `${prefix}: ${message ?? detail ?? title ?? "Request failed"}\n${findings.join("\n")}`;
+    }
+  }
+
   if (title && detail) return `${prefix}: ${title} — ${detail}`;
   if (detail) return `${prefix}: ${detail}`;
   if (message) return `${prefix}: ${message}`;
