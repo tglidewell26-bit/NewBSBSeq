@@ -1,6 +1,6 @@
-# [Project name]
+# BSB Sequence Generator V2
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Private Phase 1 application for authenticated research-packet intake, evidence validation, instrument assessment, and versioned review.
 
 ## Run & Operate
 
@@ -30,7 +30,11 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Accepts the frozen `bsb-company-research-v1` producer contract by paste or JSON upload.
+- Preserves raw packets, normalizes evidence once, and separates structural validity from factual support.
+- Produces clearly labeled deterministic mock assessments for CellScape, CosMx, and GeoMx.
+- Supports explicit, version-bound approval or rejection of no more than two supported instruments.
+- Does not include sequence writing, sending, exporting, scraping, scheduling, or live AI.
 
 ## User preferences
 
@@ -38,7 +42,9 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Live assessment remains disabled until a provider, model ID, and spend cap are separately approved.
+- Never use real company or private account facts in committed tests, fixtures, logs, or public output.
+- This is separate from the existing BSB application; do not connect it to the original repository or migrate its data/assets.
 
 ## Pointers
 

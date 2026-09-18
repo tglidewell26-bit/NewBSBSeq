@@ -1,36 +1,279 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: BSB Sequence Generator V2 Phase 1 API
 servers:
   - url: /api
-    description: Base API path
-tags:
-  - name: health
-    description: Health operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
-      tags: [health]
-      summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+  /bsb-v2/packets:
+    get:
+      operationId: listResearchPackets
+      responses:
+        "200":
+          description: Owned packets
+          content:
+            application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                type: array
+                items: { $ref: "#/components/schemas/PacketSummary" }
+    post:
+      operationId: submitResearchPacket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResearchPacketRequest" }
+      responses:
+        "201":
+          description: Validated packet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PacketRecord" }
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationFailure" }
+  /bsb-v2/packets/{packetId}:
+    get:
+      operationId: getResearchPacket
+      parameters:
+        - in: path
+          name: packetId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Packet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PacketRecord" }
+  /bsb-v2/packets/{packetId}/assess:
+    post:
+      operationId: assessCompany
+      parameters:
+        - in: path
+          name: packetId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deterministic mock assessment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "409":
+          description: Assessment blocked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationFailure" }
+  /bsb-v2/packets/{packetId}/reviews:
+    post:
+      operationId: reviewAssessment
+      parameters:
+        - in: path
+          name: packetId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewInput" }
+      responses:
+        "200":
+          description: Versioned review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
 components:
   schemas:
     HealthStatus:
       type: object
+      additionalProperties: false
+      required: [status]
       properties:
-        status:
+        status: { type: string }
+    ResearchPacketRequest:
+      type: object
+      additionalProperties: false
+      required: [researchPacket]
+      properties:
+        researchPacket: { $ref: "#/components/schemas/ResearchPacket" }
+    ResearchPacket:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, brief, qualificationEvidence]
+      properties:
+        schemaVersion: { type: string, const: bsb-company-research-v1 }
+        brief: { type: string, minLength: 1 }
+        qualificationEvidence: { $ref: "#/components/schemas/QualificationEvidence" }
+    QualificationEvidence:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, purpose, generationStatus, categories, instrumentDiscriminatingEvidence]
+      properties:
+        schemaVersion: { type: string, const: "1.0" }
+        purpose: { type: string, const: EVIDENCE_ONLY_NO_INSTRUMENT_SELECTION }
+        generationStatus:
           type: string
-      required:
-        - status
-
+          enum: [COMPLETE, CORRECTED, FALLBACK]
+        categories: { $ref: "#/components/schemas/EvidenceCategories" }
+        instrumentDiscriminatingEvidence: { $ref: "#/components/schemas/InstrumentEvidence" }
+    EvidenceCategories:
+      type: object
+      additionalProperties: false
+      required: [scientificNeeds, workflows, samples, technologies, translationalStage, negativeOrContradictoryEvidence, materialUnknowns, buyingReadinessSignals]
+      properties:
+        scientificNeeds: { $ref: "#/components/schemas/EvidenceArray" }
+        workflows: { $ref: "#/components/schemas/EvidenceArray" }
+        samples: { $ref: "#/components/schemas/EvidenceArray" }
+        technologies: { $ref: "#/components/schemas/EvidenceArray" }
+        translationalStage: { $ref: "#/components/schemas/EvidenceArray" }
+        negativeOrContradictoryEvidence: { $ref: "#/components/schemas/EvidenceArray" }
+        materialUnknowns: { $ref: "#/components/schemas/EvidenceArray" }
+        buyingReadinessSignals: { $ref: "#/components/schemas/EvidenceArray" }
+    InstrumentEvidence:
+      type: object
+      additionalProperties: false
+      required: [cellScapeRelevant, cosMxRelevant, geoMxRelevant]
+      properties:
+        cellScapeRelevant: { $ref: "#/components/schemas/EvidenceArray" }
+        cosMxRelevant: { $ref: "#/components/schemas/EvidenceArray" }
+        geoMxRelevant: { $ref: "#/components/schemas/EvidenceArray" }
+    EvidenceArray:
+      type: array
+      items: { $ref: "#/components/schemas/EvidenceItem" }
+    EvidenceItem:
+      type: object
+      additionalProperties: false
+      required: [evidenceState, assessmentType, claim, sourceUrl, basisFacts, basisSourceUrls, inference, evidenceId, provenanceType]
+      properties:
+        evidenceState:
+          type: string
+          enum: [CONFIRMED, SUPPORTED, EXPLICIT, UNKNOWN, INFERRED, CONTRADICTED, ABSENT]
+        assessmentType:
+          type: string
+          enum: [COMPANY_FACT, COMPANY, CAPABILITY, WORKFLOW, SAMPLE, SAMPLE_TYPE, PROGRAM, MODALITY, QUESTION, OPPORTUNITY, FIT, LIMITATION, SOURCE, UNKNOWN]
+        claim: { type: string, minLength: 1 }
+        sourceUrl: { type: [string, "null"], format: uri, pattern: "^https?://" }
+        basisFacts: { type: array, items: { type: string } }
+        basisSourceUrls: { type: array, items: { type: string, format: uri, pattern: "^https?://" } }
+        inference: { type: [string, "null"] }
+        evidenceId: { type: string, minLength: 1 }
+        provenanceType: { type: string, enum: [PUBLIC_SOURCE, CONFIRMED_ACCOUNT] }
+        confirmed: { type: boolean }
+        sourceLabel: { type: string, minLength: 1 }
+    PacketSummary:
+      type: object
+      required: [id, stage, brief, createdAt]
+      properties:
+        id: { type: string }
+        stage: { type: string }
+        brief: { type: string }
+        createdAt: { type: string, format: date-time }
+    PacketRecord:
+      type: object
+      required: [id, stage, inputHash, researchPacket, normalizedEvidence, validation, createdAt]
+      properties:
+        id: { type: string }
+        stage: { type: string, enum: [VALIDATED, NEEDS_REVIEW, ASSESSED, APPROVED, REJECTED] }
+        inputHash: { type: string }
+        researchPacket: { $ref: "#/components/schemas/ResearchPacket" }
+        normalizedEvidence:
+          type: array
+          items: { $ref: "#/components/schemas/NormalizedEvidence" }
+        validation: { $ref: "#/components/schemas/ValidationResult" }
+        assessment: { $ref: "#/components/schemas/Assessment" }
+        review: { $ref: "#/components/schemas/Review" }
+        createdAt: { type: string, format: date-time }
+    NormalizedEvidence:
+      allOf:
+        - { $ref: "#/components/schemas/EvidenceItem" }
+        - type: object
+          required: [locations, supportStatus]
+          properties:
+            locations: { type: array, items: { type: string } }
+            supportStatus: { type: string, enum: [SUPPORTED, UNSUPPORTED, NOT_APPLICABLE] }
+            supportIssues: { type: array, items: { type: string } }
+    ValidationResult:
+      type: object
+      required: [structurallyValid, supportValid, errors, warnings]
+      properties:
+        structurallyValid: { type: boolean }
+        supportValid: { type: boolean }
+        errors: { type: array, items: { $ref: "#/components/schemas/FieldIssue" } }
+        warnings: { type: array, items: { $ref: "#/components/schemas/FieldIssue" } }
+    ValidationFailure:
+      type: object
+      required: [error, issues]
+      properties:
+        error: { type: string }
+        issues: { type: array, items: { $ref: "#/components/schemas/FieldIssue" } }
+    FieldIssue:
+      type: object
+      required: [path, message]
+      properties:
+        path: { type: string }
+        message: { type: string }
+    InstrumentAssessment:
+      type: object
+      required: [instrument, fit, recommendation, evidenceIds, ruleIds, alternatives, currentUse, accountStatus, readiness]
+      properties:
+        instrument: { type: string, enum: [CellScape, CosMx, GeoMx] }
+        fit: { type: string, enum: [STRONG_FIT, POTENTIAL_FIT, NOT_QUALIFIED, INSUFFICIENT_EVIDENCE] }
+        recommendation: { type: string }
+        evidenceIds: { type: array, items: { type: string } }
+        ruleIds: { type: array, items: { type: string } }
+        alternatives: { type: array, items: { type: string } }
+        currentUse: { type: string }
+        accountStatus: { type: string }
+        readiness: { type: string }
+    Assessment:
+      type: object
+      required: [id, provider, mock, evidenceVersion, instruments, limitations]
+      properties:
+        id: { type: string }
+        provider: { type: string, const: DETERMINISTIC_FAKE }
+        mock: { type: boolean, const: true }
+        evidenceVersion: { type: string }
+        instruments:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/InstrumentAssessment" }
+        limitations: { type: array, items: { type: string } }
+    ReviewInput:
+      type: object
+      additionalProperties: false
+      required: [assessmentId, evidenceVersion, decision, approvedInstruments, note]
+      properties:
+        assessmentId: { type: string }
+        evidenceVersion: { type: string }
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        approvedInstruments:
+          type: array
+          maxItems: 2
+          items: { type: string, enum: [CellScape, CosMx, GeoMx] }
+        note: { type: string }
+    Review:
+      type: object
+      required: [id, decision, approvedInstruments, evidenceVersion, createdAt]
+      properties:
+        id: { type: string }
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        approvedInstruments:
+          type: array
+          maxItems: 2
+          items: { type: string }
+        evidenceVersion: { type: string }
+        createdAt: { type: string, format: date-time }

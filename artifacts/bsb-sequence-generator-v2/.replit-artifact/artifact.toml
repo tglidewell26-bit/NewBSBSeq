@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "BSB Sequence Generator V2"
+description = "A private Phase 1 review application for authenticated company research packet intake, strict evidence validation, scientific instrument assessment, and versioned approval or rejection. It uses a deterministic mock provider and does not generate sequences or make paid AI calls."
+version = "1.0.0"
+id = "artifacts/bsb-sequence-generator-v2"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18179
+
+[services.development]
+run = "pnpm --filter @workspace/bsb-sequence-generator-v2 run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/bsb-sequence-generator-v2", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/bsb-sequence-generator-v2/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18179"
+BASE_PATH = "/"

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "bsb-company-research-v1",
+  "brief": "Synthetic Atlas Tissue Lab evaluates archived FFPE tissue cohorts for regional biomarker research.",
+  "qualificationEvidence": {
+    "schemaVersion": "1.0",
+    "purpose": "EVIDENCE_ONLY_NO_INSTRUMENT_SELECTION",
+    "generationStatus": "COMPLETE",
+    "categories": {
+      "scientificNeeds": [{
+        "evidenceState": "SUPPORTED",
+        "assessmentType": "PROGRAM",
+        "claim": "Synthetic Atlas Tissue Lab studies regional biomarkers in FFPE tissue cohorts.",
+        "sourceUrl": "https://example.org/synthetic-atlas",
+        "basisFacts": ["The synthetic lab studies regional biomarkers in archived FFPE tissue cohorts."],
+        "basisSourceUrls": ["https://example.org/synthetic-atlas"],
+        "inference": null,
+        "evidenceId": "syn-geo-001",
+        "provenanceType": "PUBLIC_SOURCE"
+      }],
+      "workflows": [],
+      "samples": [],
+      "technologies": [],
+      "translationalStage": [],
+      "negativeOrContradictoryEvidence": [],
+      "materialUnknowns": [{
+        "evidenceState": "UNKNOWN",
+        "assessmentType": "QUESTION",
+        "claim": "Budget and procurement timing are unknown.",
+        "sourceUrl": null,
+        "basisFacts": [],
+        "basisSourceUrls": [],
+        "inference": null,
+        "evidenceId": "syn-unknown-001",
+        "provenanceType": "PUBLIC_SOURCE"
+      }],
+      "buyingReadinessSignals": []
+    },
+    "instrumentDiscriminatingEvidence": {
+      "cellScapeRelevant": [],
+      "cosMxRelevant": [],
+      "geoMxRelevant": []
+    }
+  }
+}
