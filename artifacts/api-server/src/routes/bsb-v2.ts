@@ -1,14 +1,11 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { getAuth } from "@clerk/express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, bsbV2PacketsTable } from "@workspace/db";
-import { ReviewAssessmentBody } from "@workspace/api-zod";
+import { AssessCompanyBody, ReviewAssessmentBody } from "@workspace/api-zod";
 import { DeterministicFakeProvider, hashPacket, normalizeEvidence, validateFrozenRequest } from "../lib/bsb-v2";
 
-const router: IRouter = Router();
-const provider = new DeterministicFakeProvider();
-
-const userIdFor = (req: any) => {
+const clerkUserIdFor = (req: Request) => {
   const auth = getAuth(req);
   return auth?.sessionClaims?.userId || auth?.userId || null;
 };
@@ -18,6 +15,14 @@ const safeRecord = (row: any) => ({
   validation: row.validation, assessment: row.assessment ?? undefined,
   review: row.review ?? undefined, createdAt: row.createdAt.toISOString(),
 });
+
+export function createBsbV2Router(options: {
+  userIdFor?: (req: Request) => string | null;
+  provider?: DeterministicFakeProvider;
+} = {}): IRouter {
+const router: IRouter = Router();
+const provider = options.provider ?? new DeterministicFakeProvider();
+const userIdFor = options.userIdFor ?? clerkUserIdFor;
 
 router.use("/bsb-v2", (req, res, next) => {
   const userId = userIdFor(req);
@@ -65,16 +70,33 @@ router.get("/bsb-v2/packets/:packetId", async (req, res): Promise<void> => {
 });
 
 router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> => {
+  const body = AssessCompanyBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid assessment request", issues: body.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) });
+    return;
+  }
   const packetId = String(req.params.packetId);
   const [row] = await db.select().from(bsbV2PacketsTable).where(and(eq(bsbV2PacketsTable.id, packetId), eq(bsbV2PacketsTable.ownerId, res.locals.userId))).limit(1);
   if (!row) { res.status(404).json({ error: "Packet not found" }); return; }
-  const normalized = row.normalizedEvidence as any[];
-  if (normalized.some((item) => item.evidenceState === "CONTRADICTED") || normalized.every((item) => item.supportStatus !== "SUPPORTED")) {
-    res.status(409).json({ error: "Assessment blocked pending evidence review", issues: [{ path: "qualificationEvidence", message: "Conflicting evidence or no independently supported evidence remains." }] });
+  if (row.assessment || row.stage === "APPROVED" || row.stage === "REJECTED") {
+    res.status(409).json({ error: "Assessment superseded", issues: [{ path: "assessment", message: "A current assessment or review already exists." }] });
     return;
   }
-  const assessment = provider.assess(normalized, row.evidenceVersion);
-  await db.update(bsbV2PacketsTable).set({ assessment, review: null, stage: "ASSESSED" }).where(eq(bsbV2PacketsTable.id, packetId));
+  const normalized = row.normalizedEvidence as any[];
+  const demoMode = body.data.mode === "DEMO_SYNTHETIC";
+  const assessment = provider.assess(normalized, row.evidenceVersion, { demoMode });
+  const updated = await db.update(bsbV2PacketsTable).set({ assessment, review: null, stage: "ASSESSED" })
+    .where(and(
+      eq(bsbV2PacketsTable.id, packetId),
+      eq(bsbV2PacketsTable.ownerId, res.locals.userId),
+      eq(bsbV2PacketsTable.evidenceVersion, row.evidenceVersion),
+      eq(bsbV2PacketsTable.stage, row.stage),
+      isNull(bsbV2PacketsTable.assessment),
+    )).returning();
+  if (!updated[0]) {
+    res.status(409).json({ error: "Assessment superseded", issues: [{ path: "evidenceVersion", message: "Concurrent assessment won; reassess the current packet." }] });
+    return;
+  }
   res.json(assessment);
 });
 
@@ -85,16 +107,62 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
   const [row] = await db.select().from(bsbV2PacketsTable).where(and(eq(bsbV2PacketsTable.id, packetId), eq(bsbV2PacketsTable.ownerId, res.locals.userId))).limit(1);
   if (!row || !row.assessment) { res.status(404).json({ error: "Assessment not found" }); return; }
   const assessment = row.assessment as any;
-  const allowed = new Set(assessment.instruments.filter((item: any) => item.fit !== "INSUFFICIENT_EVIDENCE" && item.evidenceIds.length).map((item: any) => item.instrument));
+  const currentEvidence = row.normalizedEvidence as any[];
+  const eligibleStatuses = assessment.demoMode === true
+    ? new Set(["SUPPORTED", "SUPPORT_NOT_VERIFIED"])
+    : new Set(["SUPPORTED"]);
+  const allowed = new Set(assessment.instruments.filter((item: any) =>
+    item.fit !== "INSUFFICIENT_EVIDENCE" &&
+    item.evidenceIds.length &&
+    item.evidenceIds.every((id: string) =>
+      currentEvidence.some((e: any) =>
+        e.evidenceId === id &&
+        eligibleStatuses.has(e.supportStatus) &&
+        e.evidenceState !== "INFERRED" &&
+        !hasExcludedCitation(e)))).map((item: any) => item.instrument));
   if (body.data.assessmentId !== assessment.id || body.data.evidenceVersion !== row.evidenceVersion) {
     res.status(409).json({ error: "Stale approval", issues: [{ path: "evidenceVersion", message: "Evidence or assessment changed; reassess before review." }] }); return;
   }
-  if (body.data.decision === "APPROVE" && (body.data.approvedInstruments.length === 0 || body.data.approvedInstruments.some((item) => !allowed.has(item)))) {
+  if (body.data.decision === "APPROVE" && (assessment.approvable !== true || body.data.approvedInstruments.length === 0 || body.data.approvedInstruments.some((item) => !allowed.has(item)))) {
     res.status(409).json({ error: "Unsupported decision", issues: [{ path: "approvedInstruments", message: "Approval cannot authorize unsupported instruments." }] }); return;
   }
-  const review = { id: crypto.randomUUID(), decision: body.data.decision, approvedInstruments: body.data.approvedInstruments, evidenceVersion: row.evidenceVersion, createdAt: new Date().toISOString() };
-  await db.update(bsbV2PacketsTable).set({ review, stage: body.data.decision === "APPROVE" ? "APPROVED" : "REJECTED" }).where(eq(bsbV2PacketsTable.id, packetId));
+  if (body.data.decision === "REJECT" && body.data.approvedInstruments.length > 0) {
+    res.status(409).json({ error: "Invalid rejection", issues: [{ path: "approvedInstruments", message: "A rejection cannot approve instruments." }] });
+    return;
+  }
+  if (body.data.decision === "APPROVE" && body.data.approvedInstruments.length > 1 && !body.data.confirmSecond) {
+    res.status(409).json({ error: "Second instrument confirmation required", issues: [{ path: "confirmSecond", message: "Explicitly confirm the second instrument." }] });
+    return;
+  }
+  const review = {
+    id: crypto.randomUUID(),
+    decision: body.data.decision,
+    approvedInstruments: body.data.approvedInstruments,
+    evidenceVersion: row.evidenceVersion,
+    note: body.data.note,
+    demoMode: assessment.demoMode === true,
+    validatedRealAssessment: assessment.validatedRealAssessment === true,
+    createdAt: new Date().toISOString(),
+  };
+  const updated = await db.update(bsbV2PacketsTable).set({ review, stage: body.data.decision === "APPROVE" ? "APPROVED" : "REJECTED" })
+    .where(and(
+      eq(bsbV2PacketsTable.id, packetId),
+      eq(bsbV2PacketsTable.ownerId, res.locals.userId),
+      eq(bsbV2PacketsTable.stage, "ASSESSED"),
+      eq(bsbV2PacketsTable.evidenceVersion, row.evidenceVersion),
+      sql`${bsbV2PacketsTable.assessment}->>'id' = ${body.data.assessmentId}`,
+    )).returning();
+  if (!updated[0]) {
+    res.status(409).json({ error: "Review superseded", issues: [{ path: "assessmentId", message: "Assessment changed or was already reviewed." }] });
+    return;
+  }
   res.json(review);
 });
 
-export default router;
+return router;
+}
+
+const hasExcludedCitation = (evidence: any) =>
+  ["UNKNOWN", "CONTRADICTED", "ABSENT"].includes(evidence.evidenceState);
+
+export default createBsbV2Router();

@@ -17,7 +17,7 @@ export type Evidence = {
 
 export type LocatedEvidence = Evidence & {
   locations: string[];
-  supportStatus: "SUPPORTED" | "UNSUPPORTED" | "NOT_APPLICABLE";
+  supportStatus: "SUPPORTED" | "UNSUPPORTED" | "SUPPORT_NOT_VERIFIED" | "NOT_APPLICABLE";
   supportIssues: string[];
 };
 
@@ -85,11 +85,15 @@ export function normalizeEvidence(packet: any) {
   const normalized: LocatedEvidence[] = [...byId.values()].map(({ item, locations }) => {
     const issues: string[] = [];
     const affirmative = ["CONFIRMED", "SUPPORTED", "EXPLICIT"].includes(item.evidenceState);
+    const publicUnverifiedMessage = "Public source evidence is SUPPORT_NOT_VERIFIED until independently account-confirmed.";
     if (item.provenanceType === "CONFIRMED_ACCOUNT") {
       if (item.evidenceState !== "CONFIRMED" || item.confirmed !== true || !item.sourceLabel || item.sourceUrl !== null || item.basisSourceUrls.length || item.inference !== null) {
         issues.push("Confirmed account evidence requires CONFIRMED state, confirmed true, sourceLabel, null sourceUrl, no public basis URLs, and no inference.");
       }
     } else if (item.provenanceType === "PUBLIC_SOURCE" && affirmative) {
+      // Public claims are retained for traceability but are never independently
+      // confirmed evidence. Account confirmation is the only support authority.
+      issues.push(publicUnverifiedMessage);
       const validHttp = (value: string) => {
         try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:"; } catch { return false; }
       };
@@ -103,16 +107,27 @@ export function normalizeEvidence(packet: any) {
       const basis = item.basisFacts.join(" ");
       const unsupportedNumbers = claimNumbers.filter((number) => !basis.includes(number));
       if (unsupportedNumbers.length) issues.push(`Claim contains unsupported numeric detail: ${unsupportedNumbers.join(", ")}.`);
+      if (hasUnsubstantiatedInstrumentClaim(item)) {
+        issues.push("Instrument-discriminating claim language is not supported by the supplied basis facts.");
+      }
     }
     if (item.evidenceState === "INFERRED" && (!item.inference || item.basisFacts.length === 0)) {
       issues.push("Inferred evidence requires an inference and supplied basis facts.");
     }
+    const supportStatus: LocatedEvidence["supportStatus"] =
+      ["UNKNOWN", "CONTRADICTED", "ABSENT"].includes(item.evidenceState)
+        ? "NOT_APPLICABLE"
+        : item.evidenceState === "INFERRED"
+          ? issues.length ? "UNSUPPORTED" : "NOT_APPLICABLE"
+          : item.provenanceType === "PUBLIC_SOURCE"
+            ? issues.length === 1 && issues[0] === publicUnverifiedMessage
+              ? "SUPPORT_NOT_VERIFIED"
+              : "UNSUPPORTED"
+            : issues.length ? "UNSUPPORTED" : "SUPPORTED";
     return {
       ...item,
       locations,
-      supportStatus: ["UNKNOWN", "CONTRADICTED", "ABSENT"].includes(item.evidenceState)
-        ? "NOT_APPLICABLE"
-        : issues.length ? "UNSUPPORTED" : "SUPPORTED",
+      supportStatus,
       supportIssues: issues,
     };
   });
@@ -134,24 +149,70 @@ const rules: Record<Instrument, Array<{ id: string; terms: RegExp }>> = {
   ],
 };
 
-export interface AssessmentProvider {
-  assess(evidence: LocatedEvidence[], evidenceVersion: string): unknown;
+function hasUnsubstantiatedInstrumentClaim(item: Evidence) {
+  const basis = item.basisFacts.join(" ");
+  return (Object.keys(rules) as Instrument[]).some((instrument) =>
+    rules[instrument].some((rule) => rule.terms.test(item.claim) && !rule.terms.test(basis)));
 }
 
+export interface AssessmentProvider {
+  assess(evidence: LocatedEvidence[], evidenceVersion: string, options?: { demoMode?: boolean }): unknown;
+}
+
+const ruleText = (item: LocatedEvidence) => `${item.claim} ${item.basisFacts.join(" ")}`;
+
+const hasNegation = (text: string) =>
+  /\b(?:no|not|never|without|does not|doesn't|isn't|aren't|lack|lacks|lacking)\b[^.!?]{0,80}\b(?:cellscape|cosmx|geomx|multiplex|tissue protein|antibody panel|single[- ]cell spatial|spatial rna|ffpe|tissue cohort|biobank|regional biomarker)\b/i.test(text) ||
+  /\b(?:cellscape|cosmx|geomx|multiplex|tissue protein|antibody panel|single[- ]cell spatial|spatial rna|ffpe|tissue cohort|biobank|regional biomarker)\b[^.!?]{0,50}\b(?:is not|isn't|are not|aren't|was not|were not|never|not active|not used|not installed|unsupported|unavailable)\b/i.test(text);
+
 export class DeterministicFakeProvider implements AssessmentProvider {
-  assess(evidence: LocatedEvidence[], evidenceVersion: string) {
-    const supported = evidence.filter((item) => item.supportStatus === "SUPPORTED");
-    const conflict = evidence.some((item) => item.evidenceState === "CONTRADICTED");
+  assess(evidence: LocatedEvidence[], evidenceVersion: string, options: { demoMode?: boolean } = {}) {
+    if (!options.demoMode) {
+      return {
+        id: randomUUID(), provider: "DETERMINISTIC_FAKE", mock: true, evidenceVersion,
+        semanticReviewNeeded: true, approvable: false, demoMode: false,
+        validatedRealAssessment: false,
+        instruments: (Object.keys(rules) as Instrument[]).map((instrument) => ({
+          instrument, fit: "INSUFFICIENT_EVIDENCE",
+          recommendation: "Semantic scientific review required; deterministic fake provider cannot produce an approvable assessment.",
+          evidenceIds: [], ruleIds: [], alternatives: (Object.keys(rules) as Instrument[]).filter((item) => item !== instrument),
+          currentUse: "Unknown", accountStatus: "Unknown", readiness: "Unknown",
+        })),
+        limitations: ["NON-APPROVABLE SEMANTIC-REVIEW-NEEDED RESULT: deterministic fake provider is not a real semantic assessor."],
+      };
+    }
+    // Demo matching may use retained public material, but it remains explicitly
+    // unverified and cannot become a validated real assessment.
+    const demoEligible = evidence.filter((item) =>
+      ["SUPPORTED", "SUPPORT_NOT_VERIFIED"].includes(item.supportStatus) &&
+      item.evidenceState !== "INFERRED" &&
+      !hasNegation(ruleText(item)));
+    const contradictionFor = (instrument: Instrument) => evidence.some((item) => {
+      if (item.evidenceState !== "CONTRADICTED") return false;
+      const text = ruleText(item);
+      return new RegExp(instrument, "i").test(text) || rules[instrument].some((rule) => rule.terms.test(text));
+    });
     const scored = (Object.keys(rules) as Instrument[]).map((instrument) => {
-      const matchedRules = rules[instrument].filter((rule) => supported.some((item) => rule.terms.test(`${item.claim} ${item.basisFacts.join(" ")}`)));
-      const ids = supported.filter((item) => matchedRules.some((rule) => rule.terms.test(`${item.claim} ${item.basisFacts.join(" ")}`))).map((item) => item.evidenceId);
-      const fit = conflict ? "INSUFFICIENT_EVIDENCE" : matchedRules.length ? (matchedRules.length > 1 ? "STRONG_FIT" : "POTENTIAL_FIT") : "INSUFFICIENT_EVIDENCE";
-      const use = supported.find((item) => new RegExp(instrument, "i").test(item.claim) && /\b(use|installed|active|historical)\b/i.test(item.claim));
-      const account = supported.find((item) => item.provenanceType === "CONFIRMED_ACCOUNT");
-      const readiness = supported.find((item) => /\b(budget|timeline|procurement|evaluation|purchase)\b/i.test(item.claim));
+      const matchedRules = rules[instrument].filter((rule) =>
+        demoEligible.some((item) => rule.terms.test(ruleText(item))));
+      const ids = demoEligible
+        .filter((item) => matchedRules.some((rule) => rule.terms.test(ruleText(item))))
+        .map((item) => item.evidenceId);
+      const fit = contradictionFor(instrument) ? "INSUFFICIENT_EVIDENCE" : matchedRules.length ? (matchedRules.length > 1 ? "STRONG_FIT" : "POTENTIAL_FIT") : "INSUFFICIENT_EVIDENCE";
+      const confirmedAccount = evidence.filter((item) =>
+        item.supportStatus === "SUPPORTED" &&
+        item.provenanceType === "CONFIRMED_ACCOUNT" &&
+        item.evidenceState === "CONFIRMED");
+      const use = confirmedAccount.find((item) =>
+        new RegExp(instrument, "i").test(item.claim) &&
+        /\b(use|installed|active|historical)\b/i.test(item.claim) &&
+        !hasNegation(item.claim));
+      const account = confirmedAccount[0];
+      const readiness = confirmedAccount.find((item) =>
+        /\b(budget|timeline|procurement|evaluation|purchase)\b/i.test(item.claim));
       return {
         instrument, fit,
-        recommendation: matchedRules.length ? `Mock rubric match only; human scientific review required.` : "Insufficient supported evidence for this instrument.",
+        recommendation: matchedRules.length ? "Synthetic demonstration rubric match only; not a validated real-company recommendation." : "Insufficient demonstration evidence for this instrument.",
         evidenceIds: ids, ruleIds: matchedRules.map((rule) => rule.id),
         alternatives: (Object.keys(rules) as Instrument[]).filter((item) => item !== instrument),
         currentUse: use ? `Evidence cited: ${use.evidenceId}` : "Unknown",
@@ -164,9 +225,11 @@ export class DeterministicFakeProvider implements AssessmentProvider {
       id: randomUUID(), provider: "DETERMINISTIC_FAKE", mock: true, evidenceVersion,
       instruments: selected.length ? selected : [scored[0]],
       limitations: [
-        "MOCK RESULT: keyword-to-rubric matching is not real-company semantic reasoning.",
+        "SYNTHETIC DEMO ONLY: keyword-to-rubric matching is not real-company semantic reasoning.",
         "Unknown real packets require secure human review; live provider, model ID, and spend cap remain unset.",
       ],
+      semanticReviewNeeded: true, approvable: true, demoMode: true,
+      validatedRealAssessment: false,
     };
   }
 }

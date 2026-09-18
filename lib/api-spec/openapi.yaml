@@ -66,6 +66,11 @@ paths:
           name: packetId
           required: true
           schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentInput" }
       responses:
         "200":
           description: Deterministic mock assessment
@@ -204,7 +209,7 @@ components:
           required: [locations, supportStatus]
           properties:
             locations: { type: array, items: { type: string } }
-            supportStatus: { type: string, enum: [SUPPORTED, UNSUPPORTED, NOT_APPLICABLE] }
+            supportStatus: { type: string, enum: [SUPPORTED, UNSUPPORTED, SUPPORT_NOT_VERIFIED, NOT_APPLICABLE] }
             supportIssues: { type: array, items: { type: string } }
     ValidationResult:
       type: object
@@ -241,7 +246,7 @@ components:
         readiness: { type: string }
     Assessment:
       type: object
-      required: [id, provider, mock, evidenceVersion, instruments, limitations]
+      required: [id, provider, mock, evidenceVersion, instruments, limitations, semanticReviewNeeded, approvable, demoMode, validatedRealAssessment]
       properties:
         id: { type: string }
         provider: { type: string, const: DETERMINISTIC_FAKE }
@@ -252,10 +257,20 @@ components:
           maxItems: 2
           items: { $ref: "#/components/schemas/InstrumentAssessment" }
         limitations: { type: array, items: { type: string } }
+        semanticReviewNeeded: { type: boolean }
+        approvable: { type: boolean }
+        demoMode: { type: boolean }
+        validatedRealAssessment: { type: boolean }
+    AssessmentInput:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [REAL_INPUT, DEMO_SYNTHETIC] }
     ReviewInput:
       type: object
       additionalProperties: false
-      required: [assessmentId, evidenceVersion, decision, approvedInstruments, note]
+      required: [assessmentId, evidenceVersion, decision, approvedInstruments, note, confirmSecond]
       properties:
         assessmentId: { type: string }
         evidenceVersion: { type: string }
@@ -265,9 +280,10 @@ components:
           maxItems: 2
           items: { type: string, enum: [CellScape, CosMx, GeoMx] }
         note: { type: string }
+        confirmSecond: { type: boolean }
     Review:
       type: object
-      required: [id, decision, approvedInstruments, evidenceVersion, createdAt]
+      required: [id, decision, approvedInstruments, evidenceVersion, note, demoMode, validatedRealAssessment, createdAt]
       properties:
         id: { type: string }
         decision: { type: string, enum: [APPROVE, REJECT] }
@@ -276,4 +292,7 @@ components:
           maxItems: 2
           items: { type: string }
         evidenceVersion: { type: string }
+        note: { type: string }
+        demoMode: { type: boolean }
+        validatedRealAssessment: { type: boolean }
         createdAt: { type: string, format: date-time }

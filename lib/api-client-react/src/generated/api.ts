@@ -21,6 +21,7 @@ import type {
 
 import type {
   Assessment,
+  AssessmentInput,
   HealthStatus,
   PacketRecord,
   PacketSummary,
@@ -360,14 +361,29 @@ export const getAssessCompanyUrl = (packetId: string,) => {
   return `/api/bsb-v2/packets/${packetId}/assess`
 }
 
-export const assessCompany = async (packetId: string, options?: Parameters<typeof customFetch>[1]): Promise<Assessment> => {
+export const assessCompany = async (packetId: string,
+    assessmentInput: AssessmentInput, options?: Parameters<typeof customFetch>[1]): Promise<Assessment> => {
 
-  return customFetch<Assessment>(getAssessCompanyUrl(packetId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Assessment>(getAssessCompanyUrl(packetId),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(assessmentInput)
   }
 );}
 
@@ -392,9 +408,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof assessCompany>>, AssessCompanyMutationVariables> = (props) => {
-          const {packetId} = props ?? {};
+          const {packetId,data} = props ?? {};
 
-          return  assessCompany(packetId,requestOptions)
+          return  assessCompany(packetId,data,requestOptions)
         }
 
 
@@ -405,9 +421,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type AssessCompanyMutationResult = NonNullable<Awaited<ReturnType<typeof assessCompany>>>
-
+    export type AssessCompanyMutationBody = BodyType<AssessmentInput>
     export type AssessCompanyMutationError = ErrorType<ValidationFailure>
-    export type AssessCompanyMutationVariables = {packetId: string}
+    export type AssessCompanyMutationVariables = {packetId: string;data: BodyType<AssessmentInput>}
 
     export const useAssessCompany = <TError = ErrorType<ValidationFailure>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assessCompany>>, TError,AssessCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

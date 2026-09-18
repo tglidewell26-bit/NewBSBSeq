@@ -15,7 +15,7 @@ pnpm run typecheck
 Result: passed across the shared libraries, API server, BSB V2 web app,
 mockup sandbox, and scripts.
 
-### Synthetic unit tests
+### Synthetic unit and server/database tests
 
 Command:
 
@@ -23,28 +23,40 @@ Command:
 pnpm --filter @workspace/api-server test
 ```
 
-Final result: 2 files passed, 17 tests passed, 0 failed.
+Correction-pass final result: 3 files passed, 26 tests passed, 0 failed.
 
-Covered synthetic cases include exact wrapper/version validation, extra-field
-rejection, pasted/uploaded object parity at the shared request boundary,
-duplicate and conflicting IDs, confirmed account evidence without a public URL,
-missing account confirmation/label, unsupported numeric claim detail, inferred,
-unknown and contradictory evidence retention, prompt-injection text remaining
-inert, the three instrument rubric families, generic AI insufficiency, and the
-two-instrument cap.
+The 19 pure unit tests cover the frozen wrapper/version and buckets,
+extra-field rejection, duplicate and conflicting IDs, confirmed account
+evidence without a public URL, public support-not-verified behavior,
+unsupported numeric and qualitative claim additions, unknown/inferred/contradictory evidence, inert
+untrusted text, explicit non-approvable real-input behavior, synthetic
+installed-base CosMx with unknown budget, synthetic prospects without
+ownership, CellScape, GeoMx, generic AI/oncology insufficiency, negation,
+relevant versus unrelated contradiction, and the two-instrument cap.
+
+The 6 HTTP/database acceptance tests start a real Express server, send actual
+HTTP requests, and use the development PostgreSQL database inside isolated
+synthetic records. They cover unauthenticated/malformed intake without provider
+use, duplicate submit and immutable reload, untrusted text round-trip,
+cross-account read/assess/review denial, persisted review notes, concurrent
+review and assessment compare-and-set behavior, stale and false citations,
+excluded evidence states, instrument mismatch, rejection shape, and explicit
+second-instrument confirmation.
+
+The remaining disposable database test directly verifies stage persistence,
+owner-scoped selection, owner/input-hash uniqueness, and rollback.
 
 An earlier run correctly exposed one failure: generated Zod objects stripped an
 unknown legacy field rather than rejecting it. A strict frozen-contract boundary
 was added, and the complete suite then passed.
 
-### Disposable database integration
+### Authentication boundary for automated tests
 
-The integration test opens a transaction against the development database,
-inserts a synthetic packet, confirms the persisted `VALIDATED` stage, confirms
-that a different owner cannot select the row, confirms the unique
-owner/input-hash idempotency constraint, and rolls the transaction back.
-
-Result: 1 integration test passed. No synthetic integration row remains.
+The HTTP acceptance tests use an injected test-only identity resolver on an
+isolated Express instance. Production Clerk middleware is not disabled or
+bypassed. These tests establish route and database authorization behavior under
+simulated identities; they are not real Clerk sign-ins and are not counted as
+signed-in browser acceptance.
 
 The live development schema was also inspected and contains the expected packet,
 owner, hash/version, stage, raw packet, normalized evidence, validation,
@@ -79,9 +91,9 @@ labeled mock data and cannot establish real-company semantic accuracy.
 
 ## Review limitations and pending acceptance
 
-- An authenticated end-to-end browser session was not fabricated. Packet
-  submission, reload, assessment, review, stale approval, and cross-user browser
-  flows still require a secure signed-in acceptance session.
+- A real Clerk-authenticated end-to-end browser session was not fabricated.
+  Paste/upload network parity, signed-in reload, and real two-account browser
+  behavior still require a secure signed-in acceptance session.
 - No private Noetik or other real-company packet was committed, logged, or used
   in automated tests. Private Noetik acceptance is pending secure real-input
   review and has not passed.

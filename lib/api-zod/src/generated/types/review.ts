@@ -13,5 +13,8 @@ export interface Review {
   /** @maxItems 2 */
   approvedInstruments: string[];
   evidenceVersion: string;
+  note: string;
+  demoMode: boolean;
+  validatedRealAssessment: boolean;
   createdAt: Date;
 }

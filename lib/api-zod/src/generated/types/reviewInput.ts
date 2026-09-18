@@ -15,4 +15,5 @@ export interface ReviewInput {
   /** @maxItems 2 */
   approvedInstruments: ReviewInputApprovedInstrumentsItem[];
   note: string;
+  confirmSecond: boolean;
 }

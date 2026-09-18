@@ -7,6 +7,8 @@
  */
 
 export * from './assessment';
+export * from './assessmentInput';
+export * from './assessmentInputMode';
 export * from './evidenceArray';
 export * from './evidenceCategories';
 export * from './evidenceItem';

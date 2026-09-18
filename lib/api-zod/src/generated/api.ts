@@ -480,7 +480,7 @@ export const SubmitResearchPacketResponse = zod.object({
   "sourceLabel": zod.string().min(1).optional()
 }).and(zod.object({
   "locations": zod.array(zod.string()),
-  "supportStatus": zod.enum(['SUPPORTED', 'UNSUPPORTED', 'NOT_APPLICABLE']),
+  "supportStatus": zod.enum(['SUPPORTED', 'UNSUPPORTED', 'SUPPORT_NOT_VERIFIED', 'NOT_APPLICABLE']),
   "supportIssues": zod.array(zod.string()).optional()
 }))),
   "validation": zod.object({
@@ -511,13 +511,20 @@ export const SubmitResearchPacketResponse = zod.object({
   "accountStatus": zod.string(),
   "readiness": zod.string()
 })).max(submitResearchPacketResponseAssessmentInstrumentsMax),
-  "limitations": zod.array(zod.string())
+  "limitations": zod.array(zod.string()),
+  "semanticReviewNeeded": zod.boolean(),
+  "approvable": zod.boolean(),
+  "demoMode": zod.boolean(),
+  "validatedRealAssessment": zod.boolean()
 }).optional(),
   "review": zod.object({
   "id": zod.string(),
   "decision": zod.enum(['APPROVE', 'REJECT']),
   "approvedInstruments": zod.array(zod.string()).max(submitResearchPacketResponseReviewApprovedInstrumentsMax),
   "evidenceVersion": zod.string(),
+  "note": zod.string(),
+  "demoMode": zod.boolean(),
+  "validatedRealAssessment": zod.boolean(),
   "createdAt": zod.coerce.date()
 }).optional(),
   "createdAt": zod.coerce.date()
@@ -769,7 +776,7 @@ export const GetResearchPacketResponse = zod.object({
   "sourceLabel": zod.string().min(1).optional()
 }).and(zod.object({
   "locations": zod.array(zod.string()),
-  "supportStatus": zod.enum(['SUPPORTED', 'UNSUPPORTED', 'NOT_APPLICABLE']),
+  "supportStatus": zod.enum(['SUPPORTED', 'UNSUPPORTED', 'SUPPORT_NOT_VERIFIED', 'NOT_APPLICABLE']),
   "supportIssues": zod.array(zod.string()).optional()
 }))),
   "validation": zod.object({
@@ -800,13 +807,20 @@ export const GetResearchPacketResponse = zod.object({
   "accountStatus": zod.string(),
   "readiness": zod.string()
 })).max(getResearchPacketResponseAssessmentInstrumentsMax),
-  "limitations": zod.array(zod.string())
+  "limitations": zod.array(zod.string()),
+  "semanticReviewNeeded": zod.boolean(),
+  "approvable": zod.boolean(),
+  "demoMode": zod.boolean(),
+  "validatedRealAssessment": zod.boolean()
 }).optional(),
   "review": zod.object({
   "id": zod.string(),
   "decision": zod.enum(['APPROVE', 'REJECT']),
   "approvedInstruments": zod.array(zod.string()).max(getResearchPacketResponseReviewApprovedInstrumentsMax),
   "evidenceVersion": zod.string(),
+  "note": zod.string(),
+  "demoMode": zod.boolean(),
+  "validatedRealAssessment": zod.boolean(),
   "createdAt": zod.coerce.date()
 }).optional(),
   "createdAt": zod.coerce.date()
@@ -815,6 +829,10 @@ export const GetResearchPacketResponse = zod.object({
 
 export const AssessCompanyParams = zod.object({
   "packetId": zod.coerce.string()
+})
+
+export const AssessCompanyBody = zod.object({
+  "mode": zod.enum(['REAL_INPUT', 'DEMO_SYNTHETIC'])
 })
 
 export const assessCompanyResponseInstrumentsMax = 2;
@@ -837,7 +855,11 @@ export const AssessCompanyResponse = zod.object({
   "accountStatus": zod.string(),
   "readiness": zod.string()
 })).max(assessCompanyResponseInstrumentsMax),
-  "limitations": zod.array(zod.string())
+  "limitations": zod.array(zod.string()),
+  "semanticReviewNeeded": zod.boolean(),
+  "approvable": zod.boolean(),
+  "demoMode": zod.boolean(),
+  "validatedRealAssessment": zod.boolean()
 })
 
 
@@ -854,7 +876,8 @@ export const ReviewAssessmentBody = zod.object({
   "evidenceVersion": zod.string(),
   "decision": zod.enum(['APPROVE', 'REJECT']),
   "approvedInstruments": zod.array(zod.enum(['CellScape', 'CosMx', 'GeoMx'])).max(reviewAssessmentBodyApprovedInstrumentsMax),
-  "note": zod.string()
+  "note": zod.string(),
+  "confirmSecond": zod.boolean()
 })
 
 export const reviewAssessmentResponseApprovedInstrumentsMax = 2;
@@ -866,6 +889,9 @@ export const ReviewAssessmentResponse = zod.object({
   "decision": zod.enum(['APPROVE', 'REJECT']),
   "approvedInstruments": zod.array(zod.string()).max(reviewAssessmentResponseApprovedInstrumentsMax),
   "evidenceVersion": zod.string(),
+  "note": zod.string(),
+  "demoMode": zod.boolean(),
+  "validatedRealAssessment": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 

@@ -34,10 +34,24 @@ properties, legacy markers, and prose-extraction envelopes are rejected.
 
 ## Assessment limits
 
-Phase 1 uses only `DETERMINISTIC_FAKE`. It maps supported text to stable rubric
-rule IDs and is not semantic reasoning. It makes zero paid runtime AI calls.
-At most two independently supported instruments can be approved. Changed
-evidence invalidates prior approval through the evidence hash.
+Phase 1 uses only `DETERMINISTIC_FAKE`. Arbitrary packets receive a
+non-approvable `semanticReviewNeeded` result rather than a keyword-derived
+recommendation. Explicit synthetic demonstration mode maps eligible synthetic
+text to stable rubric IDs, remains visibly marked as a demonstration, and never
+becomes a validated real-company assessment. It makes zero paid runtime AI
+calls.
+
+Public-source claims are retained as `SUPPORT_NOT_VERIFIED` only when their
+supplied URL and basis structure pass development checks; those checks do not
+independently verify the claim. Malformed or overstated public claims are
+`UNSUPPORTED`. Independently valid confirmed-account evidence remains
+`SUPPORTED`. Inferences remain non-authoritative.
+
+At most two eligible instruments can be approved, and a second instrument
+requires explicit confirmation. Approval revalidates every cited evidence ID
+against current evidence. Owner-scoped compare-and-set writes prevent stale or
+concurrent assessment/review changes from silently winning. Review notes remain
+attached to the persisted review.
 
 Live provider selection, model ID, spend cap, sequence writing, email timing,
 sending, exporting, scraping, scheduling, and deployment are outside Phase 1.

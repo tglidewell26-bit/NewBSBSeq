@@ -15,4 +15,8 @@ export interface Assessment {
   /** @maxItems 2 */
   instruments: InstrumentAssessment[];
   limitations: string[];
+  semanticReviewNeeded: boolean;
+  approvable: boolean;
+  demoMode: boolean;
+  validatedRealAssessment: boolean;
 }

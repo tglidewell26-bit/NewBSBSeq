@@ -190,6 +190,17 @@ function OverviewTab({ packet }: { packet: PacketRecord }) {
                 </div>
               </div>
             )}
+            {packet.review.note && (
+              <div className="mt-4 border-t border-current/10 pt-4">
+                <p className="text-sm font-semibold">Review note</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm">{packet.review.note}</p>
+              </div>
+            )}
+            {packet.review.demoMode && (
+              <p className="mt-4 rounded border border-amber-300 bg-amber-50 p-2 text-xs font-bold text-amber-900">
+                SYNTHETIC DEMONSTRATION REVIEW — not a validated real-company assessment.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -283,6 +294,8 @@ function EvidenceTab({ packet }: { packet: PacketRecord }) {
                     <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50"><CheckCircle2 className="w-3 h-3 mr-1"/> Supported</Badge>
                   ) : e.supportStatus === "UNSUPPORTED" ? (
                     <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50"><XCircle className="w-3 h-3 mr-1"/> Unsupported</Badge>
+                  ) : e.supportStatus === "SUPPORT_NOT_VERIFIED" ? (
+                    <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50"><AlertTriangle className="w-3 h-3 mr-1"/> Support not verified</Badge>
                   ) : (
                     <Badge variant="outline" className="text-slate-600 border-slate-200 bg-slate-50">N/A</Badge>
                   )}
@@ -419,6 +432,7 @@ function InstrumentCard({ instrument: i }: { instrument: InstrumentAssessment })
 function AssessmentActions({ packet }: { packet: PacketRecord }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [demoConfirmed, setDemoConfirmed] = useState(false);
   
   const assess = useAssessCompany({
     mutation: {
@@ -436,14 +450,20 @@ function AssessmentActions({ packet }: { packet: PacketRecord }) {
 
   if (packet.stage === "VALIDATED" || packet.stage === "NEEDS_REVIEW") {
     return (
-      <Button 
-        onClick={() => assess.mutate({ packetId: packet.id })} 
-        disabled={assess.isPending}
-        className="gap-2"
-      >
-        {assess.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-        Run Mock Assessment
-      </Button>
+        <div className="flex items-center gap-3">
+          <label className="flex max-w-xs items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox checked={demoConfirmed} onCheckedChange={(value) => setDemoConfirmed(value === true)} />
+            This packet is synthetic demonstration data only
+          </label>
+          <Button 
+            onClick={() => assess.mutate({ packetId: packet.id, data: { mode: demoConfirmed ? "DEMO_SYNTHETIC" : "REAL_INPUT" } })} 
+            disabled={assess.isPending}
+            className="gap-2"
+          >
+            {assess.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {demoConfirmed ? "Run Synthetic Demo" : "Check Assessment Status"}
+          </Button>
+        </div>
     );
   }
 
@@ -459,6 +479,7 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
   const [decision, setDecision] = useState<"APPROVE" | "REJECT">("APPROVE");
   const [note, setNote] = useState("");
   const [approvedInstruments, setApprovedInstruments] = useState<string[]>([]);
+  const [confirmSecond, setConfirmSecond] = useState(false);
   
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -466,7 +487,7 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
     mutation: {
       onSuccess: (data) => {
         qc.setQueryData(getGetResearchPacketQueryKey(packet.id), (old: any) => 
-          old ? { ...old, stage: data.decision, review: data } : old
+          old ? { ...old, stage: data.decision === "APPROVE" ? "APPROVED" : "REJECTED", review: data } : old
         );
         toast({ title: `Assessment ${data.decision.toLowerCase()} successfully.` });
         setOpen(false);
@@ -477,7 +498,9 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
     }
   });
 
-  const availableInstruments = packet.assessment?.instruments.map(i => i.instrument) || [];
+  const availableInstruments = packet.assessment?.instruments
+    .filter((i) => i.fit !== "INSUFFICIENT_EVIDENCE" && i.evidenceIds.length > 0)
+    .map(i => i.instrument) || [];
 
   const handleToggleInst = (inst: string) => {
     setApprovedInstruments(prev => {
@@ -499,7 +522,8 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
         evidenceVersion: packet.assessment!.evidenceVersion,
         decision,
         approvedInstruments: decision === "APPROVE" ? approvedInstruments as any[] : [],
-        note
+        note,
+        confirmSecond: decision === "APPROVE" && approvedInstruments.length > 1 ? confirmSecond : false,
       }
     });
   };
@@ -509,9 +533,11 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
       <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => { setDecision("REJECT"); setOpen(true); }}>
         <XCircle className="w-4 h-4" /> Reject
       </Button>
-      <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setDecision("APPROVE"); setOpen(true); }}>
-        <CheckCircle2 className="w-4 h-4" /> Approve Assessment
-      </Button>
+      {packet.assessment?.approvable && (
+        <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setDecision("APPROVE"); setOpen(true); }}>
+          <CheckCircle2 className="w-4 h-4" /> Approve Demonstration
+        </Button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -544,6 +570,12 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
                   <p className="text-xs text-muted-foreground mt-2">
                     {approvedInstruments.length}/2 selected
                   </p>
+                  {approvedInstruments.length > 1 && (
+                    <label className="mt-4 flex items-start gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                      <Checkbox checked={confirmSecond} onCheckedChange={(value) => setConfirmSecond(value === true)} />
+                      I explicitly confirm the second synthetic demonstration instrument.
+                    </label>
+                  )}
                 </div>
               )}
               

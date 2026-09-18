@@ -144,6 +144,7 @@ export type NormalizedEvidenceSupportStatus = typeof NormalizedEvidenceSupportSt
 export const NormalizedEvidenceSupportStatus = {
   SUPPORTED: 'SUPPORTED',
   UNSUPPORTED: 'UNSUPPORTED',
+  SUPPORT_NOT_VERIFIED: 'SUPPORT_NOT_VERIFIED',
   NOT_APPLICABLE: 'NOT_APPLICABLE',
 } as const;
 
@@ -204,6 +205,10 @@ export interface Assessment {
   /** @maxItems 2 */
   instruments: InstrumentAssessment[];
   limitations: string[];
+  semanticReviewNeeded: boolean;
+  approvable: boolean;
+  demoMode: boolean;
+  validatedRealAssessment: boolean;
 }
 
 export type ReviewDecision = typeof ReviewDecision[keyof typeof ReviewDecision];
@@ -220,6 +225,9 @@ export interface Review {
   /** @maxItems 2 */
   approvedInstruments: string[];
   evidenceVersion: string;
+  note: string;
+  demoMode: boolean;
+  validatedRealAssessment: boolean;
   createdAt: string;
 }
 
@@ -238,6 +246,18 @@ export interface PacketRecord {
 export interface ValidationFailure {
   error: string;
   issues: FieldIssue[];
+}
+
+export type AssessmentInputMode = typeof AssessmentInputMode[keyof typeof AssessmentInputMode];
+
+
+export const AssessmentInputMode = {
+  REAL_INPUT: 'REAL_INPUT',
+  DEMO_SYNTHETIC: 'DEMO_SYNTHETIC',
+} as const;
+
+export interface AssessmentInput {
+  mode: AssessmentInputMode;
 }
 
 export type ReviewInputDecision = typeof ReviewInputDecision[keyof typeof ReviewInputDecision];
@@ -264,5 +284,6 @@ export interface ReviewInput {
   /** @maxItems 2 */
   approvedInstruments: ReviewInputApprovedInstrumentsItem[];
   note: string;
+  confirmSecond: boolean;
 }
 

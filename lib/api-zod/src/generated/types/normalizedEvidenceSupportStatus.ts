@@ -12,5 +12,6 @@ export type NormalizedEvidenceSupportStatus = typeof NormalizedEvidenceSupportSt
 export const NormalizedEvidenceSupportStatus = {
   SUPPORTED: 'SUPPORTED',
   UNSUPPORTED: 'UNSUPPORTED',
+  SUPPORT_NOT_VERIFIED: 'SUPPORT_NOT_VERIFIED',
   NOT_APPLICABLE: 'NOT_APPLICABLE',
 } as const;
