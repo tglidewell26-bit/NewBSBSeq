@@ -35,7 +35,7 @@ export default function PacketList() {
   const preview = useMemo(() => {
     try {
       const value = JSON.parse(raw) as ResearchPacket;
-      return { brief: typeof value?.brief === "string" ? value.brief : "Brief missing", schemaVersion: value?.schemaVersion };
+      return { brief: typeof value?.brief === "string" ? value.brief : "Brief missing", schemaVersion: typeof value?.schemaVersion === "string" ? value.schemaVersion : "Missing or invalid" };
     } catch {
       return null;
     }

@@ -1,5 +1,42 @@
 # BSB Sequence Generator V2 — Phase 1 test report
 
+## Independent GitHub review — 2026-09-18
+
+The repository is now connected separately as `tglidewell26-bit/NewBSBSeq`.
+Source reviewed at commit `4a4994cea8ec1bcd10bf6f46331656555dcb1b18`.
+The historical Replit results below are preserved as reported, not independently
+reclassified as signed-in browser results.
+
+This correction fixes concurrent duplicate packet intake, rejects negative-fit
+and duplicate-instrument approvals, checks the assessment's own evidence version,
+and carries server field-level findings into the error message displayed by the
+UI. The raw-packet preview also treats a non-string version as invalid text rather
+than trying to render an object.
+
+Executed independently after these changes:
+
+- 30 tests passed in four files: 19 evidence/assessment unit tests, two client
+  error-message tests, eight HTTP/database tests, and one direct database test.
+- The error-message regression failed before its fix. The review-integrity
+  regression reproduced an HTTP 200 approval for `NOT_QUALIFIED` before its fix.
+- Shared library builds and API/frontend TypeScript checks passed.
+- HTTP tests used an isolated local Express server and a disposable PGlite
+  database over the PostgreSQL wire protocol, with simulated test identities.
+  The harness limited the database pool to one connection because of the
+  [PGlite socket connection limitation](https://pglite.dev/docs/pglite-socket).
+  These results exercise real SQL and overlapping HTTP requests, but do not
+  establish multi-connection production PostgreSQL concurrency or real Clerk
+  authentication. No Replit database was used.
+
+The repository test command remains `pnpm --filter @workspace/api-server test`.
+Run database tests against an isolated, schema-initialized PostgreSQL test
+database using `DATABASE_URL`. Never point synthetic test cleanup at production.
+
+Runtime AI calls during this review: **0**. No model or provider was enabled.
+Still pending: authenticated browser paste/upload/reload acceptance, native
+PostgreSQL concurrency confirmation, live semantic provider setup with a spend
+cap, and private real-company acceptance. Phase 2 has not started.
+
 Date: 2026-09-18
 
 ## Executed checks

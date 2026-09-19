@@ -58,8 +58,14 @@ router.post("/bsb-v2/packets", async (req, res): Promise<void> => {
     id, ownerId: res.locals.userId, inputHash, evidenceVersion: inputHash,
     stage: warnings.length ? "NEEDS_REVIEW" : "VALIDATED",
     researchPacket: packet, normalizedEvidence: normalized, validation,
-  }).returning();
-  res.status(201).json(safeRecord(created));
+  }).onConflictDoNothing({ target: [bsbV2PacketsTable.ownerId, bsbV2PacketsTable.inputHash] }).returning();
+  // A concurrent identical request may have inserted after our initial lookup.
+  // Return its intact record; never overwrite an assessment or review on retry.
+  const saved = created ?? (await db.select().from(bsbV2PacketsTable).where(and(
+    eq(bsbV2PacketsTable.ownerId, res.locals.userId),
+    eq(bsbV2PacketsTable.inputHash, inputHash),
+  )).limit(1))[0];
+  res.status(201).json(safeRecord(saved));
 });
 
 router.get("/bsb-v2/packets/:packetId", async (req, res): Promise<void> => {
@@ -112,7 +118,7 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
     ? new Set(["SUPPORTED", "SUPPORT_NOT_VERIFIED"])
     : new Set(["SUPPORTED"]);
   const allowed = new Set(assessment.instruments.filter((item: any) =>
-    item.fit !== "INSUFFICIENT_EVIDENCE" &&
+    ["STRONG_FIT", "POTENTIAL_FIT"].includes(item.fit) &&
     item.evidenceIds.length &&
     item.evidenceIds.every((id: string) =>
       currentEvidence.some((e: any) =>
@@ -120,11 +126,15 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
         eligibleStatuses.has(e.supportStatus) &&
         e.evidenceState !== "INFERRED" &&
         !hasExcludedCitation(e)))).map((item: any) => item.instrument));
-  if (body.data.assessmentId !== assessment.id || body.data.evidenceVersion !== row.evidenceVersion) {
+  if (body.data.assessmentId !== assessment.id || body.data.evidenceVersion !== row.evidenceVersion || assessment.evidenceVersion !== row.evidenceVersion) {
     res.status(409).json({ error: "Stale approval", issues: [{ path: "evidenceVersion", message: "Evidence or assessment changed; reassess before review." }] }); return;
   }
   if (body.data.decision === "APPROVE" && (assessment.approvable !== true || body.data.approvedInstruments.length === 0 || body.data.approvedInstruments.some((item) => !allowed.has(item)))) {
     res.status(409).json({ error: "Unsupported decision", issues: [{ path: "approvedInstruments", message: "Approval cannot authorize unsupported instruments." }] }); return;
+  }
+  if (new Set(body.data.approvedInstruments).size !== body.data.approvedInstruments.length) {
+    res.status(409).json({ error: "Duplicate instruments", issues: [{ path: "approvedInstruments", message: "Select each instrument only once." }] });
+    return;
   }
   if (body.data.decision === "REJECT" && body.data.approvedInstruments.length > 0) {
     res.status(409).json({ error: "Invalid rejection", issues: [{ path: "approvedInstruments", message: "A rejection cannot approve instruments." }] });

@@ -147,6 +147,44 @@ describe("BSB V2 real HTTP and database acceptance with simulated test identitie
     })).status).toBe(404);
   });
 
+  it("returns one intact record for concurrent identical submissions", async () => {
+    const owner = `${ownerPrefix}${randomUUID()}`;
+    const value = packet(`Concurrent intake ${randomUUID()}`);
+    const results = await Promise.all(Array.from({ length: 8 }, () => submit(owner, value)));
+    expect(results.map((result) => result.status)).toEqual(Array(8).fill(201));
+    expect(new Set(results.map((result) => result.body.id)).size).toBe(1);
+    expect(results.every((result) => JSON.stringify(result.body.researchPacket) === JSON.stringify(results[0].body.researchPacket))).toBe(true);
+    const rows = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.ownerId, owner));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("rejects negative fit, duplicate selections and an assessment from another evidence version", async () => {
+    const owner = `${ownerPrefix}${randomUUID()}`;
+    const created = await submit(owner, packet(`Review integrity ${randomUUID()}`));
+    const assessed = await request(`/api/bsb-v2/packets/${created.body.id}/assess`, owner, {
+      method: "POST", body: JSON.stringify({ mode: "DEMO_SYNTHETIC" }),
+    });
+    const instrument = assessed.body.instruments[0].instrument;
+    const review = {
+      assessmentId: assessed.body.id, evidenceVersion: created.body.inputHash,
+      decision: "APPROVE", approvedInstruments: [instrument], note: "Synthetic", confirmSecond: true,
+    };
+    for (const altered of [
+      { ...assessed.body, instruments: [{ ...assessed.body.instruments[0], fit: "NOT_QUALIFIED" }] },
+      { ...assessed.body, evidenceVersion: "different-evidence-version" },
+    ]) {
+      await db.update(bsbV2PacketsTable).set({ assessment: altered, stage: "ASSESSED", review: null })
+        .where(and(eq(bsbV2PacketsTable.id, created.body.id), eq(bsbV2PacketsTable.ownerId, owner)));
+      expect((await request(`/api/bsb-v2/packets/${created.body.id}/reviews`, owner,
+        { method: "POST", body: JSON.stringify(review) })).status).toBe(409);
+    }
+    await db.update(bsbV2PacketsTable).set({ assessment: assessed.body, stage: "ASSESSED", review: null })
+      .where(and(eq(bsbV2PacketsTable.id, created.body.id), eq(bsbV2PacketsTable.ownerId, owner)));
+    expect((await request(`/api/bsb-v2/packets/${created.body.id}/reviews`, owner, {
+      method: "POST", body: JSON.stringify({ ...review, approvedInstruments: [instrument, instrument] }),
+    })).status).toBe(409);
+  });
+
   it("persists a demonstration review note across HTTP reload and rejects concurrent reuse", async () => {
     const owner = `${ownerPrefix}${randomUUID()}`;
     const created = await submit(owner, packet(`Review-note synthetic ${randomUUID()}`));
