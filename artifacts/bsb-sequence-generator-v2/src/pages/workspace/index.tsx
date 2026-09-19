@@ -1,3 +1,4 @@
+import { useGetAssessmentConfig } from "@workspace/api-client-react";
 import { Switch, Route, useLocation } from "wouter";
 import { Beaker, LayoutDashboard, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
@@ -7,6 +8,7 @@ import PacketDetail from "./dashboard";
 
 export default function Workspace() {
   const [location] = useLocation();
+  const { data: config } = useGetAssessmentConfig();
 
   const isCurrent = (path: string) => {
     if (path === "/workspace" && location === "/workspace") return true;
@@ -43,9 +45,9 @@ export default function Workspace() {
             <div className="flex items-start gap-2">
               <ShieldAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs font-medium text-sidebar-foreground">MOCK ASSESSMENT</p>
+                <p className="text-xs font-medium text-sidebar-foreground">{config?.enabled ? "AI ASSESSMENT" : "AI SETUP REQUIRED"}</p>
                 <p className="text-[10px] text-sidebar-foreground/60 mt-1 leading-tight">
-                  Assessments are generated via deterministic mock engine.
+                  {config?.enabled ? "Evidence-based assessment, followed by your review." : "Live assessment is disabled until model access and spending limits are configured."}
                 </p>
               </div>
             </div>
@@ -62,7 +64,7 @@ export default function Workspace() {
           </h2>
           <div className="flex items-center gap-3">
             <div className="px-2.5 py-1 bg-accent border border-accent-foreground/20 text-accent-foreground text-xs font-mono rounded-sm font-bold shadow-sm">
-              DEVELOPMENT MODE
+              ASSESSMENT WORKSPACE
             </div>
           </div>
         </header>

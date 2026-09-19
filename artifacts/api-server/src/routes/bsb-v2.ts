@@ -3,6 +3,8 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, bsbV2PacketsTable } from "@workspace/db";
 import { AssessCompanyBody, ReviewAssessmentBody } from "@workspace/api-zod";
 import { DeterministicFakeProvider, hashPacket, normalizeEvidence, validateFrozenRequest } from "../lib/bsb-v2";
+import { AssessmentError, liveConfiguration, validateModelAssessment } from "../lib/live-assessment";
+import { failurePayload, getAssessmentRun, runLiveAssessment } from "../lib/assessment-runs";
 
 const safeRecord = (row: any) => ({
   id: row.id, stage: row.stage, inputHash: row.inputHash,
@@ -13,6 +15,12 @@ const safeRecord = (row: any) => ({
 
 const router: IRouter = Router();
 const provider = new DeterministicFakeProvider();
+
+router.get("/bsb-v2/assessment-config", (_req, res) => {
+  const config = liveConfiguration();
+  res.json({ enabled: config.enabled, missing: config.missing, model: config.model,
+    reservationUsd: config.reservationUsd, dailyLimitUsd: config.dailyLimitMicroUsd / 1e6 });
+});
 
 router.get("/bsb-v2/packets", async (_req, res): Promise<void> => {
   const rows = await db.select().from(bsbV2PacketsTable)
@@ -52,7 +60,7 @@ router.get("/bsb-v2/packets/:packetId", async (req, res): Promise<void> => {
   const packetId = String(req.params.packetId);
   const [row] = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.id, packetId)).limit(1);
   if (!row) { res.status(404).json({ error: "Packet not found" }); return; }
-  res.json(safeRecord(row));
+  res.json({ ...safeRecord(row), assessmentRun: await getAssessmentRun(packetId) });
 });
 
 router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> => {
@@ -62,9 +70,17 @@ router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> 
     return;
   }
   const packetId = String(req.params.packetId);
+  if (body.data.mode === "REAL_INPUT") {
+    try { res.json(await runLiveAssessment(packetId, body.data.retry === true)); }
+    catch (error) {
+      const failure = error instanceof AssessmentError ? error : new AssessmentError("SERVER_FAILED", "The assessment service could not complete the request. Reload the packet to check its saved status.", 500);
+      res.status(failure.status).json(failurePayload(failure));
+    }
+    return;
+  }
   const [row] = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.id, packetId)).limit(1);
   if (!row) { res.status(404).json({ error: "Packet not found" }); return; }
-  if (row.assessment || row.stage === "APPROVED" || row.stage === "REJECTED") {
+  if (row.assessment || row.stage === "ASSESSING" || row.stage === "APPROVED" || row.stage === "REJECTED") {
     res.status(409).json({ error: "Assessment superseded", issues: [{ path: "assessment", message: "A current assessment or review already exists." }] });
     return;
   }
@@ -93,7 +109,25 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
   if (!row || !row.assessment) { res.status(404).json({ error: "Assessment not found" }); return; }
   const assessment = row.assessment as any;
   const currentEvidence = row.normalizedEvidence as any[];
-  const eligibleStatuses = assessment.demoMode === true
+  if (assessment.provider === "OPENAI") {
+    try {
+      validateModelAssessment({
+        evidenceReviews: assessment.evidenceReviews,
+        instruments: assessment.instruments.map((item: any) => ({
+          instrument: item.instrument, fit: item.fit, recommendation: item.recommendation,
+          evidenceIds: item.evidenceIds, ruleIds: item.ruleIds,
+          currentUse: { value: item.currentUse, evidenceIds: item.currentUseEvidenceIds },
+          accountStatus: { value: item.accountStatus, evidenceIds: item.accountStatusEvidenceIds },
+          readiness: { value: item.readiness, evidenceIds: item.readinessEvidenceIds },
+        })),
+        selectedInstruments: assessment.selectedInstruments, selectionReason: assessment.selectionReason,
+        limitations: [],
+      }, currentEvidence, row.evidenceVersion);
+    } catch (error) {
+      res.status(409).json(failurePayload(error as AssessmentError)); return;
+    }
+  }
+  const eligibleStatuses = assessment.demoMode === true || assessment.provider === "OPENAI"
     ? new Set(["SUPPORTED", "SUPPORT_NOT_VERIFIED"])
     : new Set(["SUPPORTED"]);
   const allowed = new Set(assessment.instruments.filter((item: any) =>
@@ -102,9 +136,11 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
     item.evidenceIds.every((id: string) =>
       currentEvidence.some((e: any) =>
         e.evidenceId === id &&
+        (assessment.provider !== "OPENAI" || assessment.groundedEvidenceIds?.includes(id)) &&
         eligibleStatuses.has(e.supportStatus) &&
         e.evidenceState !== "INFERRED" &&
-        !hasExcludedCitation(e)))).map((item: any) => item.instrument));
+        !hasExcludedCitation(e))) &&
+    (assessment.provider !== "OPENAI" || assessment.selectedInstruments?.includes(item.instrument))).map((item: any) => item.instrument));
   if (body.data.assessmentId !== assessment.id || body.data.evidenceVersion !== row.evidenceVersion || assessment.evidenceVersion !== row.evidenceVersion) {
     res.status(409).json({ error: "Stale approval", issues: [{ path: "evidenceVersion", message: "Evidence or assessment changed; reassess before review." }] }); return;
   }

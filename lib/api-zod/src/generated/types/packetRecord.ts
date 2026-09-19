@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Assessment } from './assessment';
+import type { AssessmentRun } from './assessmentRun';
 import type { NormalizedEvidence } from './normalizedEvidence';
 import type { PacketRecordStage } from './packetRecordStage';
 import type { ResearchPacket } from './researchPacket';
@@ -20,6 +21,7 @@ export interface PacketRecord {
   normalizedEvidence: NormalizedEvidence[];
   validation: ValidationResult;
   assessment?: Assessment;
+  assessmentRun?: AssessmentRun;
   review?: Review;
   createdAt: Date;
 }

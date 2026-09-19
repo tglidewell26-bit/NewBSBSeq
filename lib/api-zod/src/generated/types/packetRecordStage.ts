@@ -12,6 +12,7 @@ export type PacketRecordStage = typeof PacketRecordStage[keyof typeof PacketReco
 export const PacketRecordStage = {
   VALIDATED: 'VALIDATED',
   NEEDS_REVIEW: 'NEEDS_REVIEW',
+  ASSESSING: 'ASSESSING',
   ASSESSED: 'ASSESSED',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',

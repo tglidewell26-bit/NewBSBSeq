@@ -5,18 +5,31 @@
  * BSB Sequence Generator V2 Phase 1 API
  * OpenAPI spec version: 0.1.0
  */
+import type { AssessmentProvider } from './assessmentProvider';
+import type { AssessmentSelectedInstrumentsItem } from './assessmentSelectedInstrumentsItem';
+import type { AssessmentUsage } from './assessmentUsage';
+import type { EvidenceReview } from './evidenceReview';
 import type { InstrumentAssessment } from './instrumentAssessment';
 
 export interface Assessment {
   id: string;
-  provider: 'DETERMINISTIC_FAKE';
-  mock: true;
+  provider: AssessmentProvider;
+  mock: boolean;
   evidenceVersion: string;
-  /** @maxItems 2 */
+  /** @maxItems 3 */
   instruments: InstrumentAssessment[];
   limitations: string[];
   semanticReviewNeeded: boolean;
   approvable: boolean;
   demoMode: boolean;
   validatedRealAssessment: boolean;
+  /** @maxItems 2 */
+  selectedInstruments?: AssessmentSelectedInstrumentsItem[];
+  selectionReason?: string;
+  model?: string;
+  promptVersion?: string;
+  rubricVersion?: string;
+  groundedEvidenceIds?: string[];
+  evidenceReviews?: EvidenceReview[];
+  usage?: AssessmentUsage;
 }

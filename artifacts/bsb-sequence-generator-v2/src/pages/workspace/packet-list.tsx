@@ -63,7 +63,7 @@ export default function PacketList() {
   return (
     <div className="space-y-8 pb-10">
       <section>
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Authenticated packet intake</p>
+        <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Research packet intake</p>
         <h1 className="mt-2 text-3xl font-bold">Phase 1 evidence review</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">Paste or upload the exact producer packet. Both paths submit the identical <span className="font-mono">researchPacket</span> object. No prose extraction, repairs, legacy markers, or sequence writing.</p>
       </section>

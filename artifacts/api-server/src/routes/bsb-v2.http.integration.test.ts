@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db, bsbV2PacketsTable } from "@workspace/db";
 import app from "../app";
 import { DeterministicFakeProvider } from "../lib/bsb-v2";
+import { initializeAssessmentRuns } from "../lib/assessment-runs";
 
 const createdIds = new Set<string>();
 let server: Server;
@@ -70,6 +71,7 @@ const submit = async (value: ReturnType<typeof packet>) => {
 };
 
 beforeAll(async () => {
+  await initializeAssessmentRuns();
   await new Promise<void>((resolve) => {
     server = app.listen(0, "127.0.0.1", () => resolve());
   });

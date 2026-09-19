@@ -85,14 +85,14 @@ export function normalizeEvidence(packet: any) {
   const normalized: LocatedEvidence[] = [...byId.values()].map(({ item, locations }) => {
     const issues: string[] = [];
     const affirmative = ["CONFIRMED", "SUPPORTED", "EXPLICIT"].includes(item.evidenceState);
-    const publicUnverifiedMessage = "Public source evidence is SUPPORT_NOT_VERIFIED until independently account-confirmed.";
+    const publicUnverifiedMessage = "Supplied public excerpt; not independently retrieved. Live assessment can evaluate whether the excerpt supports the claim.";
     if (item.provenanceType === "CONFIRMED_ACCOUNT") {
       if (item.evidenceState !== "CONFIRMED" || item.confirmed !== true || !item.sourceLabel || item.sourceUrl !== null || item.basisSourceUrls.length || item.inference !== null) {
         issues.push("Confirmed account evidence requires CONFIRMED state, confirmed true, sourceLabel, null sourceUrl, no public basis URLs, and no inference.");
       }
     } else if (item.provenanceType === "PUBLIC_SOURCE" && affirmative) {
-      // Public claims are retained for traceability but are never independently
-      // confirmed evidence. Account confirmation is the only support authority.
+      // Intake preserves supplied source provenance; semantic assessment is a
+      // separate step and does not pretend to retrieve or verify the web page.
       issues.push(publicUnverifiedMessage);
       const validHttp = (value: string) => {
         try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:"; } catch { return false; }

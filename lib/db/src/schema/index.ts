@@ -18,3 +18,4 @@
 //   export type Post = typeof postsTable.$inferSelect;
 
 export * from "./bsb-v2";
+export * from "./assessment-runs";

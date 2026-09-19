@@ -133,6 +133,7 @@ export type PacketRecordStage = typeof PacketRecordStage[keyof typeof PacketReco
 export const PacketRecordStage = {
   VALIDATED: 'VALIDATED',
   NEEDS_REVIEW: 'NEEDS_REVIEW',
+  ASSESSING: 'ASSESSING',
   ASSESSED: 'ASSESSED',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
@@ -166,6 +167,14 @@ export interface ValidationResult {
   warnings: FieldIssue[];
 }
 
+export type AssessmentProvider = typeof AssessmentProvider[keyof typeof AssessmentProvider];
+
+
+export const AssessmentProvider = {
+  DETERMINISTIC_FAKE: 'DETERMINISTIC_FAKE',
+  OPENAI: 'OPENAI',
+} as const;
+
 export type InstrumentAssessmentInstrument = typeof InstrumentAssessmentInstrument[keyof typeof InstrumentAssessmentInstrument];
 
 
@@ -197,18 +206,86 @@ export interface InstrumentAssessment {
   readiness: string;
 }
 
+export type AssessmentSelectedInstrumentsItem = typeof AssessmentSelectedInstrumentsItem[keyof typeof AssessmentSelectedInstrumentsItem];
+
+
+export const AssessmentSelectedInstrumentsItem = {
+  CellScape: 'CellScape',
+  CosMx: 'CosMx',
+  GeoMx: 'GeoMx',
+} as const;
+
+export type EvidenceReviewVerdict = typeof EvidenceReviewVerdict[keyof typeof EvidenceReviewVerdict];
+
+
+export const EvidenceReviewVerdict = {
+  ENTAILED: 'ENTAILED',
+  NOT_SUPPORTED: 'NOT_SUPPORTED',
+  CONFLICT: 'CONFLICT',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+export interface EvidenceReview {
+  evidenceId: string;
+  verdict: EvidenceReviewVerdict;
+  quote: string;
+  reason: string;
+}
+
+export interface AssessmentUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
+  model: string;
+  responseId?: string;
+}
+
 export interface Assessment {
   id: string;
-  provider: 'DETERMINISTIC_FAKE';
-  mock: true;
+  provider: AssessmentProvider;
+  mock: boolean;
   evidenceVersion: string;
-  /** @maxItems 2 */
+  /** @maxItems 3 */
   instruments: InstrumentAssessment[];
   limitations: string[];
   semanticReviewNeeded: boolean;
   approvable: boolean;
   demoMode: boolean;
   validatedRealAssessment: boolean;
+  /** @maxItems 2 */
+  selectedInstruments?: AssessmentSelectedInstrumentsItem[];
+  selectionReason?: string;
+  model?: string;
+  promptVersion?: string;
+  rubricVersion?: string;
+  groundedEvidenceIds?: string[];
+  evidenceReviews?: EvidenceReview[];
+  usage?: AssessmentUsage;
+}
+
+export type AssessmentRunState = typeof AssessmentRunState[keyof typeof AssessmentRunState];
+
+
+export const AssessmentRunState = {
+  RUNNING: 'RUNNING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+  OUTCOME_UNKNOWN: 'OUTCOME_UNKNOWN',
+} as const;
+
+export interface ValidationFailure {
+  error: string;
+  issues: FieldIssue[];
+}
+
+export interface AssessmentRun {
+  id: string;
+  state: AssessmentRunState;
+  attempt: number;
+  reservedUsd: number;
+  startedAt: string;
+  error?: ValidationFailure;
+  usage?: AssessmentUsage;
 }
 
 export type ReviewDecision = typeof ReviewDecision[keyof typeof ReviewDecision];
@@ -239,13 +316,9 @@ export interface PacketRecord {
   normalizedEvidence: NormalizedEvidence[];
   validation: ValidationResult;
   assessment?: Assessment;
+  assessmentRun?: AssessmentRun;
   review?: Review;
   createdAt: string;
-}
-
-export interface ValidationFailure {
-  error: string;
-  issues: FieldIssue[];
 }
 
 export type AssessmentInputMode = typeof AssessmentInputMode[keyof typeof AssessmentInputMode];
@@ -258,6 +331,7 @@ export const AssessmentInputMode = {
 
 export interface AssessmentInput {
   mode: AssessmentInputMode;
+  retry?: boolean;
 }
 
 export type ReviewInputDecision = typeof ReviewInputDecision[keyof typeof ReviewInputDecision];
@@ -285,5 +359,13 @@ export interface ReviewInput {
   approvedInstruments: ReviewInputApprovedInstrumentsItem[];
   note: string;
   confirmSecond: boolean;
+}
+
+export interface AssessmentConfig {
+  enabled: boolean;
+  missing: string[];
+  model: string;
+  reservationUsd: number;
+  dailyLimitUsd: number;
 }
 
