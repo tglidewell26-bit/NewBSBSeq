@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { pool } from "@workspace/db";
 
 describe("BSB V2 disposable database integration", () => {
-  it("persists real stages, scopes reads by owner, and enforces user-bound idempotency", async () => {
+  it("preserves the existing database schema and duplicate constraint", async () => {
     const client = await pool.connect();
     const id = randomUUID();
     const owner = `synthetic-owner-${randomUUID()}`;
@@ -17,9 +17,7 @@ describe("BSB V2 disposable database integration", () => {
         [id, owner, hash, JSON.stringify({ brief: "Synthetic integration company" }), JSON.stringify({ structurallyValid: true, supportValid: true, errors: [], warnings: [] })],
       );
       const owned = await client.query("SELECT stage FROM bsb_v2_packets WHERE id = $1 AND owner_id = $2", [id, owner]);
-      const crossUser = await client.query("SELECT stage FROM bsb_v2_packets WHERE id = $1 AND owner_id = $2", [id, "other-synthetic-owner"]);
       expect(owned.rows[0]?.stage).toBe("VALIDATED");
-      expect(crossUser.rowCount).toBe(0);
 
       await client.query("SAVEPOINT duplicate_check");
       try {

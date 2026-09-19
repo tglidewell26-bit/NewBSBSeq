@@ -1,14 +1,11 @@
 import { Switch, Route, useLocation } from "wouter";
-import { Show, useUser, useClerk } from "@clerk/react";
-import { Beaker, FileBox, LayoutDashboard, LogOut, ShieldAlert } from "lucide-react";
+import { Beaker, LayoutDashboard, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
 
 import PacketList from "./packet-list";
 import PacketDetail from "./dashboard";
 
 export default function Workspace() {
-  const { user } = useUser();
-  const { signOut } = useClerk();
   const [location] = useLocation();
 
   const isCurrent = (path: string) => {
@@ -55,33 +52,6 @@ export default function Workspace() {
           </div>
         </div>
 
-        <div className="p-4 border-t border-sidebar-border/50 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center shrink-0">
-                <span className="text-xs font-medium text-sidebar-accent-foreground">
-                  {user?.firstName?.[0] || user?.emailAddresses[0]?.emailAddress[0].toUpperCase() || "U"}
-                </span>
-              </div>
-              <div className="truncate">
-                <p className="text-xs font-medium text-sidebar-foreground truncate">
-                  {user?.fullName || "User"}
-                </p>
-                <p className="text-[10px] text-sidebar-foreground/60 truncate">
-                  {user?.emailAddresses[0]?.emailAddress}
-                </p>
-              </div>
-            </div>
-            <button 
-              type="button" 
-              onClick={() => signOut()}
-              className="p-1.5 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-sm transition-colors"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
       </aside>
 
       {/* Main Content Area */}

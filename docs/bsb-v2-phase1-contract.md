@@ -58,7 +58,15 @@ sending, exporting, scraping, scheduling, and deployment are outside Phase 1.
 
 ## Security
 
-All packet, assessment, and review endpoints require Clerk authentication and
-filter every record by the server-derived owner ID. Request logging strips query
-strings and redacts cookies/authorization headers. Packet bodies are not logged.
+The app opens directly into one shared workspace without sign-in. Packet,
+assessment, and review endpoints do not require credentials. Anyone with access
+to the published URL can read packets and submit assessments/reviews.
+
+Existing records remain accessible regardless of their former owner ID. The
+existing database column and unique index are retained only for compatibility;
+new records use a constant shared-workspace value. No data migration or schema
+push is required. Duplicate submissions return the existing intact record.
+
+Request logging strips query strings and redacts cookies/authorization headers.
+Packet bodies are not logged. Live AI remains disabled.
 Committed samples and tests use synthetic companies only.

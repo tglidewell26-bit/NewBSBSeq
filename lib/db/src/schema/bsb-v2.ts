@@ -4,6 +4,8 @@ export const bsbV2PacketsTable = pgTable(
   "bsb_v2_packets",
   {
     id: text("id").primaryKey(),
+    // Retained for existing databases; new records use the shared workspace ID.
+    // This field is no longer used for authentication or read access.
     ownerId: text("owner_id").notNull(),
     inputHash: text("input_hash").notNull(),
     evidenceVersion: text("evidence_version").notNull(),

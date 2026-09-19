@@ -1,6 +1,6 @@
 # BSB Sequence Generator V2
 
-Private Phase 1 application for authenticated research-packet intake, evidence validation, instrument assessment, and versioned review.
+Personal Phase 1 application for research-packet intake without sign-in, evidence validation, instrument assessment, and versioned review.
 
 ## Run & Operate
 
@@ -26,7 +26,10 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- One shared workspace; all packet and review routes work without authentication.
+- Existing records remain accessible. The legacy owner column/index stays for database compatibility; no schema push or migration is needed.
+- The interface opens directly at `/workspace`. There is no authentication provider, proxy, or key configuration.
+- Anyone who can reach the published app can read and use the shared workspace.
 
 ## Product
 
@@ -38,7 +41,9 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the backend small. Remove unused code instead of adding layers.
+- Make changes directly in GitHub; Tim pulls into Replit and publishes.
+- No sign-in or registration for this personal app.
 
 ## Gotchas
 
