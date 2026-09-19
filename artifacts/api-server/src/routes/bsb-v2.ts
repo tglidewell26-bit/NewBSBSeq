@@ -1,14 +1,9 @@
-import { Router, type IRouter, type Request } from "express";
-import { getAuth } from "@clerk/express";
+import { Router, type IRouter } from "express";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, bsbV2PacketsTable } from "@workspace/db";
 import { AssessCompanyBody, ReviewAssessmentBody } from "@workspace/api-zod";
 import { DeterministicFakeProvider, hashPacket, normalizeEvidence, validateFrozenRequest } from "../lib/bsb-v2";
 
-const clerkUserIdFor = (req: Request) => {
-  const auth = getAuth(req);
-  return auth?.sessionClaims?.userId || auth?.userId || null;
-};
 const safeRecord = (row: any) => ({
   id: row.id, stage: row.stage, inputHash: row.inputHash,
   researchPacket: row.researchPacket, normalizedEvidence: row.normalizedEvidence,
@@ -16,24 +11,11 @@ const safeRecord = (row: any) => ({
   review: row.review ?? undefined, createdAt: row.createdAt.toISOString(),
 });
 
-export function createBsbV2Router(options: {
-  userIdFor?: (req: Request) => string | null;
-  provider?: DeterministicFakeProvider;
-} = {}): IRouter {
 const router: IRouter = Router();
-const provider = options.provider ?? new DeterministicFakeProvider();
-const userIdFor = options.userIdFor ?? clerkUserIdFor;
-
-router.use("/bsb-v2", (req, res, next) => {
-  const userId = userIdFor(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  res.locals.userId = userId;
-  next();
-});
+const provider = new DeterministicFakeProvider();
 
 router.get("/bsb-v2/packets", async (_req, res): Promise<void> => {
   const rows = await db.select().from(bsbV2PacketsTable)
-    .where(eq(bsbV2PacketsTable.ownerId, res.locals.userId))
     .orderBy(desc(bsbV2PacketsTable.createdAt));
   res.json(rows.map((row) => ({ id: row.id, stage: row.stage, brief: (row.researchPacket as any).brief, createdAt: row.createdAt.toISOString() })));
 });
@@ -46,7 +28,7 @@ router.post("/bsb-v2/packets", async (req, res): Promise<void> => {
   }
   const packet = structuredClone(parsed.data.researchPacket);
   const inputHash = hashPacket(packet);
-  const existing = await db.select().from(bsbV2PacketsTable).where(and(eq(bsbV2PacketsTable.ownerId, res.locals.userId), eq(bsbV2PacketsTable.inputHash, inputHash))).limit(1);
+  const existing = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.inputHash, inputHash)).limit(1);
   if (existing[0]) { res.status(201).json(safeRecord(existing[0])); return; }
 
   const { normalized, errors } = normalizeEvidence(packet);
@@ -55,22 +37,20 @@ router.post("/bsb-v2/packets", async (req, res): Promise<void> => {
   const validation = { structurallyValid: true, supportValid: warnings.length === 0, errors: [], warnings };
   const id = crypto.randomUUID();
   const [created] = await db.insert(bsbV2PacketsTable).values({
-    id, ownerId: res.locals.userId, inputHash, evidenceVersion: inputHash,
+    // Keep the existing NOT NULL column/index without migrating saved records.
+    id, ownerId: "shared-workspace", inputHash, evidenceVersion: inputHash,
     stage: warnings.length ? "NEEDS_REVIEW" : "VALIDATED",
     researchPacket: packet, normalizedEvidence: normalized, validation,
   }).onConflictDoNothing({ target: [bsbV2PacketsTable.ownerId, bsbV2PacketsTable.inputHash] }).returning();
   // A concurrent identical request may have inserted after our initial lookup.
   // Return its intact record; never overwrite an assessment or review on retry.
-  const saved = created ?? (await db.select().from(bsbV2PacketsTable).where(and(
-    eq(bsbV2PacketsTable.ownerId, res.locals.userId),
-    eq(bsbV2PacketsTable.inputHash, inputHash),
-  )).limit(1))[0];
+  const saved = created ?? (await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.inputHash, inputHash)).limit(1))[0];
   res.status(201).json(safeRecord(saved));
 });
 
 router.get("/bsb-v2/packets/:packetId", async (req, res): Promise<void> => {
   const packetId = String(req.params.packetId);
-  const [row] = await db.select().from(bsbV2PacketsTable).where(and(eq(bsbV2PacketsTable.id, packetId), eq(bsbV2PacketsTable.ownerId, res.locals.userId))).limit(1);
+  const [row] = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.id, packetId)).limit(1);
   if (!row) { res.status(404).json({ error: "Packet not found" }); return; }
   res.json(safeRecord(row));
 });
@@ -82,7 +62,7 @@ router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> 
     return;
   }
   const packetId = String(req.params.packetId);
-  const [row] = await db.select().from(bsbV2PacketsTable).where(and(eq(bsbV2PacketsTable.id, packetId), eq(bsbV2PacketsTable.ownerId, res.locals.userId))).limit(1);
+  const [row] = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.id, packetId)).limit(1);
   if (!row) { res.status(404).json({ error: "Packet not found" }); return; }
   if (row.assessment || row.stage === "APPROVED" || row.stage === "REJECTED") {
     res.status(409).json({ error: "Assessment superseded", issues: [{ path: "assessment", message: "A current assessment or review already exists." }] });
@@ -94,7 +74,6 @@ router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> 
   const updated = await db.update(bsbV2PacketsTable).set({ assessment, review: null, stage: "ASSESSED" })
     .where(and(
       eq(bsbV2PacketsTable.id, packetId),
-      eq(bsbV2PacketsTable.ownerId, res.locals.userId),
       eq(bsbV2PacketsTable.evidenceVersion, row.evidenceVersion),
       eq(bsbV2PacketsTable.stage, row.stage),
       isNull(bsbV2PacketsTable.assessment),
@@ -110,7 +89,7 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
   const body = ReviewAssessmentBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid review", issues: body.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) }); return; }
   const packetId = String(req.params.packetId);
-  const [row] = await db.select().from(bsbV2PacketsTable).where(and(eq(bsbV2PacketsTable.id, packetId), eq(bsbV2PacketsTable.ownerId, res.locals.userId))).limit(1);
+  const [row] = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.id, packetId)).limit(1);
   if (!row || !row.assessment) { res.status(404).json({ error: "Assessment not found" }); return; }
   const assessment = row.assessment as any;
   const currentEvidence = row.normalizedEvidence as any[];
@@ -157,7 +136,6 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
   const updated = await db.update(bsbV2PacketsTable).set({ review, stage: body.data.decision === "APPROVE" ? "APPROVED" : "REJECTED" })
     .where(and(
       eq(bsbV2PacketsTable.id, packetId),
-      eq(bsbV2PacketsTable.ownerId, res.locals.userId),
       eq(bsbV2PacketsTable.stage, "ASSESSED"),
       eq(bsbV2PacketsTable.evidenceVersion, row.evidenceVersion),
       sql`${bsbV2PacketsTable.assessment}->>'id' = ${body.data.assessmentId}`,
@@ -169,10 +147,7 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
   res.json(review);
 });
 
-return router;
-}
-
 const hasExcludedCitation = (evidence: any) =>
   ["UNKNOWN", "CONTRADICTED", "ABSENT"].includes(evidence.evidenceState);
 
-export default createBsbV2Router();
+export default router;

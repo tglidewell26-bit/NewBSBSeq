@@ -1,5 +1,35 @@
 # BSB Sequence Generator V2 — Phase 1 test report
 
+## Shared workspace update — 2026-09-19
+
+At Tim's request, sign-in and per-user access have been removed from both the
+interface and API. The app opens at `/workspace`. Clerk, its proxy, authentication
+UI, token helpers, and unused server dependencies are removed. The lockfile only
+removes dependencies; remaining package versions are unchanged.
+
+Existing records remain accessible without changing their IDs, packets,
+assessments or review notes. The legacy owner column/index remains solely for
+database compatibility. No schema push or data migration is required.
+
+Executed after this change:
+
+- All 30 tests pass. The eight HTTP/database tests now exercise the production
+  Express app without credentials or simulated authentication. They cover intake,
+  listing, reload, assessment, review, old-owner records, duplicate submissions,
+  concurrent updates, and rejection of invalid approvals.
+- Shared library builds and API/frontend TypeScript checks pass.
+- API and frontend production builds pass without Clerk configuration. Vite
+  reports existing source-map warnings for the tooltip and label components.
+- The dependency lockfile passes pnpm's frozen-lockfile check offline.
+
+Database testing used disposable PGlite with the single-connection harness
+described below. No production database was accessed or changed. Browser testing
+could not reach the local preview because the cloud browser blocked localhost;
+visual acceptance on the republished Replit app remains pending.
+
+Live AI is still disabled. Earlier authenticated-test results below are historical
+and describe the previous access model.
+
 ## Independent GitHub review — 2026-09-18
 
 The repository is now connected separately as `tglidewell26-bit/NewBSBSeq`.
