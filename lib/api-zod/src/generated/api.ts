@@ -8,6 +8,15 @@
 import * as zod from 'zod';
 
 
+export const GetAssessmentConfigResponse = zod.object({
+  "enabled": zod.boolean(),
+  "missing": zod.array(zod.string()),
+  "model": zod.string(),
+  "reservationUsd": zod.number(),
+  "dailyLimitUsd": zod.number()
+})
+
+
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
@@ -300,7 +309,9 @@ export const submitResearchPacketResponseNormalizedEvidenceItemOneSourceUrlRegEx
 export const submitResearchPacketResponseNormalizedEvidenceItemOneBasisSourceUrlsItemRegExp = new RegExp('^https?:/');
 
 
-export const submitResearchPacketResponseAssessmentInstrumentsMax = 2;
+export const submitResearchPacketResponseAssessmentInstrumentsMax = 3;
+
+export const submitResearchPacketResponseAssessmentSelectedInstrumentsMax = 2;
 
 export const submitResearchPacketResponseReviewApprovedInstrumentsMax = 2;
 
@@ -308,7 +319,7 @@ export const submitResearchPacketResponseReviewApprovedInstrumentsMax = 2;
 
 export const SubmitResearchPacketResponse = zod.object({
   "id": zod.string(),
-  "stage": zod.enum(['VALIDATED', 'NEEDS_REVIEW', 'ASSESSED', 'APPROVED', 'REJECTED']),
+  "stage": zod.enum(['VALIDATED', 'NEEDS_REVIEW', 'ASSESSING', 'ASSESSED', 'APPROVED', 'REJECTED']),
   "inputHash": zod.string(),
   "researchPacket": zod.object({
   "schemaVersion": zod.literal("bsb-company-research-v1"),
@@ -497,8 +508,8 @@ export const SubmitResearchPacketResponse = zod.object({
 }),
   "assessment": zod.object({
   "id": zod.string(),
-  "provider": zod.literal("DETERMINISTIC_FAKE"),
-  "mock": zod.literal(true),
+  "provider": zod.enum(['DETERMINISTIC_FAKE', 'OPENAI']),
+  "mock": zod.boolean(),
   "evidenceVersion": zod.string(),
   "instruments": zod.array(zod.object({
   "instrument": zod.enum(['CellScape', 'CosMx', 'GeoMx']),
@@ -515,7 +526,47 @@ export const SubmitResearchPacketResponse = zod.object({
   "semanticReviewNeeded": zod.boolean(),
   "approvable": zod.boolean(),
   "demoMode": zod.boolean(),
-  "validatedRealAssessment": zod.boolean()
+  "validatedRealAssessment": zod.boolean(),
+  "selectedInstruments": zod.array(zod.enum(['CellScape', 'CosMx', 'GeoMx'])).max(submitResearchPacketResponseAssessmentSelectedInstrumentsMax).optional(),
+  "selectionReason": zod.string().optional(),
+  "model": zod.string().optional(),
+  "promptVersion": zod.string().optional(),
+  "rubricVersion": zod.string().optional(),
+  "groundedEvidenceIds": zod.array(zod.string()).optional(),
+  "evidenceReviews": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "verdict": zod.enum(['ENTAILED', 'NOT_SUPPORTED', 'CONFLICT', 'UNKNOWN']),
+  "quote": zod.string(),
+  "reason": zod.string()
+})).optional(),
+  "usage": zod.object({
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "estimatedCostUsd": zod.number(),
+  "model": zod.string(),
+  "responseId": zod.string().optional()
+}).optional()
+}).optional(),
+  "assessmentRun": zod.object({
+  "id": zod.string(),
+  "state": zod.enum(['RUNNING', 'COMPLETED', 'FAILED', 'OUTCOME_UNKNOWN']),
+  "attempt": zod.number().int(),
+  "reservedUsd": zod.number(),
+  "startedAt": zod.coerce.date(),
+  "error": zod.object({
+  "error": zod.string(),
+  "issues": zod.array(zod.object({
+  "path": zod.string(),
+  "message": zod.string()
+}))
+}).optional(),
+  "usage": zod.object({
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "estimatedCostUsd": zod.number(),
+  "model": zod.string(),
+  "responseId": zod.string().optional()
+}).optional()
 }).optional(),
   "review": zod.object({
   "id": zod.string(),
@@ -596,7 +647,9 @@ export const getResearchPacketResponseNormalizedEvidenceItemOneSourceUrlRegExp =
 export const getResearchPacketResponseNormalizedEvidenceItemOneBasisSourceUrlsItemRegExp = new RegExp('^https?:/');
 
 
-export const getResearchPacketResponseAssessmentInstrumentsMax = 2;
+export const getResearchPacketResponseAssessmentInstrumentsMax = 3;
+
+export const getResearchPacketResponseAssessmentSelectedInstrumentsMax = 2;
 
 export const getResearchPacketResponseReviewApprovedInstrumentsMax = 2;
 
@@ -604,7 +657,7 @@ export const getResearchPacketResponseReviewApprovedInstrumentsMax = 2;
 
 export const GetResearchPacketResponse = zod.object({
   "id": zod.string(),
-  "stage": zod.enum(['VALIDATED', 'NEEDS_REVIEW', 'ASSESSED', 'APPROVED', 'REJECTED']),
+  "stage": zod.enum(['VALIDATED', 'NEEDS_REVIEW', 'ASSESSING', 'ASSESSED', 'APPROVED', 'REJECTED']),
   "inputHash": zod.string(),
   "researchPacket": zod.object({
   "schemaVersion": zod.literal("bsb-company-research-v1"),
@@ -793,8 +846,8 @@ export const GetResearchPacketResponse = zod.object({
 }),
   "assessment": zod.object({
   "id": zod.string(),
-  "provider": zod.literal("DETERMINISTIC_FAKE"),
-  "mock": zod.literal(true),
+  "provider": zod.enum(['DETERMINISTIC_FAKE', 'OPENAI']),
+  "mock": zod.boolean(),
   "evidenceVersion": zod.string(),
   "instruments": zod.array(zod.object({
   "instrument": zod.enum(['CellScape', 'CosMx', 'GeoMx']),
@@ -811,7 +864,47 @@ export const GetResearchPacketResponse = zod.object({
   "semanticReviewNeeded": zod.boolean(),
   "approvable": zod.boolean(),
   "demoMode": zod.boolean(),
-  "validatedRealAssessment": zod.boolean()
+  "validatedRealAssessment": zod.boolean(),
+  "selectedInstruments": zod.array(zod.enum(['CellScape', 'CosMx', 'GeoMx'])).max(getResearchPacketResponseAssessmentSelectedInstrumentsMax).optional(),
+  "selectionReason": zod.string().optional(),
+  "model": zod.string().optional(),
+  "promptVersion": zod.string().optional(),
+  "rubricVersion": zod.string().optional(),
+  "groundedEvidenceIds": zod.array(zod.string()).optional(),
+  "evidenceReviews": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "verdict": zod.enum(['ENTAILED', 'NOT_SUPPORTED', 'CONFLICT', 'UNKNOWN']),
+  "quote": zod.string(),
+  "reason": zod.string()
+})).optional(),
+  "usage": zod.object({
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "estimatedCostUsd": zod.number(),
+  "model": zod.string(),
+  "responseId": zod.string().optional()
+}).optional()
+}).optional(),
+  "assessmentRun": zod.object({
+  "id": zod.string(),
+  "state": zod.enum(['RUNNING', 'COMPLETED', 'FAILED', 'OUTCOME_UNKNOWN']),
+  "attempt": zod.number().int(),
+  "reservedUsd": zod.number(),
+  "startedAt": zod.coerce.date(),
+  "error": zod.object({
+  "error": zod.string(),
+  "issues": zod.array(zod.object({
+  "path": zod.string(),
+  "message": zod.string()
+}))
+}).optional(),
+  "usage": zod.object({
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "estimatedCostUsd": zod.number(),
+  "model": zod.string(),
+  "responseId": zod.string().optional()
+}).optional()
 }).optional(),
   "review": zod.object({
   "id": zod.string(),
@@ -832,17 +925,20 @@ export const AssessCompanyParams = zod.object({
 })
 
 export const AssessCompanyBody = zod.object({
-  "mode": zod.enum(['REAL_INPUT', 'DEMO_SYNTHETIC'])
+  "mode": zod.enum(['REAL_INPUT', 'DEMO_SYNTHETIC']),
+  "retry": zod.boolean().optional()
 })
 
-export const assessCompanyResponseInstrumentsMax = 2;
+export const assessCompanyResponseInstrumentsMax = 3;
+
+export const assessCompanyResponseSelectedInstrumentsMax = 2;
 
 
 
 export const AssessCompanyResponse = zod.object({
   "id": zod.string(),
-  "provider": zod.literal("DETERMINISTIC_FAKE"),
-  "mock": zod.literal(true),
+  "provider": zod.enum(['DETERMINISTIC_FAKE', 'OPENAI']),
+  "mock": zod.boolean(),
   "evidenceVersion": zod.string(),
   "instruments": zod.array(zod.object({
   "instrument": zod.enum(['CellScape', 'CosMx', 'GeoMx']),
@@ -859,7 +955,26 @@ export const AssessCompanyResponse = zod.object({
   "semanticReviewNeeded": zod.boolean(),
   "approvable": zod.boolean(),
   "demoMode": zod.boolean(),
-  "validatedRealAssessment": zod.boolean()
+  "validatedRealAssessment": zod.boolean(),
+  "selectedInstruments": zod.array(zod.enum(['CellScape', 'CosMx', 'GeoMx'])).max(assessCompanyResponseSelectedInstrumentsMax).optional(),
+  "selectionReason": zod.string().optional(),
+  "model": zod.string().optional(),
+  "promptVersion": zod.string().optional(),
+  "rubricVersion": zod.string().optional(),
+  "groundedEvidenceIds": zod.array(zod.string()).optional(),
+  "evidenceReviews": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "verdict": zod.enum(['ENTAILED', 'NOT_SUPPORTED', 'CONFLICT', 'UNKNOWN']),
+  "quote": zod.string(),
+  "reason": zod.string()
+})).optional(),
+  "usage": zod.object({
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "estimatedCostUsd": zod.number(),
+  "model": zod.string(),
+  "responseId": zod.string().optional()
+}).optional()
 })
 
 

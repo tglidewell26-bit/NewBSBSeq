@@ -18,26 +18,30 @@ Personal Phase 1 application for research-packet intake without sign-in, evidenc
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Build: esbuild (ESM bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- Setup and spending controls: `docs/live-assessment-setup.md`
+- Evidence/model contract and rubric: `lib/api-zod/src/live-assessment.ts`
+- Provider call and evidence validation: `artifacts/api-server/src/lib/live-assessment.ts`
+- Persistent call reservations: `artifacts/api-server/src/lib/assessment-runs.ts`
+- API contract: `lib/api-spec/openapi.yaml`
 
 ## Architecture decisions
 
 - One shared workspace; all packet and review routes work without authentication.
-- Existing records remain accessible. The legacy owner column/index stays for database compatibility; no schema push or migration is needed.
-- The interface opens directly at `/workspace`. There is no authentication provider, proxy, or key configuration.
+- Existing records remain accessible. Startup adds only the assessment-run ledger table/index; no existing records or columns are changed.
+- The interface opens directly at `/workspace`. There is no authentication provider or proxy. The server API key is only for paid AI assessment.
 - Anyone who can reach the published app can read and use the shared workspace.
 
 ## Product
 
 - Accepts the frozen `bsb-company-research-v1` producer contract by paste or JSON upload.
 - Preserves raw packets, normalizes evidence once, and separates structural validity from factual support.
-- Produces clearly labeled deterministic mock assessments for CellScape, CosMx, and GeoMx.
+- Supports one GPT-5.6 Terra assessment call for CellScape, CosMx, and GeoMx when explicitly configured; synthetic demonstration mode remains labeled.
 - Supports explicit, version-bound approval or rejection of no more than two supported instruments.
-- Does not include sequence writing, sending, exporting, scraping, scheduling, or live AI.
+- Does not include sequence writing, sending, exporting, scraping, or scheduling.
 
 ## User preferences
 
@@ -47,7 +51,7 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Gotchas
 
-- Live assessment remains disabled until a provider, model ID, and spend cap are separately approved.
+- Live assessment defaults off. Configure the API key, exact model, and agreed per-job/daily limits before enabling it. No automatic paid retries or repair loops.
 - Never use real company or private account facts in committed tests, fixtures, logs, or public output.
 - This is separate from the existing BSB application; do not connect it to the original repository or migrate its data/assets.
 

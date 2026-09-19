@@ -1,5 +1,25 @@
 # BSB Sequence Generator V2 — Phase 1 test report
 
+## Live assessment implementation — 2026-09-19
+
+- **65 tests passed across six files**, including the actual Express request path
+  and disposable SQL database. New tests cover nested evidence preservation,
+  model-output grounding, unsupported claims, separate commercial readiness,
+  budget reservations, duplicate calls, explicit bounded retries, uncertain calls
+  across midnight, approval, and client abort with a saved server result.
+- Shared-library, API, and frontend TypeScript checks passed. Both production
+  builds passed; Vite reports existing tooltip/label source-map warnings.
+- The private Noetik packet passed unchanged intake and request-preservation
+  checks. A deliberately stubbed expected response passed the evidence validator.
+  This is not a real model accuracy test. Private account details are not committed.
+- **Zero paid API calls** were made. Provider responses in tests were stubbed.
+  Live Noetik assessment awaits API configuration and agreed spending limits.
+- SQL tests used disposable PGlite with a single-connection harness. Production
+  PostgreSQL multi-connection contention and the republished browser UI still
+  need deployment verification. No production database was changed during testing.
+
+The sections below record earlier implementation states and test counts.
+
 ## Shared workspace update — 2026-09-19
 
 At Tim's request, sign-in and per-user access have been removed from both the

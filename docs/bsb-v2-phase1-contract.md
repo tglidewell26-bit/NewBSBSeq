@@ -34,12 +34,11 @@ properties, legacy markers, and prose-extraction envelopes are rejected.
 
 ## Assessment limits
 
-Phase 1 uses only `DETERMINISTIC_FAKE`. Arbitrary packets receive a
-non-approvable `semanticReviewNeeded` result rather than a keyword-derived
-recommendation. Explicit synthetic demonstration mode maps eligible synthetic
-text to stable rubric IDs, remains visibly marked as a demonstration, and never
-becomes a validated real-company assessment. It makes zero paid runtime AI
-calls.
+Real-company assessment uses one explicitly enabled GPT-5.6 Terra call, followed
+by server evidence checks and human review. Configuration and persistent spending
+controls are documented in `live-assessment-setup.md`. Calls default off.
+Explicit synthetic demonstration mode remains deterministic and visibly labeled;
+it makes zero paid calls and cannot become a validated real-company assessment.
 
 Public-source claims are retained as `SUPPORT_NOT_VERIFIED` only when their
 supplied URL and basis structure pass development checks; those checks do not
@@ -47,14 +46,21 @@ independently verify the claim. Malformed or overstated public claims are
 `UNSUPPORTED`. Independently valid confirmed-account evidence remains
 `SUPPORTED`. Inferences remain non-authoritative.
 
-At most two eligible instruments can be approved, and a second instrument
+Live assessment can cite eligible public excerpts after model entailment review,
+without promoting their original provenance or claiming independent retrieval.
+Every supplied item receives a review; rejected individual claims do not erase
+separately supported workflow evidence. Fit, current use, account status, and
+commercial readiness each retain their own supporting evidence IDs.
+
+One instrument is recommended by default. Two require strong fit and distinct
+evidence for each. At most two eligible instruments can be approved, and a second instrument
 requires explicit confirmation. Approval revalidates every cited evidence ID
-against current evidence. Owner-scoped compare-and-set writes prevent stale or
+against current evidence. Version-bound compare-and-set writes prevent stale or
 concurrent assessment/review changes from silently winning. Review notes remain
 attached to the persisted review.
 
-Live provider selection, model ID, spend cap, sequence writing, email timing,
-sending, exporting, scraping, scheduling, and deployment are outside Phase 1.
+Sequence writing, email timing, sending, exporting, scraping, and scheduling
+remain outside this implementation.
 
 ## Security
 
@@ -65,8 +71,9 @@ to the published URL can read packets and submit assessments/reviews.
 Existing records remain accessible regardless of their former owner ID. The
 existing database column and unique index are retained only for compatibility;
 new records use a constant shared-workspace value. No data migration or schema
-push is required. Duplicate submissions return the existing intact record.
+push is required for packet records. Startup adds only an assessment-run ledger
+table/index. Duplicate submissions return the existing intact record.
 
 Request logging strips query strings and redacts cookies/authorization headers.
-Packet bodies are not logged. Live AI remains disabled.
+Packet bodies are not logged. Live AI defaults disabled until configured.
 Committed samples and tests use synthetic companies only.

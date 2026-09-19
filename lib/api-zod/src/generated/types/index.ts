@@ -7,14 +7,22 @@
  */
 
 export * from './assessment';
+export * from './assessmentConfig';
 export * from './assessmentInput';
 export * from './assessmentInputMode';
+export * from './assessmentProvider';
+export * from './assessmentRun';
+export * from './assessmentRunState';
+export * from './assessmentSelectedInstrumentsItem';
+export * from './assessmentUsage';
 export * from './evidenceArray';
 export * from './evidenceCategories';
 export * from './evidenceItem';
 export * from './evidenceItemAssessmentType';
 export * from './evidenceItemEvidenceState';
 export * from './evidenceItemProvenanceType';
+export * from './evidenceReview';
+export * from './evidenceReviewVerdict';
 export * from './fieldIssue';
 export * from './healthStatus';
 export * from './instrumentAssessment';

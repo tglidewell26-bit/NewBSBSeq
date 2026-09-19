@@ -6,6 +6,15 @@ info:
 servers:
   - url: /api
 paths:
+  /bsb-v2/assessment-config:
+    get:
+      operationId: getAssessmentConfig
+      responses:
+        "200":
+          description: Live assessment configuration without secrets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentConfig" }
   /healthz:
     get:
       operationId: healthCheck
@@ -20,7 +29,7 @@ paths:
       operationId: listResearchPackets
       responses:
         "200":
-          description: Owned packets
+          description: Shared workspace packets
           content:
             application/json:
               schema:
@@ -192,7 +201,7 @@ components:
       required: [id, stage, inputHash, researchPacket, normalizedEvidence, validation, createdAt]
       properties:
         id: { type: string }
-        stage: { type: string, enum: [VALIDATED, NEEDS_REVIEW, ASSESSED, APPROVED, REJECTED] }
+        stage: { type: string, enum: [VALIDATED, NEEDS_REVIEW, ASSESSING, ASSESSED, APPROVED, REJECTED] }
         inputHash: { type: string }
         researchPacket: { $ref: "#/components/schemas/ResearchPacket" }
         normalizedEvidence:
@@ -200,6 +209,7 @@ components:
           items: { $ref: "#/components/schemas/NormalizedEvidence" }
         validation: { $ref: "#/components/schemas/ValidationResult" }
         assessment: { $ref: "#/components/schemas/Assessment" }
+        assessmentRun: { $ref: "#/components/schemas/AssessmentRun" }
         review: { $ref: "#/components/schemas/Review" }
         createdAt: { type: string, format: date-time }
     NormalizedEvidence:
@@ -249,24 +259,38 @@ components:
       required: [id, provider, mock, evidenceVersion, instruments, limitations, semanticReviewNeeded, approvable, demoMode, validatedRealAssessment]
       properties:
         id: { type: string }
-        provider: { type: string, const: DETERMINISTIC_FAKE }
-        mock: { type: boolean, const: true }
+        provider: { type: string, enum: [DETERMINISTIC_FAKE, OPENAI] }
+        mock: { type: boolean }
         evidenceVersion: { type: string }
         instruments:
           type: array
-          maxItems: 2
+          maxItems: 3
           items: { $ref: "#/components/schemas/InstrumentAssessment" }
         limitations: { type: array, items: { type: string } }
         semanticReviewNeeded: { type: boolean }
         approvable: { type: boolean }
         demoMode: { type: boolean }
         validatedRealAssessment: { type: boolean }
+        selectedInstruments:
+          type: array
+          maxItems: 2
+          items: { type: string, enum: [CellScape, CosMx, GeoMx] }
+        selectionReason: { type: string }
+        model: { type: string }
+        promptVersion: { type: string }
+        rubricVersion: { type: string }
+        groundedEvidenceIds: { type: array, items: { type: string } }
+        evidenceReviews:
+          type: array
+          items: { $ref: "#/components/schemas/EvidenceReview" }
+        usage: { $ref: "#/components/schemas/AssessmentUsage" }
     AssessmentInput:
       type: object
       additionalProperties: false
       required: [mode]
       properties:
         mode: { type: string, enum: [REAL_INPUT, DEMO_SYNTHETIC] }
+        retry: { type: boolean }
     ReviewInput:
       type: object
       additionalProperties: false
@@ -296,3 +320,41 @@ components:
         demoMode: { type: boolean }
         validatedRealAssessment: { type: boolean }
         createdAt: { type: string, format: date-time }
+
+    AssessmentConfig:
+      type: object
+      required: [enabled, missing, model, reservationUsd, dailyLimitUsd]
+      properties:
+        enabled: { type: boolean }
+        missing: { type: array, items: { type: string } }
+        model: { type: string }
+        reservationUsd: { type: number }
+        dailyLimitUsd: { type: number }
+    AssessmentUsage:
+      type: object
+      required: [inputTokens, outputTokens, estimatedCostUsd, model]
+      properties:
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        estimatedCostUsd: { type: number }
+        model: { type: string }
+        responseId: { type: string }
+    EvidenceReview:
+      type: object
+      required: [evidenceId, verdict, quote, reason]
+      properties:
+        evidenceId: { type: string }
+        verdict: { type: string, enum: [ENTAILED, NOT_SUPPORTED, CONFLICT, UNKNOWN] }
+        quote: { type: string }
+        reason: { type: string }
+    AssessmentRun:
+      type: object
+      required: [id, state, attempt, reservedUsd, startedAt]
+      properties:
+        id: { type: string }
+        state: { type: string, enum: [RUNNING, COMPLETED, FAILED, OUTCOME_UNKNOWN] }
+        attempt: { type: integer }
+        reservedUsd: { type: number }
+        startedAt: { type: string, format: date-time }
+        error: { $ref: "#/components/schemas/ValidationFailure" }
+        usage: { $ref: "#/components/schemas/AssessmentUsage" }

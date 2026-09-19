@@ -21,6 +21,7 @@ import type {
 
 import type {
   Assessment,
+  AssessmentConfig,
   AssessmentInput,
   HealthStatus,
   PacketRecord,
@@ -57,6 +58,77 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetAssessmentConfigUrl = () => {
+
+
+
+
+  return `/api/bsb-v2/assessment-config`
+}
+
+export const getAssessmentConfig = async ( options?: Parameters<typeof customFetch>[1]): Promise<AssessmentConfig> => {
+
+  return customFetch<AssessmentConfig>(getGetAssessmentConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAssessmentConfigQueryKey = () => {
+    return [
+    `/api/bsb-v2/assessment-config`
+    ] as const;
+    }
+
+
+export const getGetAssessmentConfigQueryOptions = <TData = Awaited<ReturnType<typeof getAssessmentConfig>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAssessmentConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAssessmentConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAssessmentConfig>>> = ({ signal }) => getAssessmentConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAssessmentConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAssessmentConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getAssessmentConfig>>>
+export type GetAssessmentConfigQueryError = ErrorType<unknown>
+
+
+
+export function useGetAssessmentConfig<TData = Awaited<ReturnType<typeof getAssessmentConfig>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAssessmentConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAssessmentConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getHealthCheckUrl = () => {
 
