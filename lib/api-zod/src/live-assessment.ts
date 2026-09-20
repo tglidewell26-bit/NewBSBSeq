@@ -37,5 +37,29 @@ export const modelAssessmentSchema = z.object({
   limitations: z.array(text).max(12),
 }).strict();
 
-export const modelAssessmentJsonSchema = z.toJSONSchema(modelAssessmentSchema);
+// Constrain generation, while retaining the existing persisted response shape
+// and field-specific semantic errors in the server validator. Nested anyOf and
+// array bounds are supported by Responses Structured Outputs.
+const generationDimension = <T extends readonly [string, ...string[]]>(known: T) => z.union([
+  z.object({ value: z.literal("UNKNOWN"), evidenceIds: ids.max(0) }).strict(),
+  z.object({ value: z.enum(known), evidenceIds: ids.min(1) }).strict(),
+]);
+const generationInstrument = modelAssessmentSchema.shape.instruments.element.extend({
+  currentUse: generationDimension(["ACTIVE", "HISTORICAL"]),
+  accountStatus: generationDimension(["INSTALLED_BASE", "PROSPECT"]),
+  readiness: generationDimension(["BUDGET_CONFIRMED", "TIMELINE_CONFIRMED", "ACTIVE_EVALUATION"]),
+});
+export const modelGenerationSchema = modelAssessmentSchema.extend({
+  instruments: z.array(z.union([
+    generationInstrument.extend({
+      fit: z.enum(["STRONG_FIT", "POTENTIAL_FIT"]),
+      evidenceIds: ids.min(1),
+      ruleIds: generationInstrument.shape.ruleIds.min(1),
+    }),
+    generationInstrument.extend({ fit: z.literal("NOT_QUALIFIED"), evidenceIds: ids.min(1) }),
+    generationInstrument.extend({ fit: z.literal("INSUFFICIENT_EVIDENCE") }),
+  ])).length(3),
+});
+
+export const modelAssessmentJsonSchema = z.toJSONSchema(modelGenerationSchema);
 export type ModelAssessment = z.infer<typeof modelAssessmentSchema>;
