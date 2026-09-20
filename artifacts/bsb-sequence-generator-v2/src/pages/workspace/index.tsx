@@ -26,7 +26,7 @@ export default function Workspace() {
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-sidebar-foreground text-sm leading-tight">BSB Sequence</span>
-            <span className="text-[10px] text-sidebar-foreground/60 font-mono tracking-widest uppercase">Phase 1</span>
+            <span className="text-[10px] text-sidebar-foreground/60 font-mono tracking-widest uppercase">Phase 2</span>
           </div>
         </div>
 
@@ -64,7 +64,7 @@ export default function Workspace() {
           </h2>
           <div className="flex items-center gap-3">
             <div className="px-2.5 py-1 bg-accent border border-accent-foreground/20 text-accent-foreground text-xs font-mono rounded-sm font-bold shadow-sm">
-              ASSESSMENT WORKSPACE
+              OUTREACH WORKSPACE
             </div>
           </div>
         </header>

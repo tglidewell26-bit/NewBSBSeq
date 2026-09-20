@@ -1,3 +1,4 @@
+import { initializeSequenceJobs } from "./sequence-jobs";
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
 import { normalizeEvidence, hashPacket, validateFrozenRequest } from "./bsb-v2";
@@ -13,6 +14,7 @@ export async function initializeAssessmentRuns() {
     started_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz
   ); CREATE UNIQUE INDEX IF NOT EXISTS bsb_v2_run_attempt_idx
      ON bsb_v2_assessment_runs(packet_id, attempt);`);
+  await initializeSequenceJobs();
 }
 
 export const failurePayload = (error: AssessmentError) => ({
@@ -60,9 +62,9 @@ export async function runLiveAssessment(packetId: string, retry = false) {
     if (previous && !retry) throw new AssessmentError("RETRY_CONFIRMATION_REQUIRED", "The previous attempt failed. Use the explicit retry action to authorize one more bounded call.", 409);
     if (previous?.attempt >= 2) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. Review the reported failure before further work.", 409);
     if (((previous?.attempt ?? 0) + 1) * RESERVATION_MICRO_USD > config.jobLimitMicroUsd) throw new AssessmentError("BUDGET_EXHAUSTED", "Another attempt would exceed this packet's per-job spending limit. No paid call was started.", 429);
-    const spent = (await client.query(`SELECT COALESCE(SUM(reserved_micro_usd),0)::bigint AS reserved
-      FROM bsb_v2_assessment_runs WHERE started_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
-      OR state IN ('RUNNING','OUTCOME_UNKNOWN')`)).rows[0];
+    const spent = (await client.query(`SELECT COALESCE(SUM(reserved_micro_usd),0)::bigint AS reserved FROM (
+      SELECT reserved_micro_usd FROM bsb_v2_assessment_runs WHERE started_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' OR state IN ('RUNNING','OUTCOME_UNKNOWN')
+      UNION ALL SELECT reserved_micro_usd FROM bsb_v2_sequence_jobs WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' OR state IN ('QUEUED','WRITING','VALIDATING','RECOVERY_REQUIRED')) charges`)).rows[0];
     if (Number(spent.reserved) + RESERVATION_MICRO_USD > config.dailyLimitMicroUsd) throw new AssessmentError("BUDGET_EXHAUSTED", "The daily assessment budget is exhausted. No paid call was started. Uncertain calls retain their reservations.", 429);
     runId = randomUUID();
     await client.query(`INSERT INTO bsb_v2_assessment_runs

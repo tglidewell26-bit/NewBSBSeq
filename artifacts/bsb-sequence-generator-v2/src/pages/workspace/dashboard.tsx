@@ -1,3 +1,4 @@
+import SequencePanel from "./sequence-panel";
 import { useState, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { 
@@ -105,6 +106,7 @@ export default function PacketDetail() {
             <TabsTrigger value="assessment" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full bg-transparent px-2 shadow-none" disabled={!packet.assessment}>
               Instrument Assessment
             </TabsTrigger>
+            <TabsTrigger value="sequence" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full bg-transparent px-2 shadow-none">Outreach Sequence</TabsTrigger>
             <TabsTrigger value="raw" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full bg-transparent px-2 shadow-none">
               Raw Payload
             </TabsTrigger>
@@ -123,6 +125,9 @@ export default function PacketDetail() {
               {packet.assessment && <AssessmentTab packet={packet} />}
             </TabsContent>
             
+            <TabsContent value="sequence" className="h-full min-h-0 m-0 overflow-hidden">
+              <SequencePanel key={packet.id} packet={packet} />
+            </TabsContent>
             <TabsContent value="raw" className="h-full m-0 data-[state=active]:block overflow-hidden">
               <div className="bg-muted/30 border border-border rounded-md h-full overflow-auto">
                 <pre className="p-4 text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all">
