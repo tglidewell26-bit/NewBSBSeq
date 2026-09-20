@@ -308,26 +308,38 @@ describe("durable sequence HTTP workflow", () => {
       ).status,
     ).toBe(409);
   });
-  it("stops when targeted regeneration changes a preserved touch", async () => {
-    const id = await packet();
-    reviewer = async () => providerResponse(unsafeReview());
-    const first = await terminal(
-      (await request(`/packets/${id}/sequences`, body())).body.id,
-    );
-    const t = sequenceFixture().touches;
-    t[1].middle += " Altered.";
-    writer = async () => providerResponse({ touches: t });
-    const next = await terminal(
-      (
-        await request(`/sequences/${first.id}/regenerate`, {
-          idempotencyKey: randomUUID(),
-        })
-      ).body.id,
-    );
-    expect(next.state).toBe("PROVIDER_FAILED");
-    expect(next.error).toContain("preserved");
-    expect(next.sequence).toBeNull();
-  });
+  it.each(["changed", "omitted"])(
+    "stops when targeted regeneration has a %s preserved touch",
+    async (fault) => {
+      const id = await packet();
+      reviewer = async () => providerResponse(unsafeReview());
+      const first = await terminal(
+        (await request(`/packets/${id}/sequences`, body())).body.id,
+      );
+      const t = sequenceFixture().touches;
+      if (fault === "changed") t[1].middle += " Altered.";
+      else t[1] = { ...t[0] };
+      writer = async () => providerResponse({ touches: t });
+      const next = await terminal(
+        (
+          await request(`/sequences/${first.id}/regenerate`, {
+            idempotencyKey: randomUUID(),
+          })
+        ).body.id,
+      );
+      expect(next.state).toBe("PROVIDER_FAILED");
+      expect(next.error).toContain("preserved");
+      expect(next.sequence).toBeNull();
+      expect(calls).toHaveLength(3);
+      expect((await request(`/sequences/${next.id}/export`)).status).toBe(409);
+      writer = async () =>
+        providerResponse({ touches: sequenceFixture().touches });
+      reviewer = async () => providerResponse(sequenceFixture().review);
+      const restarted = await request(`/packets/${id}/sequences`, body());
+      expect(restarted.status).toBe(202);
+      expect((await terminal(restarted.body.id)).state).toBe("APPROVED");
+    },
+  );
   it("keeps a second unsafe regeneration unsaved and stops at its cap", async () => {
     const id = await packet();
     reviewer = async () => providerResponse(unsafeReview());

@@ -377,14 +377,14 @@ export async function runSequenceJob(
     const checked = checkDraft(value, authority);
     touches = checked.touches;
     if (
-      preserved?.some(
-        (p) =>
-          digest(p) !== digest(touches.find((t) => t.touchId === p.touchId)),
-      )
+      preserved?.some((p) => {
+        const regenerated = touches.find((t) => t.touchId === p.touchId);
+        return !regenerated || digest(p) !== digest(regenerated);
+      })
     )
       throw new AssessmentError(
         "REGENERATION_SCOPE",
-        "The writer changed a preserved touch during targeted regeneration. No sequence was saved.",
+        "The writer changed or omitted a preserved touch during targeted regeneration. No sequence was saved.",
       );
     await stillCurrent(id, "VALIDATING");
     const review = await provider(

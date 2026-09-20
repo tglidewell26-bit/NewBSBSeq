@@ -23,7 +23,7 @@ Server initialization adds `bsb_v2_sequence_jobs` and its indexes with `CREATE .
 
 ## Executed verification
 
-- **113 tests passed across 9 files**: existing 74 plus 23 sequence unit cases and 16 sequence HTTP/database cases. Fake provider only; **zero paid model calls** for this implementation.
+- **114 tests passed across 9 files**: existing 74 plus 23 sequence unit cases and 17 sequence HTTP/database cases. Fake provider only; **zero paid model calls** for this implementation. Includes the PR review regression: a regeneration that omits a preserved touch is rejected without incorrectly locking the packet in recovery.
 - Tests exercised the actual Express routes and a disposable PGlite PostgreSQL-wire database: authority checks, explicit account-fact permission, two-instrument scope, fixed copy, schema/semantic coverage, unsafe output with an apparently passing reviewer, approved export, targeted regeneration, edits, cancellation/save races, client disconnect/reconnect, uncertain provider response, worker inactivity, idempotency, and shared spend caps.
 - Shared-library, API-server and frontend TypeScript checks passed. Both production builds passed. Vite retained its existing tooltip/label sourcemap warnings; these did not fail the build.
 - A root-wide typecheck also sees an unrelated incomplete local `artifacts/mockup-sandbox` without its tsconfig. That directory is excluded from this change; the two delivered application packages and shared libraries were checked directly.
