@@ -169,7 +169,7 @@ export function validateModelAssessment(value: unknown, evidence: LocatedEvidenc
   };
 }
 
-export async function callAssessmentModel(request: ReturnType<typeof buildAssessmentRequest>, fetcher: typeof fetch = fetch) {
+export async function callAssessmentModel(request: { model: string; max_output_tokens: number; [key: string]: unknown }, fetcher: typeof fetch = fetch) {
   let response: Response;
   try {
     response = await fetcher("https://api.openai.com/v1/responses", {
