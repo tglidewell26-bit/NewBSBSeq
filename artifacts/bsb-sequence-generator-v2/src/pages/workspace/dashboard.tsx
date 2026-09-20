@@ -346,7 +346,7 @@ function AssessmentTab({ packet }: { packet: PacketRecord }) {
   const ass = packet.assessment!;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="h-full min-h-0 overflow-y-auto pr-4">
       <div className="bg-accent/30 border border-accent-foreground/20 rounded-md p-4 mb-6 shrink-0 flex items-start gap-4">
         <ShieldAlert className="w-6 h-6 text-accent-foreground mt-0.5" />
         <div>
@@ -361,13 +361,11 @@ function AssessmentTab({ packet }: { packet: PacketRecord }) {
       {ass.selectionReason && <p className="mb-4 text-sm"><strong>Recommended: {ass.selectedInstruments?.join(", ") || "No instrument selected"}.</strong> {ass.selectionReason}</p>}
       {ass.usage && <p className="mb-4 text-xs text-muted-foreground">Estimated API cost: ${ass.usage.estimatedCostUsd.toFixed(4)} · {ass.usage.inputTokens} input / {ass.usage.outputTokens} output tokens</p>}
       {ass.limitations.length > 0 && <ul className="mb-4 list-disc pl-5 text-sm text-muted-foreground">{ass.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul>}
-      <ScrollArea className="flex-1 pr-4">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-6">
           {ass.instruments.map((inst, idx) => (
             <InstrumentCard key={idx} instrument={inst} />
           ))}
         </div>
-      </ScrollArea>
     </div>
   );
 }
