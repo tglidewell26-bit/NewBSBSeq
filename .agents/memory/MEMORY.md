@@ -1,0 +1,1 @@
+- [Workflow secret restart](workflow-secret-restart.md) — restart artifact servers after secret changes so they pick up environment and rebuilt routes.
