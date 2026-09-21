@@ -66,21 +66,21 @@ describe("sequence authority and fixed copy", () => {
       trip1: [{ date: "2099-04-06", start: "09:00", end: "12:00" }],
       trip2: [{ date: "2099-05-06", start: "10:00", end: "14:00" }],
     });
-    touches[7].middle = "Tim can revisit the spatial biology angle around that work.";
+    touches[5].middle = "Tim can revisit the spatial biology angle around that work.";
     const request = sequenceModelRequest("VALIDATING", authority, touches);
-    const close = JSON.parse(request.input).touches[7];
+    const close = JSON.parse(request.input).touches[5];
     expect(close).not.toHaveProperty("applicationCopy");
     expect(close).not.toHaveProperty("body");
     expect(request.input).not.toContain("Sorry I missed you last time.");
     expect(request.input).not.toContain("2099-05-06");
-    expect(close.middle).toBe(touches[7].middle);
-    expect(renderSequence(touches, authority)[7].body).toContain("Sorry I missed you last time.");
+    expect(close.middle).toBe(touches[5].middle);
+    expect(renderSequence(touches, authority)[5].body).toContain("Sorry I missed you last time.");
     expect(checkDraft({ touches }, authority).violations).toEqual(
-      expect.arrayContaining([expect.objectContaining({ touchId: "email5", ruleId: "SENDER_VOICE" })]),
+      expect.arrayContaining([expect.objectContaining({ touchId: "email4", ruleId: "SENDER_VOICE" })]),
     );
-    touches[7].middle = "Sorry I missed you last time.";
+    touches[5].middle = "Sorry I missed you last time.";
     expect(checkDraft({ touches }, authority).violations).toEqual(
-      expect.arrayContaining([expect.objectContaining({ touchId: "email5", ruleId: "FIXED_COPY" })]),
+      expect.arrayContaining([expect.objectContaining({ touchId: "email4", ruleId: "FIXED_COPY" })]),
     );
   });
   it("requires explicit permission when only account-confirmed outreach evidence is available", () => {
@@ -138,8 +138,9 @@ describe("sequence authority and fixed copy", () => {
       "CosMx",
       "CosMx",
       "CellScape",
-      "CellScape",
       "CosMx",
+      "CosMx",
+      "CellScape",
       null,
     ]);
     expect(a.plan[4].evidenceIds).toEqual(["protein"]);
@@ -147,7 +148,7 @@ describe("sequence authority and fixed copy", () => {
       a.capabilities.find((c) => c.id === a.plan[4].capabilityId)?.instrument,
     ).toBe("CellScape");
   });
-  it("plans exactly eight touches from approved, permitted evidence", () => {
+  it("plans exactly nine touches from approved, permitted evidence", () => {
     const { authority, row } = sequenceFixture();
     expect(authority.plan.map((p) => p.touchId)).toEqual(touchIds);
     expect(authority.evidence.map((e) => e.evidenceId)).toEqual([
@@ -216,21 +217,26 @@ describe("sequence authority and fixed copy", () => {
       ).not.toThrow();
     },
   );
-  it("uses second-trip missed-you language only in email5", () => {
+  it("starts the second trip at email4 and keeps all later touches on that trip", () => {
     const { touches, authority } = sequenceFixture();
-    authority.settings = validateSettings({
-      ...settings,
-      meetingMode: "IN_PERSON",
+    authority.settings = validateSettings({ ...settings, meetingMode: "IN_PERSON",
       trip1: [{ date: "2099-04-06", start: "09:00", end: "12:00" }],
       trip2: [{ date: "2099-05-06", start: "10:00", end: "14:00" }],
     });
     const rendered = renderSequence(touches, authority);
-    expect(rendered[6].body).not.toContain("Sorry I missed");
-    expect(rendered[6].body).toContain("April 6, 2099");
-    expect(rendered[7].body).toContain("Sorry I missed you last time.");
-    expect(rendered[7].body).toContain("May 6, 2099");
-    expect(rendered[7].body).not.toContain("April 6, 2099");
-    expect(rendered[0].body).toContain("America/Los_Angeles");
+    expect(rendered.map(t => t.touchId)).toEqual(["email1", "email2", "liConnect", "liMsg1", "email3", "email4", "email5", "liMsg2", "email6"]);
+    for (const t of rendered) {
+      if (t.touchId === "liConnect") {
+        expect(t.body).not.toContain("2099");
+      } else {
+        const second = ["email4", "email5", "liMsg2", "email6"].includes(t.touchId);
+        expect(t.body).toContain(second ? "May 6, 2099" : "April 6, 2099");
+        expect(t.body).not.toContain(second ? "April 6, 2099" : "May 6, 2099");
+      }
+      expect(t.body.includes("Sorry I missed you last time.")).toBe(t.touchId === "email4");
+    }
+    authority.settings = settings;
+    expect(renderSequence(touches, authority).every(t => !t.body.includes("Sorry I missed"))).toBe(true);
   });
   it.each([
     { timezone: "No/SuchZone" },

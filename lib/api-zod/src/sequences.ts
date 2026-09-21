@@ -7,9 +7,10 @@ export const touchIds = [
   "liConnect",
   "liMsg1",
   "email3",
-  "liMsg2",
   "email4",
   "email5",
+  "liMsg2",
+  "email6",
 ] as const;
 export type TouchId = (typeof touchIds)[number];
 export const slotSchema = z
@@ -38,19 +39,19 @@ export const draftTouchSchema = z
   })
   .strict();
 export const draftSchema = z
-  .object({ touches: z.array(draftTouchSchema).length(8) })
+  .object({ touches: z.array(draftTouchSchema).length(touchIds.length) })
   .strict();
 export const sequenceRequestSchema = z
   .object({
     idempotencyKey: z.string().uuid(),
     settings: outreachSchema,
     editOf: z.string().uuid().optional(),
-    edits: z.array(draftTouchSchema).length(8).optional(),
+    edits: z.array(draftTouchSchema).length(touchIds.length).optional(),
   })
   .strict()
   .refine((x) => !!x.editOf === !!x.edits, {
     message:
-      "An edit requires both the original sequence and all eight revised touches.",
+      "An edit requires both the original sequence and all nine revised touches.",
   });
 export const semanticSchema = z
   .object({
@@ -81,7 +82,7 @@ export const semanticSchema = z
           })
           .strict(),
       )
-      .length(8),
+      .length(touchIds.length),
   })
   .strict();
 export type OutreachSettings = z.infer<typeof outreachSchema>;

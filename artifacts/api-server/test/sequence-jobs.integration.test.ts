@@ -197,7 +197,7 @@ describe("durable sequence HTTP workflow", () => {
     expect((await terminal(resumed.body.id)).state).toBe("APPROVED");
     expect(calls).toEqual(["bsb_sequence", "bsb_sequence_review"]);
   });
-  it("saves eight ordered validated touches, provenance, usage and hash exactly once", async () => {
+  it("saves nine ordered validated touches, provenance, usage and hash exactly once", async () => {
     const id = await packet();
     const input = body();
     const start = await request(`/packets/${id}/sequences`, input);
@@ -320,7 +320,7 @@ describe("durable sequence HTTP workflow", () => {
     expect(next.retryOf).toBe(first.id);
     expect(modelInputs[2].repairIds).toEqual(["email1"]);
     expect(modelInputs[2].feedback).toEqual(first.violations);
-    expect(modelInputs[2].preservedTouches).toHaveLength(7);
+    expect(modelInputs[2].preservedTouches).toHaveLength(8);
     expect((await request(`/sequences/${first.id}`)).body.canRegenerate).toBe(
       false,
     );

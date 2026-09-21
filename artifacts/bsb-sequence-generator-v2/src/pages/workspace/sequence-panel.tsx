@@ -175,7 +175,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              Eight touches using your approved{" "}
+              Nine touches using your approved{" "}
               {packet.review?.approvedInstruments?.join(" / ")} assessment.
               Review the content and dates before sending.
             </p>
@@ -258,9 +258,9 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                     {slots("trip1", "First trip")}
                     {slots("trip2", "Second trip — optional")}
                     <p className="text-xs text-muted-foreground">
-                      Email 5 introduces the second trip and “Sorry I missed you
+                      Email 4 introduces the second trip and “Sorry I missed you
                       last time.” Earlier touches use the first trip. Schedule
-                      Email 5 after the first trip; this app does not send
+                      Email 4 after the first trip; this app does not send
                       messages.
                     </p>
                   </>
@@ -474,7 +474,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                 </a>
                 <Button
                   variant="outline"
-                  disabled={busy}
+                  disabled={busy || job.sequence.length !== 9}
                   onClick={() => {
                     setEdits(
                       job.sequence!.map(({ touchId, subject, middle }) => ({
@@ -497,12 +497,13 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                   {copyStatus}
                 </span>
               </div>
+              {job.sequence.length !== 9 && <p className="text-sm text-muted-foreground">Saved legacy sequence: copy and download remain available. Generate a new sequence to use the nine-step trip order.</p>}
               {job.sequence.map((t, index) => (
                 <article
                   key={t.touchId}
                   className="rounded border bg-card p-5 space-y-3"
                 >
-                  <h4 className="font-semibold">{t.touchId}</h4>
+                  <h4 className="font-semibold">{index + 1}. {t.touchId.startsWith("email") ? `Email ${t.touchId.slice(5)}` : t.touchId === "liConnect" ? "LinkedIn connection request" : `LinkedIn message ${t.touchId.slice(5)}`}</h4>
                   {edits ? (
                     <>
                       {t.touchId.startsWith("email") && (
@@ -543,11 +544,19 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                   ) : (
                     <>
                       {t.subject && (
-                        <p className="font-medium">Subject: {t.subject}</p>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium">Subject: {t.subject}</p>
+                          <Button variant="outline" size="sm" onClick={async () => {
+                            try { await navigator.clipboard.writeText(t.subject); setCopyStatus("Copied subject."); }
+                            catch { setCopyStatus("Clipboard unavailable. Select the subject to copy it."); }
+                          }}>Copy subject</Button>
+                        </div>
                       )}
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {t.body}
-                      </p>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.body}</p>
+                      <Button variant="outline" size="sm" onClick={async () => {
+                        try { await navigator.clipboard.writeText(t.body); setCopyStatus("Copied body."); }
+                        catch { setCopyStatus("Clipboard unavailable. Select the body to copy it."); }
+                      }}>Copy body</Button>
                     </>
                   )}
                 </article>
