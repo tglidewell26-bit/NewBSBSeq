@@ -58,6 +58,30 @@ describe("sequence authority and fixed copy", () => {
       ).toBe(false);
     },
   );
+  it("separates authorized second-trip copy from generated claims for review", () => {
+    const { authority, touches } = sequenceFixture();
+    authority.settings = validateSettings({
+      ...settings,
+      meetingMode: "IN_PERSON",
+      trip1: [{ date: "2099-04-06", start: "09:00", end: "12:00" }],
+      trip2: [{ date: "2099-05-06", start: "10:00", end: "14:00" }],
+    });
+    touches[7].middle = "Tim can revisit the spatial biology angle around that work.";
+    const request = sequenceModelRequest("VALIDATING", authority, touches);
+    const close = JSON.parse(request.input).touches[7];
+    expect(close.applicationCopy).toContain("Sorry I missed you last time.");
+    expect(close.applicationCopy).toContain("May 6, 2099");
+    expect(close.applicationCopy).not.toContain(touches[7].middle);
+    expect(close.middle).toBe(touches[7].middle);
+    expect(close.body).toContain(touches[7].middle);
+    expect(checkDraft({ touches }, authority).violations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ touchId: "email5", ruleId: "SENDER_VOICE" })]),
+    );
+    touches[7].middle = "Sorry I missed you last time.";
+    expect(checkDraft({ touches }, authority).violations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ touchId: "email5", ruleId: "FIXED_COPY" })]),
+    );
+  });
   it("requires explicit permission when only account-confirmed outreach evidence is available", () => {
     const { row } = sequenceFixture();
     row.assessment.instruments[1].evidenceIds = ["account-workflow"];
