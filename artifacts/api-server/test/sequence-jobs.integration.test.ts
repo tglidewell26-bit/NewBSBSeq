@@ -282,6 +282,25 @@ describe("durable sequence HTTP workflow", () => {
     ).rows[0];
     expect(JSON.stringify(row)).not.toContain("GeoMx cures");
   });
+  it("rejects oversized repair feedback before consuming a retry or reserving budget", async () => {
+    const id = await packet();
+    reviewer = async () => providerResponse(unsafeReview());
+    const first = await terminal((await request(`/packets/${id}/sequences`, body())).body.id);
+    for (let batch = 0; batch < 4; batch++) {
+      await pool.query("UPDATE bsb_v2_sequence_jobs SET violations=violations || $2::jsonb WHERE id=$1", [
+        first.id, JSON.stringify(Array.from({ length: 15 }, () => ({
+          ...first.violations[0], message: "x".repeat(700), nextAction: "y".repeat(500),
+        }))),
+      ]);
+    }
+    const result = await request(`/sequences/${first.id}/regenerate`, { idempotencyKey: randomUUID() });
+    expect(result.status).toBe(400);
+    expect(calls).toHaveLength(2);
+    const jobs = (await pool.query("SELECT * FROM bsb_v2_sequence_jobs WHERE packet_id=$1", [id])).rows;
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].reserved_micro_usd).toBe(700000);
+    expect((await request(`/sequences/${first.id}`)).body.canRegenerate).toBe(true);
+  });
   it("regenerates only rejected touches once and revalidates the entire sequence", async () => {
     const id = await packet();
     reviewer = async () => providerResponse(unsafeReview());

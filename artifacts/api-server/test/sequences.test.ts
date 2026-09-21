@@ -302,6 +302,15 @@ describe("sequence authority and fixed copy", () => {
     ];
     expect(() => checkSemantic(r, touches, authority)).toThrow();
   });
+  it("sends a large shared evidence claim once rather than once per touch", () => {
+    const { authority } = sequenceFixture();
+    const claim = "Shared evidence " + "x".repeat(8000);
+    authority.evidence = [{ ...authority.evidence[0], claim }];
+    for (const p of authority.plan) p.evidenceIds = [authority.evidence[0].evidenceId];
+    const request = sequenceModelRequest("WRITING", authority);
+    expect(request.input.split(claim)).toHaveLength(2);
+    expect(JSON.parse(request.input).evidence).toEqual(authority.evidence);
+  });
   it("gives the writer only scoped authority and sends strict JSON schemas", () => {
     const { authority, touches } = sequenceFixture();
     const write = sequenceModelRequest("WRITING", authority);
@@ -312,7 +321,7 @@ describe("sequence authority and fixed copy", () => {
     const { assignments } = JSON.parse(write.input);
     for (const assignment of assignments) {
       const plan = authority.plan.find((p) => p.touchId === assignment.touchId)!;
-      expect(assignment.evidence).toEqual(authority.evidence.filter((e) => plan.evidenceIds.includes(e.evidenceId)));
+      expect(assignment.evidenceIds).toEqual(plan.evidenceIds);
       expect(assignment.capability).toEqual(authority.capabilities.find((c) => c.id === plan.capabilityId) ?? null);
     }
     expect(JSON.parse(review.input).assignments).toEqual(assignments);

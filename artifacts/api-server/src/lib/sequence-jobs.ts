@@ -246,7 +246,9 @@ export async function createSequenceJob(
     sequenceModelRequest(
       request.editOf ? "VALIDATING" : "WRITING",
       authority,
-      edits,
+      retryOf ? parent.safe_touches : edits,
+      retryOf ? touchIds.filter((t) => !parent.safe_touches.some((p: DraftTouch) => p.touchId === t)) : undefined,
+      retryOf ? parent.violations : undefined,
     );
     const amount = RESERVATION_MICRO_USD * (request.editOf ? 1 : 2);
     await reserve(c, amount, retryOf ? parent.root_id : null);
