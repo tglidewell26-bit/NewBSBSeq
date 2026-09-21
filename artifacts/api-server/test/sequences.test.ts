@@ -41,6 +41,23 @@ describe("sequence authority and fixed copy", () => {
       ),
     ).toBe(false);
   });
+  it.each([
+    "TIM is implicated in this pathway.",
+    "TIM can serve as a marker.",
+    "TIM's expression is discussed in the research.",
+    "TIM’s expression is discussed in the research.",
+  ])(
+    "does not classify a TIM biomarker reference as sender voice: %s",
+    (middle) => {
+      const { authority, touches } = sequenceFixture();
+      touches[0].middle = middle;
+      expect(
+        checkDraft({ touches }, authority).violations.some(
+          (v) => v.ruleId === "SENDER_VOICE",
+        ),
+      ).toBe(false);
+    },
+  );
   it("requires explicit permission when only account-confirmed outreach evidence is available", () => {
     const { row } = sequenceFixture();
     row.assessment.instruments[1].evidenceIds = ["account-workflow"];

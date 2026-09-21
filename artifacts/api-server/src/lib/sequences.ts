@@ -378,8 +378,9 @@ export function checkDraft(
         "Leave greetings, meeting requests, availability and signoffs to the application.",
         text,
       );
+    // Preserve the distinction between the sender's name and uppercase TIM biomarkers.
     const thirdPerson = text.match(
-      /\bTim\s+Glidewell\b|\bTim(?:['’]s\b|\s+(?:can|could|would|will|is|has|offers|suggests|recommends|believes)\b)|\b(?:ask|contact|consult)\s+Tim\b/i,
+      /\b[Tt]im\s+[Gg]lidewell\b|\b[Tt]im(?:['’]s\b|\s+(?:can|could|would|will|is|has|offers|suggests|recommends|believes)\b)|\b(?:[Aa]sk|[Cc]ontact|[Cc]onsult)\s+[Tt]im\b/,
     );
     if (thirdPerson)
       add(
