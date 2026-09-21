@@ -14,6 +14,33 @@ import {
 
 import { settings, sequenceFixture } from "./sequence-fixture";
 describe("sequence authority and fixed copy", () => {
+  it.each([
+    "Tim’s perspective on fit would be valuable.",
+    "Tim's guidance would help determine the next step.",
+    "Tim could advise your team.",
+    "Please contact Tim about the workflow.",
+    "Tim Glidewell recommends this approach.",
+  ])("blocks third-person sender language: %s", (middle) => {
+    const { authority, touches } = sequenceFixture();
+    touches[0].middle = middle;
+    expect(
+      checkDraft({ touches }, authority).violations.some(
+        (v) => v.ruleId === "SENDER_VOICE",
+      ),
+    ).toBe(true);
+  });
+  it("allows first-person suggestions and does not mistake a TIM-3 marker for the sender", () => {
+    const { authority, touches } = sequenceFixture();
+    touches[0].middle =
+      "I thought this could be relevant to your tissue research.";
+    expect(checkDraft({ touches }, authority).violations).toEqual([]);
+    touches[0].middle = "TIM-3 is the marker discussed in this research.";
+    expect(
+      checkDraft({ touches }, authority).violations.some(
+        (v) => v.ruleId === "SENDER_VOICE",
+      ),
+    ).toBe(false);
+  });
   it("requires explicit permission when only account-confirmed outreach evidence is available", () => {
     const { row } = sequenceFixture();
     row.assessment.instruments[1].evidenceIds = ["account-workflow"];
