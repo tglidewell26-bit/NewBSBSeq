@@ -25,8 +25,8 @@ export const outreachSchema = z
     firstName: z.string().trim().max(60),
     meetingMode: z.enum(["IN_PERSON", "VIRTUAL"]),
     timezone: z.string().min(1).max(80),
-    trip1: z.array(slotSchema).max(6),
-    trip2: z.array(slotSchema).max(6),
+    trip1: z.array(slotSchema).max(31),
+    trip2: z.array(slotSchema).max(31),
     allowAccountFacts: z.boolean(),
   })
   .strict();
@@ -85,6 +85,15 @@ export const semanticSchema = z
   })
   .strict();
 export type OutreachSettings = z.infer<typeof outreachSchema>;
+export const savedTripSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().trim().min(1).max(100),
+    timezone: z.string().min(1).max(80),
+    slots: z.array(slotSchema).min(1).max(31),
+  })
+  .strict();
+export type SavedTrip = z.infer<typeof savedTripSchema> & { createdAt: string };
 export type DraftTouch = z.infer<typeof draftTouchSchema>;
 export type SequenceRequest = z.infer<typeof sequenceRequestSchema>;
 export type Capability = {

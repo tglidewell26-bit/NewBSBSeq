@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { initializeSavedTrips } from "./saved-trips";
 import { pool } from "@workspace/db";
 import {
   sequenceRequestSchema,
@@ -28,6 +29,7 @@ import {
 const ACTIVE = ["QUEUED", "WRITING", "VALIDATING"];
 const LEASE_MS = 180000;
 export async function initializeSequenceJobs() {
+  await initializeSavedTrips();
   await pool.query(`CREATE TABLE IF NOT EXISTS bsb_v2_sequence_jobs (
     id text PRIMARY KEY, packet_id text NOT NULL, action_key text NOT NULL UNIQUE, input_hash text NOT NULL,
     state text NOT NULL, authority jsonb NOT NULL, authority_hash text NOT NULL,

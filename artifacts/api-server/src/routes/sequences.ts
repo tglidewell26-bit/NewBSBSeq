@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { listSavedTrips, saveTrip } from "../lib/saved-trips";
 import {
   createSequenceJob,
   listSequenceJobs,
@@ -22,19 +23,29 @@ function handle(action: (req: any, res: any) => Promise<void>) {
               "Sequence service could not complete the request. Reload saved job status before retrying.",
               500,
             );
-      res
-        .status(x.status)
-        .json({
-          error: x.message,
-          errorType: x.code,
-          failedStage: "SEQUENCE",
-          issues: x.issues,
-        });
+      res.status(x.status).json({
+        error: x.message,
+        errorType: x.code,
+        failedStage: "SEQUENCE",
+        issues: x.issues,
+      });
     }
   };
 }
 router.get("/bsb-v2/sequence-config", (_req, res) =>
   res.json(sequenceConfig()),
+);
+router.get(
+  "/bsb-v2/trips",
+  handle(async (_req, res) => {
+    res.json(await listSavedTrips());
+  }),
+);
+router.post(
+  "/bsb-v2/trips",
+  handle(async (req, res) => {
+    res.status(201).json(await saveTrip(req.body));
+  }),
 );
 router.get(
   "/bsb-v2/packets/:packetId/sequences",
@@ -66,18 +77,16 @@ router.post(
   "/bsb-v2/sequences/:id/regenerate",
   handle(async (req, res) => {
     const parent = await getSequenceJob(req.params.id);
-    res
-      .status(202)
-      .json(
-        await createSequenceJob(
-          parent.packetId,
-          {
-            idempotencyKey: req.body.idempotencyKey,
-            settings: parent.authority.settings,
-          },
-          parent.id,
-        ),
-      );
+    res.status(202).json(
+      await createSequenceJob(
+        parent.packetId,
+        {
+          idempotencyKey: req.body.idempotencyKey,
+          settings: parent.authority.settings,
+        },
+        parent.id,
+      ),
+    );
   }),
 );
 router.get(

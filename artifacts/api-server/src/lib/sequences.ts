@@ -29,6 +29,7 @@ const fail = (message: string) => {
 export function validateSettings(
   input: unknown,
   now = new Date(),
+  { allowPastDates = false } = {},
 ): OutreachSettings {
   const parsed = outreachSchema.safeParse(input);
   if (!parsed.success)
@@ -75,7 +76,7 @@ export function validateSettings(
         day.toISOString().slice(0, 10) !== slot.date
       )
         fail("Availability contains an invalid calendar date.");
-      if (slot.date < today)
+      if (!allowPastDates && slot.date < today)
         fail(
           "Availability contains a past date. Update the trip before generating.",
         );
