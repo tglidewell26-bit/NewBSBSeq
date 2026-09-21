@@ -123,6 +123,30 @@ describe("sequence authority and fixed copy", () => {
     authority.settings = { ...settings, mode: "INDIVIDUAL", firstName: "Alex" };
     expect(renderSequence(touches, authority)[0].body).toMatch(/^Hello Alex,/);
   });
+  it.each([7, 31])(
+    "keeps LinkedIn connection copy short with %i travel days",
+    (count) => {
+      const { touches, authority } = sequenceFixture();
+      authority.settings = validateSettings({
+        ...settings,
+        meetingMode: "IN_PERSON",
+        trip1: Array.from({ length: count }, (_, i) => ({
+          date: `2099-10-${String(i + 1).padStart(2, "0")}`,
+          start: "10:00",
+          end: "16:00",
+        })),
+      });
+      const rendered = renderSequence(touches, authority);
+      const connection = rendered.find((t) => t.touchId === "liConnect")!;
+      expect(connection.body.length).toBeLessThanOrEqual(300);
+      expect(connection.body).not.toContain("2099");
+      expect(rendered[0].body).toContain(`October ${count}, 2099`);
+      expect(checkDraft({ touches }, authority).violations).toEqual([]);
+      expect(() =>
+        sequenceModelRequest("VALIDATING", authority, touches),
+      ).not.toThrow();
+    },
+  );
   it("uses second-trip missed-you language only in email5", () => {
     const { touches, authority } = sequenceFixture();
     authority.settings = validateSettings({

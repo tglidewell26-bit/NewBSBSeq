@@ -1,15 +1,18 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { PacketRecord } from "@workspace/api-client-react";
 import type {
   DraftTouch,
   OutreachSettings,
   SequenceJob,
+  SavedTrip,
 } from "@workspace/api-zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import TripPicker from "./trip-picker";
+import { restoreTripDraft, TRIP_DRAFT_KEY } from "./trip-utils";
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(
@@ -44,7 +47,39 @@ const initial: OutreachSettings = {
 const active = (j: SequenceJob) =>
   ["QUEUED", "WRITING", "VALIDATING"].includes(j.state);
 export default function SequencePanel({ packet }: { packet: PacketRecord }) {
-  const [settings, setSettings] = useState<OutreachSettings>(initial);
+  const [settings, setSettings] = useState<OutreachSettings>(() => {
+    try {
+      return {
+        ...initial,
+        ...restoreTripDraft(localStorage.getItem(TRIP_DRAFT_KEY)),
+      };
+    } catch {
+      return initial;
+    }
+  });
+  const [tripStorageError, setTripStorageError] = useState("");
+  useEffect(() => {
+    try {
+      const { meetingMode, timezone, trip1, trip2 } = settings;
+      localStorage.setItem(
+        TRIP_DRAFT_KEY,
+        JSON.stringify({ meetingMode, timezone, trip1, trip2 }),
+      );
+      setTripStorageError("");
+    } catch {
+      setTripStorageError(
+        "This browser cannot remember your current trip selection. Use Save as new trip to keep it in the workspace.",
+      );
+    }
+  }, [settings.meetingMode, settings.timezone, settings.trip1, settings.trip2]);
+  const savedTrips = useQuery({
+    queryKey: ["saved-trips"],
+    queryFn: () => api<SavedTrip[]>("/trips"),
+  });
+  async function saveTrip(trip: Omit<SavedTrip, "createdAt">) {
+    await api<SavedTrip>("/trips", trip);
+    await savedTrips.refetch();
+  }
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -95,7 +130,12 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
     actionKey.current ??= crypto.randomUUID();
     void action(`/packets/${packet.id}/sequences`, {
       idempotencyKey: actionKey.current,
-      settings: edits && job ? job.authority.settings : settings,
+      settings:
+        edits && job
+          ? job.authority.settings
+          : settings.meetingMode === "VIRTUAL"
+            ? { ...settings, trip1: [], trip2: [] }
+            : settings,
       ...(edits && job ? { editOf: job.id, edits } : {}),
     });
   }
@@ -106,55 +146,23 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
     setSettings((s) => ({ ...s, [key]: value }));
   }
   const slots = (key: "trip1" | "trip2", title: string) => (
-    <fieldset className="rounded border p-3 space-y-2">
-      <legend className="px-1 font-medium text-sm">{title}</legend>
-      {settings[key].map((slot, i) => (
-        <div key={i} className="flex flex-wrap gap-2 items-end">
-          {(["date", "start", "end"] as const).map((field) => (
-            <label key={field} className="text-xs">
-              {field}
-              <Input
-                aria-label={`${title} ${i + 1} ${field}`}
-                type={field === "date" ? "date" : "time"}
-                value={slot[field]}
-                onChange={(e) =>
-                  set(
-                    key,
-                    settings[key].map((s, n) =>
-                      n === i ? { ...s, [field]: e.target.value } : s,
-                    ),
-                  )
-                }
-              />
-            </label>
-          ))}
-          <Button
-            variant="ghost"
-            onClick={() =>
-              set(
-                key,
-                settings[key].filter((_, n) => n !== i),
-              )
-            }
-          >
-            Remove
-          </Button>
-        </div>
-      ))}
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={settings[key].length >= 6}
-        onClick={() =>
-          set(key, [
-            ...settings[key],
-            { date: "", start: "09:00", end: "17:00" },
-          ])
-        }
-      >
-        Add availability
-      </Button>
-    </fieldset>
+    <TripPicker
+      title={title}
+      slots={settings[key]}
+      timezone={settings.timezone}
+      savedTrips={savedTrips.data ?? []}
+      loading={savedTrips.isLoading}
+      disabled={busy}
+      onChange={(value) => set(key, value)}
+      onSave={saveTrip}
+      onLoad={(trip) =>
+        setSettings((s) => ({
+          ...s,
+          [key]: trip.slots.map((slot) => ({ ...slot })),
+          timezone: trip.timezone,
+        }))
+      }
+    />
   );
   return (
     <div className="h-full min-h-0 overflow-y-auto pr-2 space-y-5 pb-8">
@@ -207,10 +215,6 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                       value={settings.meetingMode}
                       onChange={(e) => {
                         set("meetingMode", e.target.value as any);
-                        if (e.target.value === "VIRTUAL") {
-                          set("trip1", []);
-                          set("trip2", []);
-                        }
                       }}
                     >
                       <option value="VIRTUAL">Virtual</option>
@@ -228,6 +232,29 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                         placeholder="America/Los_Angeles"
                       />
                     </label>
+                    <p className="text-xs text-muted-foreground">
+                      Your current selection is remembered in this browser.
+                      Named trips are saved in the workspace and can be loaded
+                      for either trip. Both trips use the timezone above.
+                    </p>
+                    {tripStorageError && (
+                      <p role="alert" className="text-sm text-destructive">
+                        {tripStorageError}
+                      </p>
+                    )}
+                    {savedTrips.error && (
+                      <p role="alert" className="text-sm text-destructive">
+                        Saved trips could not be loaded. You can still select
+                        travel days manually.{" "}
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => void savedTrips.refetch()}
+                        >
+                          Retry
+                        </button>
+                      </p>
+                    )}
                     {slots("trip1", "First trip")}
                     {slots("trip2", "Second trip — optional")}
                     <p className="text-xs text-muted-foreground">
