@@ -24,6 +24,7 @@ let server: Server, base: string;
 const realFetch = fetch;
 const packets: string[] = [];
 let calls: string[] = [];
+let modelInputs: any[] = [];
 let writer: () => Promise<Response>;
 let reviewer: () => Promise<Response>;
 let release: undefined | (() => void);
@@ -38,6 +39,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   calls = [];
+  modelInputs = [];
   release = undefined;
   writer = async () => providerResponse({ touches: sequenceFixture().touches });
   reviewer = async () => providerResponse(sequenceFixture().review);
@@ -55,6 +57,7 @@ beforeEach(() => {
     const request = JSON.parse(init.body);
     const name = request.text.format.name;
     calls.push(name);
+    modelInputs.push(JSON.parse(request.input));
     if (name === "bsb_sequence") return writer();
     if (name === "bsb_sequence_review") return reviewer();
     throw Error("Unexpected provider request");
@@ -296,6 +299,9 @@ describe("durable sequence HTTP workflow", () => {
     );
     expect(next.state).toBe("APPROVED");
     expect(next.retryOf).toBe(first.id);
+    expect(modelInputs[2].repairIds).toEqual(["email1"]);
+    expect(modelInputs[2].feedback).toEqual(first.violations);
+    expect(modelInputs[2].preservedTouches).toHaveLength(7);
     expect((await request(`/sequences/${first.id}`)).body.canRegenerate).toBe(
       false,
     );

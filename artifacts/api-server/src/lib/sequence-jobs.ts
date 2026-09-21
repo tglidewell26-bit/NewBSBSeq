@@ -8,6 +8,7 @@ import {
   type SequenceJob,
   type DraftTouch,
   type TouchId,
+  type Violation,
 } from "@workspace/api-zod";
 import {
   AssessmentError,
@@ -350,6 +351,7 @@ export async function runSequenceJob(
     let touches: DraftTouch[];
     let repairIds: TouchId[] | undefined;
     let preserved: DraftTouch[] | undefined;
+    let feedback: Violation[] | undefined;
     if (job.retry_of) {
       const parent = (
         await pool.query("SELECT * FROM bsb_v2_sequence_jobs WHERE id=$1", [
@@ -357,6 +359,7 @@ export async function runSequenceJob(
         ])
       ).rows[0];
       preserved = parent.safe_touches;
+      feedback = parent.violations;
       repairIds = touchIds.filter(
         (t) => !preserved!.some((p) => p.touchId === t),
       );
@@ -371,7 +374,7 @@ export async function runSequenceJob(
       value = { touches: edits };
     } else {
       const response = await provider(
-        sequenceModelRequest("WRITING", authority, preserved, repairIds),
+        sequenceModelRequest("WRITING", authority, preserved, repairIds, feedback),
       );
       value = response.value;
       await recordUsage(id, "WRITING", response.usage);

@@ -58,7 +58,7 @@ describe("sequence authority and fixed copy", () => {
       ).toBe(false);
     },
   );
-  it("separates authorized second-trip copy from generated claims for review", () => {
+  it("reviews generated copy without sending fixed trip copy to the model", () => {
     const { authority, touches } = sequenceFixture();
     authority.settings = validateSettings({
       ...settings,
@@ -69,11 +69,12 @@ describe("sequence authority and fixed copy", () => {
     touches[7].middle = "Tim can revisit the spatial biology angle around that work.";
     const request = sequenceModelRequest("VALIDATING", authority, touches);
     const close = JSON.parse(request.input).touches[7];
-    expect(close.applicationCopy).toContain("Sorry I missed you last time.");
-    expect(close.applicationCopy).toContain("May 6, 2099");
-    expect(close.applicationCopy).not.toContain(touches[7].middle);
+    expect(close).not.toHaveProperty("applicationCopy");
+    expect(close).not.toHaveProperty("body");
+    expect(request.input).not.toContain("Sorry I missed you last time.");
+    expect(request.input).not.toContain("2099-05-06");
     expect(close.middle).toBe(touches[7].middle);
-    expect(close.body).toContain(touches[7].middle);
+    expect(renderSequence(touches, authority)[7].body).toContain("Sorry I missed you last time.");
     expect(checkDraft({ touches }, authority).violations).toEqual(
       expect.arrayContaining([expect.objectContaining({ touchId: "email5", ruleId: "SENDER_VOICE" })]),
     );
@@ -307,8 +308,13 @@ describe("sequence authority and fixed copy", () => {
     expect(write.text.format.strict).toBe(true);
     expect(write.input).not.toContain("account-workflow");
     const review = sequenceModelRequest("VALIDATING", authority, touches);
-    expect(review.input).toContain(
-      "Would you be available for a short virtual meeting?",
-    );
+    expect(review.input).not.toContain("Would you be available for a short virtual meeting?");
+    const { assignments } = JSON.parse(write.input);
+    for (const assignment of assignments) {
+      const plan = authority.plan.find((p) => p.touchId === assignment.touchId)!;
+      expect(assignment.evidence).toEqual(authority.evidence.filter((e) => plan.evidenceIds.includes(e.evidenceId)));
+      expect(assignment.capability).toEqual(authority.capabilities.find((c) => c.id === plan.capabilityId) ?? null);
+    }
+    expect(JSON.parse(review.input).assignments).toEqual(assignments);
   });
 });
