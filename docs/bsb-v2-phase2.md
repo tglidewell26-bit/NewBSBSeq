@@ -1,11 +1,19 @@
-# Phase 2: reviewed eight-touch outreach
+## September 21: original sequence and trip UI alignment
+
+New sequences use nine steps: email1, email2, liConnect, liMsg1, email3, email4, email5, liMsg2, email6. The first five steps belong to trip 1 (the connection request omits availability). Email 4 begins “Sorry I missed you last time” only for in-person outreach with a second trip. Email 4 onward uses trip 2, falling back to trip 1 when no second trip is supplied. Virtual outreach never uses missed-you wording. Email 6 is the final neutral follow-up.
+
+The plan version changed. Existing approved sequences remain immutable and can still be read, copied, and exported. Legacy eight-step sequences cannot be edited into the new schema; create a new sequence to use the new order. Retry/revision authority checks reject older plans rather than silently reassigning saved messages.
+
+Trip controls now use start/end dates and daily availability cards with morning, afternoon, all-day, unavailable, and half-hour time choices. Unset/unavailable days are excluded from outgoing availability. Named trips persist available time windows; loading one reconstructs its date range. Custom saved times outside the dropdown choices remain selectable. Separate subject/body copy buttons use the saved validated text.
+
+# Phase 2: reviewed nine-touch outreach
 
 Implementation and test record, September 20, 2026. This extends the existing shared, single-user workspace at main `a97afe21a8846972779fb954f8967cd225be759e`. It preserves the assessment scrolling fix. The user's later shared-workspace instruction supersedes the original specification's authentication requirement.
 
 ## Behavior
 
 - A real, approved instrument assessment is required. The planner freezes the evidence, approval, instrument assignments, catalog version and outreach settings. Canonical hashes tolerate PostgreSQL JSONB key ordering.
-- Exact order: `email1`, `email2`, `liConnect`, `liMsg1`, `email3`, `liMsg2`, `email4`, `email5`. Separately approved secondary instruments appear in email3 and liMsg2. Account-confirmed evidence requires the explicit outreach checkbox.
+- Exact order: `email1`, `email2`, `liConnect`, `liMsg1`, `email3`, `email4`, `email5`, `liMsg2`, `email6`. Separately approved secondary instruments appear in email3 and liMsg2. Account-confirmed evidence requires the explicit outreach checkbox.
 - Planning is deterministic and free. Generation makes one strict-schema writer call and one independent semantic review call. Deterministic checks block invalid output even when the reviewer returns no findings. Only validated output is saved as approved and made available for copy/export.
 - The application renders greetings, Tim's introduction, links, meeting availability, and signatures. General mode uses `{{first_name}}`; individual mode uses the supplied name. In-person dates are calendar-validated, ordered, future/current in the selected IANA timezone, and nonoverlapping. Virtual mode uses no trip dates. Email5 introduces the optional second trip and missed-you line, following the user's later Email5 direction.
 - The small versioned catalog contains six sourced, qualitative capabilities and their limitations. Optional marketing assets are omitted; catalog/asset import remains later scope.
@@ -45,6 +53,6 @@ The temporary test launcher initializes an isolated PGlite database and invokes 
 ## Remaining acceptance after deployment
 
 1. Open an approved real packet, select **Outreach Sequence**, and check scrolling, general/named recipient settings, and virtual/in-person fields. Verify changing packets does not retain the previous packet's editor state.
-2. Run one authorized sequence generation. Refresh while it runs and confirm the same job resumes. Review all eight touches, their evidence/assignments, actual model/cost, and fixed copy. A specific actionable rejection is an acceptable diagnostic outcome; do not automatically retry.
+2. Run one authorized sequence generation. Refresh while it runs and confirm the same job resumes. Review all nine touches, their evidence/assignments, actual model/cost, and fixed copy. A specific actionable rejection is an acceptable diagnostic outcome; do not automatically retry.
 3. On approved output, test copy/download and an edited revision. Check the prior approved version remains available. For two trips, verify Email5's dates and missed-you timing before sending.
 4. Complete the private Noetik live generation/human review gate and a published-layout check before declaring Phase 2 accepted. Model semantic review is a safeguard, not proof of factual correctness. No messages are sent by this application.

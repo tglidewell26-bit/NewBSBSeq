@@ -9,7 +9,9 @@ import { settings } from "./sequence-fixture";
 import {
   calendarDate,
   dateKey,
-  selectTripDays,
+  rangeDays,
+  halfHourTimes,
+  timeLabel,
   orderTripSlots,
   restoreTripDraft,
   todayInTimezone,
@@ -129,24 +131,18 @@ describe("saved trip persistence and validation", () => {
   });
 });
 describe("calendar selection and remembered trips", () => {
-  it("sorts nonconsecutive days across months without changing custom availability", () => {
-    const current = [{ ...slot, start: "10:30" }];
-    const selected = selectTripDays(
-      [calendarDate("2099-10-01"), calendarDate(slot.date)],
-      current,
-    );
-    expect(selected).toEqual([
-      current[0],
-      { date: "2099-10-01", start: "10:00", end: "16:00" },
-    ]);
-    expect(selectTripDays([calendarDate("2099-10-01")], selected)).toEqual([
-      selected[1],
-    ]);
+  it("expands date ranges across months and daylight-saving boundaries", () => {
+    expect(rangeDays("2026-10-31", "2026-11-02")).toEqual(["2026-10-31", "2026-11-01", "2026-11-02"]);
+    expect(rangeDays("2026-09-30", "2026-10-01")).toEqual(["2026-09-30", "2026-10-01"]);
+    expect(rangeDays("2026-10-01", "2026-10-31")).toHaveLength(31);
     expect(dateKey(calendarDate("2099-10-01"))).toBe("2099-10-01");
   });
-  it("preserves split time windows for selected dates", () => {
-    const current = [slot, { ...slot, start: "14:00", end: "16:00" }];
-    expect(selectTripDays([calendarDate(slot.date)], current)).toEqual(current);
+  it("rejects invalid or oversized ranges and provides original half-hour time choices", () => {
+    for (const [a, b] of [["", "2026-10-01"], ["2026-02-30", "2026-03-02"], ["2026-10-02", "2026-10-01"], ["2026-10-01", "2026-11-01"]]) expect(rangeDays(a, b)).toEqual([]);
+    expect(halfHourTimes).toHaveLength(13);
+    expect(halfHourTimes[0]).toBe("10:00");
+    expect(halfHourTimes.at(-1)).toBe("16:00");
+    expect(timeLabel("13:30")).toBe("1:30 PM");
   });
   it("restores trip settings without carrying recipient or account permission to another packet", () => {
     const s = {

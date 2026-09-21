@@ -34,14 +34,6 @@ export function todayInTimezone(timezone: string, now = new Date()) {
     return dateKey(now);
   }
 }
-export function selectTripDays(days: Date[], current: TripSlot[]): TripSlot[] {
-  return [...new Set(days.map(dateKey))].sort().flatMap((date) => {
-    const existing = current.filter((s) => s.date === date);
-    return existing.length
-      ? existing
-      : [{ date, start: "10:00", end: "16:00" }];
-  });
-}
 export const TRIP_DRAFT_KEY = "bsb-v2-trip-draft-v1";
 export function restoreTripDraft(
   raw: string | null,
@@ -89,4 +81,18 @@ export function restoreTripDraft(
   } catch {
     return {};
   }
+}
+
+// UTC arithmetic keeps a date range stable across daylight-saving changes.
+export function rangeDays(start: string, end: string): string[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return [];
+  const a = Date.parse(`${start}T12:00:00Z`), b = Date.parse(`${end}T12:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a || b - a > 30 * 86400000) return [];
+  if (new Date(a).toISOString().slice(0, 10) !== start || new Date(b).toISOString().slice(0, 10) !== end) return [];
+  return Array.from({ length: (b - a) / 86400000 + 1 }, (_, i) => new Date(a + i * 86400000).toISOString().slice(0, 10));
+}
+export const halfHourTimes = Array.from({ length: 13 }, (_, i) => `${String(10 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+export function timeLabel(value: string) {
+  const [h, m] = value.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
