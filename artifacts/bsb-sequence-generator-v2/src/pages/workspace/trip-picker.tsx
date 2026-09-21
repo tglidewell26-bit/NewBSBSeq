@@ -8,6 +8,7 @@ import {
   dayLabel,
   presets,
   selectTripDays,
+  orderTripSlots,
   todayInTimezone,
   type TripSlot,
 } from "./trip-utils";
@@ -50,7 +51,7 @@ export default function TripPicker({
   const past = slots.some((s) => s.date < today);
   const changed = (value: TripSlot[]) => {
     setMessage("");
-    onChange(value);
+    onChange(orderTripSlots(value));
   };
   async function save() {
     setSaving(true);
@@ -242,6 +243,20 @@ export default function TripPicker({
                   </label>
                 ))}
               </div>
+              {slots.findLastIndex((slot) => slot.date === s.date) === i && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={slots.length >= 31}
+                  aria-label={`Add time window for ${title} ${s.date}`}
+                  onClick={() =>
+                    changed([...slots, { date: s.date, start: "", end: "" }])
+                  }
+                >
+                  Add time window
+                </Button>
+              )}
             </div>
           ))}
         </div>

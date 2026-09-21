@@ -10,6 +10,7 @@ import {
   calendarDate,
   dateKey,
   selectTripDays,
+  orderTripSlots,
   restoreTripDraft,
   todayInTimezone,
 } from "../../bsb-sequence-generator-v2/src/pages/workspace/trip-utils";
@@ -55,6 +56,32 @@ async function save(body: unknown) {
 }
 
 describe("saved trip persistence and validation", () => {
+  it("saves an additional same-day window in chronological order and rejects overlaps", async () => {
+    const input = trip();
+    input.slots = orderTripSlots([
+      ...input.slots,
+      { ...slot, start: "14:00", end: "16:00" },
+    ]);
+    expect((await save(input)).status).toBe(201);
+    expect(
+      validateSettings({
+        ...settings,
+        meetingMode: "IN_PERSON",
+        trip1: input.slots,
+      }).trip1.map((s) => s.start),
+    ).toEqual(["10:00", "14:00", "13:00"]);
+    const invalid = orderTripSlots([
+      ...input.slots,
+      { ...slot, start: "12:00", end: "15:00" },
+    ]);
+    expect(() =>
+      validateSettings({
+        ...settings,
+        meetingMode: "IN_PERSON",
+        trip1: invalid,
+      }),
+    ).toThrow(/overlap/);
+  });
   it("preserves named trip dates, timezone and custom times across reload and initialization", async () => {
     const input = trip();
     input.slots[1].start = "13:30";
@@ -131,6 +158,11 @@ describe("calendar selection and remembered trips", () => {
     };
     const restored = restoreTripDraft(JSON.stringify(s));
     expect(restored.trip1).toEqual([slot]);
+    const unfinished = { ...s, trip1: [slot, { ...slot, start: "", end: "" }] };
+    expect(restoreTripDraft(JSON.stringify(unfinished)).trip1).toEqual(
+      unfinished.trip1,
+    );
+    expect(() => validateSettings(unfinished)).toThrow();
     expect(restored).not.toHaveProperty("firstName");
     expect(restored).not.toHaveProperty("allowAccountFacts");
     expect(restoreTripDraft("bad json")).toEqual({});

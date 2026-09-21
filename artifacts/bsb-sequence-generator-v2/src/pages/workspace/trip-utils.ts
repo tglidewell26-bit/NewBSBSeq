@@ -1,6 +1,12 @@
 import type { OutreachSettings } from "@workspace/api-zod";
 
 export type TripSlot = OutreachSettings["trip1"][number];
+export const orderTripSlots = (slots: TripSlot[]) =>
+  [...slots].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.start || "99:99").localeCompare(b.start || "99:99"),
+  );
 export const presets = [
   { name: "Morning", start: "10:00", end: "13:00", label: "10 AM–1 PM" },
   { name: "Afternoon", start: "13:00", end: "16:00", label: "1–4 PM" },
@@ -59,8 +65,8 @@ export function restoreTripDraft(
             !/^\d{4}-\d{2}-\d{2}$/.test(s.date) ||
             !Number.isFinite(calendarDate(s.date).getTime()) ||
             dateKey(calendarDate(s.date)) !== s.date ||
-            !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.start) ||
-            !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.end),
+            (s.start !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.start)) ||
+            (s.end !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.end)),
         )
       )
         return {};
