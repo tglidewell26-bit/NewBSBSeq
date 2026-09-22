@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { db, bsbV2PacketsTable } from "@workspace/db";
+import { db, pool, bsbV2PacketsTable } from "@workspace/db";
 import { AssessCompanyBody, ReviewAssessmentBody } from "@workspace/api-zod";
 import { DeterministicFakeProvider, hashPacket, normalizeEvidence, validateFrozenRequest } from "../lib/bsb-v2";
 import { AssessmentError, liveConfiguration, validateModelAssessment } from "../lib/live-assessment";
@@ -61,6 +61,56 @@ router.get("/bsb-v2/packets/:packetId", async (req, res): Promise<void> => {
   const [row] = await db.select().from(bsbV2PacketsTable).where(eq(bsbV2PacketsTable.id, packetId)).limit(1);
   if (!row) { res.status(404).json({ error: "Packet not found" }); return; }
   res.json({ ...safeRecord(row), assessmentRun: await getAssessmentRun(packetId) });
+});
+
+router.delete("/bsb-v2/packets/:packetId", async (req, res): Promise<void> => {
+  const packetId = String(req.params.packetId);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const packet = await client.query(
+      "SELECT id FROM bsb_v2_packets WHERE id=$1 FOR UPDATE",
+      [packetId],
+    );
+    if (!packet.rows[0]) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "Packet not found" });
+      return;
+    }
+    const activeAssessment = await client.query(
+      "SELECT 1 FROM bsb_v2_assessment_runs WHERE packet_id=$1 AND state IN ('RUNNING','OUTCOME_UNKNOWN') LIMIT 1",
+      [packetId],
+    );
+    const sequenceTable = await client.query(
+      "SELECT to_regclass('public.bsb_v2_sequence_jobs') AS name",
+    );
+    let activeSequence = { rows: [] as any[] };
+    if (sequenceTable.rows[0]?.name) {
+      activeSequence = await client.query(
+        "SELECT 1 FROM bsb_v2_sequence_jobs WHERE packet_id=$1 AND state IN ('QUEUED','WRITING','VALIDATING') LIMIT 1",
+        [packetId],
+      );
+    }
+    if (activeAssessment.rows[0] || activeSequence.rows[0]) {
+      await client.query("ROLLBACK");
+      res.status(409).json({
+        error: "This packet has work in progress. Wait for it to finish before deleting it.",
+      });
+      return;
+    }
+    if (sequenceTable.rows[0]?.name) {
+      await client.query("DELETE FROM bsb_v2_sequence_jobs WHERE packet_id=$1", [packetId]);
+    }
+    await client.query("DELETE FROM bsb_v2_assessment_runs WHERE packet_id=$1", [packetId]);
+    await client.query("DELETE FROM bsb_v2_packets WHERE id=$1", [packetId]);
+    await client.query("COMMIT");
+    res.json({ deleted: true });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> => {
