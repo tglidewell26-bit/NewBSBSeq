@@ -23,6 +23,7 @@ import { assessmentFixture } from "./assessment-fixture";
 let server: Server, base: string;
 const realFetch = fetch;
 const packets: string[] = [];
+const assetIds: string[] = [];
 let calls: string[] = [];
 let modelInputs: any[] = [];
 let writer: () => Promise<Response>;
@@ -89,6 +90,8 @@ afterEach(async () => {
     packets,
   ]);
   packets.length = 0;
+  await pool.query("DELETE FROM bsb_v2_knowledge_assets WHERE id=ANY($1::text[])", [assetIds]);
+  assetIds.length = 0;
 });
 afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
@@ -142,6 +145,16 @@ async function packet() {
   return id;
 }
 const body = () => ({ idempotencyKey: randomUUID(), settings });
+async function asset() {
+  const created = await request("/assets", {
+    fileName: "synthetic-resource.png", displayName: "Synthetic RNA resource", fileKind: "image",
+    fileDataBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9eAAAAABJRU5ErkJggg==",
+    instrument: "CosMx", researchArea: "Unknown", assetType: "Images",
+    description: "This synthetic resource describes single-cell spatial RNA. It covers tissue morphology. It is for testing only.",
+    keywords: ["single-cell RNA", "tissue", "morphology", "test", "synthetic"], classificationReasoning: "Synthetic fixture for retrieval tests.",
+  });
+  expect(created.status).toBe(201); assetIds.push(created.body.id); return created.body;
+}
 async function terminal(id: string) {
   for (let n = 0; n < 200; n++) {
     const r = await request(`/sequences/${id}`);
@@ -213,6 +226,49 @@ describe("durable sequence HTTP workflow", () => {
     const exported = await request(`/sequences/${job.id}/export`);
     expect(exported.status).toBe(200);
     expect(exported.body).toContain("Best regards,");
+  });
+  it("selects a saved resource, exports an attachment checklist, and keeps copy free of attachment claims", async () => {
+    const saved = await asset();
+    const id = await packet();
+    const start = await request(`/packets/${id}/sequences`, body());
+    const job = await terminal(start.body.id);
+    expect(job.state).toBe("APPROVED");
+    expect(job.authority.assets).toHaveLength(1);
+    expect(job.authority.assets[0]).toMatchObject({ id: saved.id, revision: 1 });
+    expect(job.authority.assets[0]).not.toHaveProperty("fileData");
+    expect(modelInputs[0].assignments[0].resources[0].matchedTopics).toEqual(["single-cell spatial RNA"]);
+    expect(modelInputs[1].assignments[0].resources).toEqual(modelInputs[0].assignments[0].resources);
+    expect(job.sequence[0].body).not.toContain("synthetic-resource.png");
+    const exported = await request(`/sequences/${job.id}/export`);
+    expect(exported.body).toContain("Attachment checklist — not email copy");
+    expect(exported.body).toContain("synthetic-resource.png");
+    expect(calls).toHaveLength(2);
+    // A new unrelated asset must not change an approved revision's assignments.
+    await asset();
+    const revision = await request(`/packets/${id}/sequences`, { ...body(), editOf: job.id, edits: sequenceFixture().touches });
+    expect((await terminal(revision.body.id)).state).toBe("APPROVED");
+  });
+  it.each(["edit", "delete"])("blocks saving if a selected resource is changed by %s during generation", async action => {
+    const saved = await asset(); const id = await packet(); const wait = paused();
+    writer = async () => { await wait; return providerResponse({ touches: sequenceFixture().touches }); };
+    const start = await request(`/packets/${id}/sequences`, body());
+    if (action === "edit") await pool.query("UPDATE bsb_v2_knowledge_assets SET revision=revision+1 WHERE id=$1", [saved.id]);
+    else await pool.query("DELETE FROM bsb_v2_knowledge_assets WHERE id=$1", [saved.id]);
+    release!();
+    const job = await terminal(start.body.id);
+    expect(job.state).toBe("PROVIDER_FAILED");
+    expect(job.error).toContain("edited or deleted");
+    expect(job.sequence).toBeNull();
+    expect((await request(`/sequences/${job.id}/export`)).status).toBe(409);
+  });
+  it("keeps a running selection stable when another file is added", async () => {
+    const saved = await asset(); const id = await packet(); const wait = paused();
+    writer = async () => { await wait; return providerResponse({ touches: sequenceFixture().touches }); };
+    const start = await request(`/packets/${id}/sequences`, body());
+    await asset(); release!();
+    const job = await terminal(start.body.id);
+    expect(job.state).toBe("APPROVED");
+    expect(job.authority.assets.map((a: any) => a.id)).toEqual([saved.id]);
   });
   it("deduplicates concurrent actions and rejects same key with different settings", async () => {
     const id = await packet();

@@ -9,6 +9,7 @@ import {
 } from "../lib/sequence-jobs";
 import { AssessmentError } from "../lib/live-assessment";
 import { digest } from "../lib/sequences";
+import { attachmentNotes } from "../lib/sequence-assets";
 const router = Router();
 function handle(action: (req: any, res: any) => Promise<void>) {
   return async (req: any, res: any) => {
@@ -112,7 +113,7 @@ router.get(
       job.sequence
         .map(
           (t) =>
-            `${t.touchId}\n${t.subject ? `Subject: ${t.subject}\n\n` : ""}${t.body}`,
+            `${t.touchId}\n${t.subject ? `Subject: ${t.subject}\n\n` : ""}${t.body}${attachmentNotes(job.authority, t.touchId)}`,
         )
         .join("\n\n---\n\n"),
     );

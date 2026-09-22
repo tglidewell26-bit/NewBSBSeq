@@ -113,6 +113,12 @@ export type TouchPlan = {
   evidenceIds: string[];
   capabilityId: string | null;
   assetIds: string[];
+  assetMatches?: Array<{ assetId: string; evidenceIds: string[]; topics: string[]; reason: string }>;
+};
+export type SequenceAsset = {
+  id: string; revision: number; fileName: string; displayName: string;
+  instrument: string; researchArea: string | null; assetType: string;
+  description: string; keywords: string[];
 };
 export type SequenceAuthority = {
   evidenceVersion: string;
@@ -127,6 +133,7 @@ export type SequenceAuthority = {
     sourceUrl?: string | null;
   }>;
   capabilities: Capability[];
+  assets?: SequenceAsset[];
   instruments: string[];
   plan: TouchPlan[];
   settings: OutreachSettings;

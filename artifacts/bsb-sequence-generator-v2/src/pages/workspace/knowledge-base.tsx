@@ -113,7 +113,7 @@ export default function KnowledgeBase() {
   </article>;
 
   return <div className="space-y-6 pb-10">
-    <section><p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Knowledge base</p><h1 className="mt-2 text-3xl font-bold">Bruker asset library</h1><p className="mt-2 max-w-3xl text-muted-foreground">Upload reference files, review AI suggestions, and organize your library. Saved assets are not yet added to outreach sequences.</p></section>
+    <section><p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Knowledge base</p><h1 className="mt-2 text-3xl font-bold">Bruker asset library</h1><p className="mt-2 max-w-3xl text-muted-foreground">Upload reference files, review AI suggestions, and organize your library. New outreach sequences select relevant files using the approved instrument and documented company workflows.</p></section>
     <div className="grid items-start gap-6 xl:grid-cols-[.85fr_1.15fr]">
       <Card id="asset-editor" className="min-w-0"><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{draft?.asset ? "Edit saved asset" : "Knowledge base upload"}</CardTitle><CardDescription>PDF, PNG, JPG, JPEG, or WebP. Up to 25 MB each. Review and save each file separately.</CardDescription></CardHeader><CardContent>
         {!draft ? <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center hover:bg-muted/50">

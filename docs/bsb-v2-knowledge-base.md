@@ -1,6 +1,6 @@
 # Knowledge base: upload, define, review, save
 
-This stage provides the asset library and AI metadata suggestions. Assets are **not yet retrieved by instrument assessment or sequence generation**. Saved metadata is user reviewed, not independent verification of instrument specifications or company evidence. The original sequencer and its assets are unchanged.
+The asset library provides AI metadata suggestions, human review, and relevant resource selection for **new outreach sequences**. Saved metadata is user reviewed, not independent verification of instrument specifications or company evidence. Instrument assessment still uses the approved company-evidence rubric, and product claims still use the curated capability catalog. The original sequencer and its assets are unchanged.
 
 ## User workflow
 
@@ -30,7 +30,20 @@ API additions: `GET /api/bsb-v2/assets/analysis/config`, `POST /api/bsb-v2/asset
 
 Verified in a disposable database using synthetic files and a fake provider: metadata-only AI drafts, cached results, duplicate concurrent requests, token preflight failures and limits, interrupted calls, invalid output, shared budget exhaustion, invalid file input, metadata editing, stale revision conflicts, duplicate keywords, and byte-for-byte downloads after editing. No live paid calls were made.
 
-API/shared/frontend type checks and production builds pass. The full API regression suite passes (156 tests). Browser acceptance remains a deployment check: the browser environment could not reach the local preview. After publishing, try one PDF, review/save it, reopen Edit, and expand its library folders. A real provider call still needs validation in Replit with its configured credentials.
+The user confirmed the published upload/AI-review/save flow works. Retrieval validation adds deterministic matching, wrong-instrument and broad-label exclusion, sample/species conflicts, negation, duplicate suppression, immutable resource snapshots, stale-resource blocking, unrelated-upload stability, and exported attachment checklists. The full API suite passes (166 tests), along with shared/API/frontend type checks and both production builds. Retrieval tests use a fake provider; no paid calls were made. Browser acceptance of the new attachment cards remains a deployment check because the browser cannot reach the local preview.
+
+## Sequence retrieval
+
+- Retrieval requires the exact approved instrument, a workflow concept in the evidence assigned to that message, and a compatible assigned capability. A research-area label, display name, or filename alone never qualifies a file.
+- Matching currently covers tissue protein imaging, antibody assays, single-cell spatial RNA, RNA/protein integration, and regional tissue profiling. Explicit negation and conflicting FFPE/fresh-frozen or human/mouse context decline the match. This deliberately favors precision; missing matches do not block generation.
+- At most one attachment per eligible email and three distinct files per sequence. Only Emails 1, 2, 3, and 5 receive candidates; LinkedIn, the second-trip opener, and the neutral close stay clear. Ties are deterministic. There is no additional AI call.
+- The job stores a snapshot of selected metadata and its revision. Selected-file edits/deletions invalidate running jobs and revision attempts. Other library changes do not change a running job's selection. Existing saved sequences are not backfilled; generate a new sequence to use retrieval.
+- Writer and reviewer receive only controlled matched-topic labels and resource IDs, not filenames, descriptions, or file bytes. Uploaded descriptions cannot introduce instructions, new company facts, or product specifications into the prompts.
+- Each message displays its suggested attachment, matching company evidence IDs, reason, and download link. Download links enforce the selected revision. Changed/deleted files display an availability warning.
+- Copy body/sequence copies message text only. The text export includes a clearly separated **Attachment checklist — not email copy** with frozen filenames and revisions. The sender downloads, reviews, and attaches files in the email tool; the app does not send emails or claim attachments were sent.
+- Historical text exports retain their original resource checklist. The current availability check and versioned download protect against silently substituting a changed resource.
+
+After publishing: open an approved packet, generate a **new** sequence, inspect Suggested attachment and the Evidence and message plan, download the selected file, and verify the text export's separate attachment checklist. An empty match is valid when the saved library lacks an instrument/workflow match.
 
 Official API references used for the file input and token preflight contract:
 - https://developers.openai.com/api/docs/guides/file-inputs
