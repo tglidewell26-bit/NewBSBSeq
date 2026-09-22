@@ -23,7 +23,7 @@ app.use(
     },
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: "35mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 

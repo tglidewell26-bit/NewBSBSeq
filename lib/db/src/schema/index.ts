@@ -19,3 +19,4 @@
 
 export * from "./bsb-v2";
 export * from "./assessment-runs";
+export * from "./knowledge-assets";

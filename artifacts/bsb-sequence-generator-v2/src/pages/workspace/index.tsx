@@ -1,10 +1,11 @@
 import { useGetAssessmentConfig } from "@workspace/api-client-react";
 import { Switch, Route, useLocation } from "wouter";
-import { Beaker, LayoutDashboard, ShieldAlert } from "lucide-react";
+import { Beaker, LayoutDashboard, LibraryBig, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
 
 import PacketList from "./packet-list";
 import PacketDetail from "./dashboard";
+import KnowledgeBase from "./knowledge-base";
 
 export default function Workspace() {
   const [location] = useLocation();
@@ -39,6 +40,10 @@ export default function Workspace() {
             <LayoutDashboard className="w-4 h-4" />
             Dashboard
           </Link>
+          <Link href="/workspace/knowledge" className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${isCurrent("/workspace/knowledge") ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}`}>
+            <LibraryBig className="w-4 h-4" />
+            Knowledge Base
+          </Link>
           
           {/* Mock indicator in sidebar to keep the requirement prominent */}
           <div className="mt-8 px-3 py-3 bg-sidebar-accent/30 border border-sidebar-accent/50 rounded-sm">
@@ -60,7 +65,7 @@ export default function Workspace() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 shrink-0">
           <h2 className="text-sm font-semibold text-foreground">
-            {location === "/workspace" ? "Research Packets" : "Packet Review"}
+            {location === "/workspace" ? "Research Packets" : location.startsWith("/workspace/knowledge") ? "Knowledge Base" : "Packet Review"}
           </h2>
           <div className="flex items-center gap-3">
             <div className="px-2.5 py-1 bg-accent border border-accent-foreground/20 text-accent-foreground text-xs font-mono rounded-sm font-bold shadow-sm">
@@ -73,6 +78,7 @@ export default function Workspace() {
           <div className="max-w-6xl mx-auto h-full">
             <Switch>
               <Route path="/workspace/packet/:id" component={PacketDetail} />
+              <Route path="/workspace/knowledge" component={KnowledgeBase} />
               <Route path="/workspace" component={PacketList} />
             </Switch>
           </div>
