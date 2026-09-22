@@ -95,7 +95,7 @@ afterAll(async () => {
 });
 
 describe("BSB V2 shared workspace through the production Express app", () => {
-  it("stores, lists, downloads, and deletes reviewed knowledge assets", async () => {
+  it("stores, edits without replacing the file, rejects stale edits, downloads, and deletes reviewed assets", async () => {
     const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9eAAAAABJRU5ErkJggg==";
     const created = await request("/api/bsb-v2/assets", { method: "POST", body: JSON.stringify({
       fileName: "synthetic.png", displayName: "Synthetic test image", fileDataBase64: png, fileKind: "image",
@@ -105,13 +105,29 @@ describe("BSB V2 shared workspace through the production Express app", () => {
     }) });
     expect(created.status).toBe(201);
     assetIds.add(created.body.id);
+    expect(created.body).not.toHaveProperty("fileData");
+    const edited = await request(`/api/bsb-v2/assets/${created.body.id}`, { method: "PATCH", body: JSON.stringify({
+      ...created.body, displayName: "Reviewed image", fileName: "do-not-replace.pdf", fileDataBase64: "not file data", fileKind: "document",
+    }) });
+    expect(edited.status).toBe(200);
+    expect(edited.body).toMatchObject({ displayName: "Reviewed image", fileName: "synthetic.png", fileKind: "image", revision: 2 });
+    expect((await request(`/api/bsb-v2/assets/${created.body.id}`, { method: "PATCH", body: JSON.stringify(created.body) })).status).toBe(409);
+    expect((await request(`/api/bsb-v2/assets/${created.body.id}`, { method: "PATCH", body: JSON.stringify({ ...edited.body, keywords: ["same", "same", "same", "same", "same"] }) })).status).toBe(400);
     expect((await request("/api/bsb-v2/assets")).body.some((asset: any) => asset.id === created.body.id)).toBe(true);
     const download = await fetch(`${baseUrl}/api/bsb-v2/assets/${created.body.id}/download`);
     expect(download.status).toBe(200);
     expect(download.headers.get("content-type")).toContain("image/png");
+    expect(Buffer.from(await download.arrayBuffer()).toString("base64")).toBe(png);
     const deleted = await request(`/api/bsb-v2/assets/${created.body.id}`, { method: "DELETE" });
     expect(deleted.status).toBe(200);
     assetIds.delete(created.body.id);
+  });
+
+  it("rejects invalid files before AI analysis and reports unavailable configuration", async () => {
+    const invalid = await request("/api/bsb-v2/assets/analyze", { method: "POST", body: JSON.stringify({ fileName: "test.pdf", fileDataBase64: "invalid" }) });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.errorType).toBe("INVALID_FILE");
+    expect((await request("/api/bsb-v2/assets/analysis/config")).body).toHaveProperty("reservationUsd", 0.35);
   });
 
   it("opens without credentials and rejects malformed intake without invoking the provider", async () => {

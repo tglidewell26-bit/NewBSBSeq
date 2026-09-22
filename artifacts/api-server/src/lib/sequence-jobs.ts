@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { initializeSavedTrips } from "./saved-trips";
+import { dailyAiReserved, initializeAssetAnalysisRuns } from "./ai-budget";
 import { pool } from "@workspace/db";
 import {
   sequenceRequestSchema,
@@ -30,6 +31,7 @@ import {
 const ACTIVE = ["QUEUED", "WRITING", "VALIDATING"];
 const LEASE_MS = 180000;
 export async function initializeSequenceJobs() {
+  await initializeAssetAnalysisRuns();
   await initializeSavedTrips();
   await pool.query(`CREATE TABLE IF NOT EXISTS bsb_v2_sequence_jobs (
     id text PRIMARY KEY, packet_id text NOT NULL, action_key text NOT NULL UNIQUE, input_hash text NOT NULL,
@@ -132,11 +134,7 @@ async function reserve(client: any, amount: number, rootId: string | null) {
       "This sequence and its regeneration would exceed BSB_AI_MAX_JOB_USD. No paid call was started.",
       429,
     );
-  const { rows } =
-    await client.query(`SELECT COALESCE(SUM(reserved_micro_usd),0)::bigint AS total FROM (
-    SELECT reserved_micro_usd FROM bsb_v2_assessment_runs WHERE started_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' OR state IN ('RUNNING','OUTCOME_UNKNOWN')
-    UNION ALL SELECT reserved_micro_usd FROM bsb_v2_sequence_jobs WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' OR state IN ('QUEUED','WRITING','VALIDATING','RECOVERY_REQUIRED')) charges`);
-  if (Number(rows[0].total) + amount > c.dailyLimitMicroUsd)
+  if (await dailyAiReserved(client) + amount > c.dailyLimitMicroUsd)
     throw new AssessmentError(
       "BUDGET_EXHAUSTED",
       "The shared daily AI budget is exhausted. No paid call was started.",

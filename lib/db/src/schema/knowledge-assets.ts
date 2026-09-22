@@ -2,6 +2,7 @@ import { integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const knowledgeAssetsTable = pgTable("bsb_v2_knowledge_assets", {
   id: text("id").primaryKey(),
+  revision: integer("revision").notNull().default(1),
   fileName: text("file_name").notNull(),
   displayName: text("display_name").notNull(),
   fileType: text("file_type").notNull(),
