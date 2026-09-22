@@ -1,16 +1,26 @@
 import { useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getListResearchPacketsQueryKey,
   useListResearchPackets,
   useSubmitResearchPacket,
   type ResearchPacket,
 } from "@workspace/api-client-react";
-import { AlertTriangle, ArrowRight, FileJson, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRight, FileJson, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function PacketList() {
   const [, navigate] = useLocation();
@@ -19,6 +29,7 @@ export default function PacketList() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [raw, setRaw] = useState("");
   const [parseError, setParseError] = useState("");
+  const [packetToDelete, setPacketToDelete] = useState<string | null>(null);
   const { data: packets = [], isLoading } = useListResearchPackets({
     query: { queryKey: getListResearchPacketsQueryKey() },
   });
@@ -30,6 +41,22 @@ export default function PacketList() {
       },
       onError: (error) => toast({ title: "Packet validation failed", description: error.message, variant: "destructive" }),
     },
+  });
+  const remove = useMutation({
+    mutationFn: async (packetId: string) => {
+      const response = await fetch(`/api/bsb-v2/packets/${packetId}`, { method: "DELETE" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || "Packet could not be deleted.");
+      return packetId;
+    },
+    onSuccess: (packetId) => {
+      queryClient.setQueryData(getListResearchPacketsQueryKey(), (current: typeof packets) =>
+        current.filter((packet) => packet.id !== packetId),
+      );
+      setPacketToDelete(null);
+      toast({ title: "Packet deleted." });
+    },
+    onError: (error) => toast({ title: "Packet was not deleted", description: error.message, variant: "destructive" }),
   });
 
   const preview = useMemo(() => {
@@ -102,14 +129,33 @@ export default function PacketList() {
         ) : (
           <div className="divide-y overflow-hidden rounded-lg border bg-card">
             {packets.map((packet) => (
-              <button key={packet.id} type="button" onClick={() => navigate(`/workspace/packet/${packet.id}`)} className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-muted/50">
-                <div className="min-w-0 flex-1"><p className="truncate font-medium">{packet.brief}</p><p className="mt-1 font-mono text-xs text-muted-foreground">{packet.id}</p></div>
-                <span className="rounded border px-2 py-1 font-mono text-[10px] font-bold">{packet.stage}</span><ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </button>
+              <div key={packet.id} className="flex items-center gap-2 p-2 transition-colors hover:bg-muted/50">
+                <button type="button" onClick={() => navigate(`/workspace/packet/${packet.id}`)} className="flex min-w-0 flex-1 items-center gap-4 rounded p-2 text-left">
+                  <div className="min-w-0 flex-1"><p className="truncate font-medium">{packet.brief}</p><p className="mt-1 font-mono text-xs text-muted-foreground">{packet.id}</p></div>
+                  <span className="rounded border px-2 py-1 font-mono text-[10px] font-bold">{packet.stage}</span><ArrowRight className="h-4 w-4 text-muted-foreground" />
+                </button>
+                <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-destructive" aria-label={`Delete packet ${packet.id}`} onClick={() => setPacketToDelete(packet.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             ))}
           </div>
         )}
       </section>
+      <AlertDialog open={packetToDelete !== null} onOpenChange={(open) => !open && setPacketToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this packet?</AlertDialogTitle>
+            <AlertDialogDescription>This permanently deletes the packet, its assessment history, and its saved sequences. It cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={remove.isPending} onClick={(event) => { event.preventDefault(); if (packetToDelete) remove.mutate(packetToDelete); }}>
+              {remove.isPending ? "Deleting…" : "Delete packet"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

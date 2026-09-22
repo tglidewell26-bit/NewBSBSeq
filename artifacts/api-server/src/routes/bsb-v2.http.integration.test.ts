@@ -2,7 +2,7 @@ import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { db, bsbV2PacketsTable } from "@workspace/db";
+import { assessmentRunsTable, db, bsbV2PacketsTable } from "@workspace/db";
 import app from "../app";
 import { DeterministicFakeProvider } from "../lib/bsb-v2";
 import { initializeAssessmentRuns } from "../lib/assessment-runs";
@@ -81,7 +81,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (createdIds.size) await db.delete(bsbV2PacketsTable).where(inArray(bsbV2PacketsTable.id, [...createdIds]));
+  if (createdIds.size) {
+    await db.delete(assessmentRunsTable).where(inArray(assessmentRunsTable.packetId, [...createdIds]));
+    await db.delete(bsbV2PacketsTable).where(inArray(bsbV2PacketsTable.id, [...createdIds]));
+  }
   assessSpy.mockRestore();
   await new Promise<void>((resolve, reject) =>
     server.close((error) => error ? reject(error) : resolve()));
@@ -113,6 +116,26 @@ describe("BSB V2 shared workspace through the production Express app", () => {
     expect(reload.body.researchPacket.brief).toContain("<script>");
     expect(reload.status).toBe(200);
     expect((await request("/api/bsb-v2/packets")).body.some((row: any) => row.id === first.body.id)).toBe(true);
+  });
+
+  it("deletes a completed packet and its derived records, but protects active work", async () => {
+    const completed = await submit(packet(`Delete completed ${randomUUID()}`));
+    const id = completed.body.id;
+    const deleted = await request(`/api/bsb-v2/packets/${id}`, { method: "DELETE" });
+    expect(deleted.status).toBe(200);
+    expect(deleted.body).toEqual({ deleted: true });
+    createdIds.delete(id);
+    expect((await request(`/api/bsb-v2/packets/${id}`)).status).toBe(404);
+    expect((await request(`/api/bsb-v2/packets/${id}`, { method: "DELETE" })).status).toBe(404);
+
+    const active = await submit(packet(`Delete active ${randomUUID()}`));
+    await db.insert(assessmentRunsTable).values({
+      id: randomUUID(), packetId: active.body.id, evidenceVersion: active.body.inputHash,
+      attempt: 1, state: "RUNNING", reservedMicroUsd: 0, model: "test", promptVersion: "test",
+    });
+    const blocked = await request(`/api/bsb-v2/packets/${active.body.id}`, { method: "DELETE" });
+    expect(blocked.status).toBe(409);
+    expect((await request(`/api/bsb-v2/packets/${active.body.id}`)).status).toBe(200);
   });
 
   it("keeps previously owned packets, assessments and reviews accessible without a migration", async () => {

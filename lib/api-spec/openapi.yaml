@@ -67,6 +67,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PacketRecord" }
+    delete:
+      operationId: deleteResearchPacket
+      parameters:
+        - in: path
+          name: packetId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Packet and its derived assessment and sequence records were deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [deleted]
+                properties:
+                  deleted: { type: boolean, const: true }
+        "404":
+          description: Packet not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationFailure" }
+        "409":
+          description: Packet has active work
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationFailure" }
   /bsb-v2/packets/{packetId}/assess:
     post:
       operationId: assessCompany
