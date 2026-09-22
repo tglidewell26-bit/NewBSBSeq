@@ -2,12 +2,14 @@ import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { assessmentRunsTable, db, bsbV2PacketsTable } from "@workspace/db";
+import { assessmentRunsTable, db, bsbV2PacketsTable, knowledgeAssetsTable } from "@workspace/db";
 import app from "../app";
 import { DeterministicFakeProvider } from "../lib/bsb-v2";
 import { initializeAssessmentRuns } from "../lib/assessment-runs";
+import { initializeKnowledgeAssets } from "../lib/knowledge-assets";
 
 const createdIds = new Set<string>();
+const assetIds = new Set<string>();
 let server: Server;
 let baseUrl = "";
 const assessSpy = vi.spyOn(DeterministicFakeProvider.prototype, "assess");
@@ -72,6 +74,7 @@ const submit = async (value: ReturnType<typeof packet>) => {
 
 beforeAll(async () => {
   await initializeAssessmentRuns();
+  await initializeKnowledgeAssets();
   await new Promise<void>((resolve) => {
     server = app.listen(0, "127.0.0.1", () => resolve());
   });
@@ -81,6 +84,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (assetIds.size) await db.delete(knowledgeAssetsTable).where(inArray(knowledgeAssetsTable.id, [...assetIds]));
   if (createdIds.size) {
     await db.delete(assessmentRunsTable).where(inArray(assessmentRunsTable.packetId, [...createdIds]));
     await db.delete(bsbV2PacketsTable).where(inArray(bsbV2PacketsTable.id, [...createdIds]));
@@ -91,6 +95,25 @@ afterAll(async () => {
 });
 
 describe("BSB V2 shared workspace through the production Express app", () => {
+  it("stores, lists, downloads, and deletes reviewed knowledge assets", async () => {
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9eAAAAABJRU5ErkJggg==";
+    const created = await request("/api/bsb-v2/assets", { method: "POST", body: JSON.stringify({
+      fileName: "synthetic.png", displayName: "Synthetic test image", fileDataBase64: png, fileKind: "image",
+      instrument: "CellScape", researchArea: "Cancer", assetType: "Images",
+      description: "This is a synthetic image for route testing. It has no scientific meaning. It verifies knowledge-base storage only.",
+      keywords: ["synthetic", "test image", "CellScape", "cancer", "storage"], classificationReasoning: "This test file is explicitly a PNG image.",
+    }) });
+    expect(created.status).toBe(201);
+    assetIds.add(created.body.id);
+    expect((await request("/api/bsb-v2/assets")).body.some((asset: any) => asset.id === created.body.id)).toBe(true);
+    const download = await fetch(`${baseUrl}/api/bsb-v2/assets/${created.body.id}/download`);
+    expect(download.status).toBe(200);
+    expect(download.headers.get("content-type")).toContain("image/png");
+    const deleted = await request(`/api/bsb-v2/assets/${created.body.id}`, { method: "DELETE" });
+    expect(deleted.status).toBe(200);
+    assetIds.delete(created.body.id);
+  });
+
   it("opens without credentials and rejects malformed intake without invoking the provider", async () => {
     const before = assessSpy.mock.calls.length;
     expect((await request("/api/bsb-v2/packets")).status).toBe(200);
