@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { initializeSavedTrips } from "./saved-trips";
 import { dailyAiReserved, initializeAssetAnalysisRuns } from "./ai-budget";
+import { initializeKnowledgeAssets } from "./knowledge-assets";
+import { loadSequenceAssets } from "./sequence-assets";
 import { pool } from "@workspace/db";
 import {
   sequenceRequestSchema,
@@ -31,6 +33,7 @@ import {
 const ACTIVE = ["QUEUED", "WRITING", "VALIDATING"];
 const LEASE_MS = 180000;
 export async function initializeSequenceJobs() {
+  await initializeKnowledgeAssets();
   await initializeAssetAnalysisRuns();
   await initializeSavedTrips();
   await pool.query(`CREATE TABLE IF NOT EXISTS bsb_v2_sequence_jobs (
@@ -188,7 +191,7 @@ export async function createSequenceJob(
     ).rows[0];
     if (!row) throw new AssessmentError("NOT_FOUND", "Packet not found.", 404);
     const settings = validateSettings(request.settings);
-    let authority = planSequence(row, settings);
+    let authority: SequenceAuthority;
     let parent: any;
     if (request.editOf || retryOf) {
       parent = (
@@ -197,7 +200,9 @@ export async function createSequenceJob(
           [request.editOf ?? retryOf, packetId],
         )
       ).rows[0];
-      if (!parent || digest(authority) !== parent.authority_hash)
+      if (!parent) throw new AssessmentError("NOT_FOUND", "Source sequence not found.", 404);
+      authority = planSequence(row, settings, await loadSequenceAssets(c, parent.authority.assets ?? []));
+      if (digest(authority) !== parent.authority_hash)
         throw new AssessmentError(
           "STALE_AUTHORITY",
           "The source sequence's assessment, evidence, settings or catalog changed. Start a new sequence with current approval.",
@@ -225,6 +230,8 @@ export async function createSequenceJob(
           409,
         );
       authority = parent.authority;
+    } else {
+      authority = planSequence(row, settings, await loadSequenceAssets(c));
     }
     const active = (
       await c.query(
@@ -298,7 +305,7 @@ async function stillCurrent(id: string, targetState?: string) {
       ])
     ).rows[0];
     if (
-      digest(planSequence(row, job.authority.settings)) !== job.authority_hash
+      digest(planSequence(row, job.authority.settings, await loadSequenceAssets(c, job.authority.assets ?? []))) !== job.authority_hash
     )
       throw new AssessmentError(
         "STALE_AUTHORITY",
@@ -423,7 +430,7 @@ export async function runSequenceJob(
           job.packet_id,
         ])
       ).rows[0];
-      if (digest(planSequence(row, authority.settings)) !== job.authority_hash)
+      if (digest(planSequence(row, authority.settings, await loadSequenceAssets(c, authority.assets ?? []))) !== job.authority_hash)
         throw new AssessmentError(
           "STALE_AUTHORITY",
           "Authority changed before save. No sequence was saved.",

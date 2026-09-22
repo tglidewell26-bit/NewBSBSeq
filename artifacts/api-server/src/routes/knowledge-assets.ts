@@ -84,6 +84,9 @@ router.patch("/bsb-v2/assets/:assetId", async (req, res) => {
 router.get("/bsb-v2/assets/:assetId/download", async (req, res) => {
   const [asset] = await db.select().from(knowledgeAssetsTable).where(eq(knowledgeAssetsTable.id, String(req.params.assetId))).limit(1);
   if (!asset) { res.status(404).json({ error: "Asset not found" }); return; }
+  if (req.query.revision !== undefined && String(req.query.revision) !== String(asset.revision)) {
+    res.status(409).json({ error: "This resource changed after the sequence was generated. Generate a new sequence to refresh its attachment selection." }); return;
+  }
   res.setHeader("Content-Type", asset.fileType);
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(asset.fileName)}"`);
   res.send(Buffer.from(asset.fileData, "base64"));

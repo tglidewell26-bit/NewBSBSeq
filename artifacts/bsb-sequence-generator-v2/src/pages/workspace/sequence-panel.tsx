@@ -6,6 +6,7 @@ import type {
   OutreachSettings,
   SequenceJob,
   SavedTrip,
+  SequenceAuthority,
 } from "@workspace/api-zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -438,6 +439,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                       </a>
                     </div>
                   ))}
+                <TouchAssets authority={job.authority} touchId={p.touchId} />
               </div>
             ))}
           </details>
@@ -456,7 +458,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                           )
                           .join("\n\n---\n\n"),
                       );
-                      setCopyStatus("Copied approved sequence.");
+                      setCopyStatus("Copied approved sequence text. Download and attach any suggested files separately.");
                     } catch {
                       setCopyStatus(
                         "Clipboard unavailable. Use Download text.",
@@ -554,9 +556,10 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                       )}
                       <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.body}</p>
                       <Button variant="outline" size="sm" onClick={async () => {
-                        try { await navigator.clipboard.writeText(t.body); setCopyStatus("Copied body."); }
+                        try { await navigator.clipboard.writeText(t.body); setCopyStatus("Copied body text. Suggested files must be attached separately."); }
                         catch { setCopyStatus("Clipboard unavailable. Select the body to copy it."); }
                       }}>Copy body</Button>
+                      <TouchAssets authority={job.authority} touchId={t.touchId} />
                     </>
                   )}
                 </article>
@@ -572,4 +575,28 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
       )}
     </div>
   );
+}
+
+function TouchAssets({ authority, touchId }: { authority: SequenceAuthority; touchId: string }) {
+  const plan = authority.plan.find(p => p.touchId === touchId);
+  const assets = (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
+  const current = useQuery({ queryKey: ["knowledge-assets"], queryFn: () => api<Array<{ id: string; revision: number }>>("/assets"), enabled: assets.length > 0 });
+  if (!authority.assets || !["email1", "email2", "email3", "email5"].includes(touchId)) return null;
+  if (!assets.length) return <p className="mt-3 text-xs text-muted-foreground">No library file closely matched this message's documented workflow.</p>;
+  return <div className="mt-3 space-y-3 rounded-md border bg-muted/20 p-3">
+    <p className="text-sm font-medium">Suggested attachment</p>
+    {assets.map(asset => {
+      const match = plan?.assetMatches?.find(m => m.assetId === asset.id);
+      const available = current.data?.some(a => a.id === asset.id && a.revision === asset.revision);
+      return <div key={asset.id} className="space-y-1 text-sm">
+        <p className="font-medium break-words">{asset.displayName}</p>
+        <p className="text-xs text-muted-foreground break-all">{asset.fileName} · reviewed revision {asset.revision}</p>
+        <p>{match?.reason}</p>
+        <p className="text-xs text-muted-foreground">Company evidence: {match?.evidenceIds.join(", ")}</p>
+        {available ? <a className="inline-block underline text-primary" href={`/api/bsb-v2/assets/${asset.id}/download?revision=${asset.revision}`}>Download attachment</a>
+          : <p role="status" className="text-xs text-muted-foreground">{current.isLoading ? "Checking file…" : current.isError ? "Could not check file availability. Reload before sending." : "This file was changed or deleted. Generate a new sequence to refresh its resource selection."}</p>}
+      </div>;
+    })}
+    <p className="text-xs text-muted-foreground">Review the original file before use. Copying the message does not attach it; download and attach it in your email tool.</p>
+  </div>;
 }
