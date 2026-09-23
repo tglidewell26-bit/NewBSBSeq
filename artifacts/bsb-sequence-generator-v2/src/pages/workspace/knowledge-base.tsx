@@ -14,7 +14,7 @@ const areas = ["Neuroscience", "Cancer", "Infectious disease", "Genetic disorder
 const types = ["Publications", "Tech notes", "Images", "Panels and Brochures"];
 type Metadata = { displayName: string; instrument: string; researchArea: string | null; assetType: string; description: string; keywords: string[]; classificationReasoning: string };
 type Asset = Metadata & { id: string; revision: number; fileName: string; fileSize: number; fileKind: "document" | "image" };
-type Draft = Omit<Metadata, "keywords"> & { key: string; keywords: string; asset?: Asset; file?: File; data?: string; analysis?: "queued" | "analyzing" | "ready" | "failed"; analysisError?: string };
+type Draft = Omit<Metadata, "keywords"> & { key: string; keywords: string; asset?: Asset; file?: File; data?: string; analysis?: "queued" | "analyzing" | "ready" | "failed"; analysisError?: string; estimatedCostUsd?: number };
 type Analysis = { metadata: Metadata; usage: { estimatedCostUsd: number } };
 const bytes = (size: number) => size < 1024 * 1024 ? `${Math.round(size / 1024)} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`;
 const assetKey = ["knowledge-assets"] as const;
@@ -57,7 +57,7 @@ export default function KnowledgeBase() {
   const draft = drafts[0];
   const library = useQuery({ queryKey: assetKey, queryFn: () => api<Asset[]>(endpoint) });
   const assets = library.data ?? [];
-  const config = useQuery({ queryKey: ["asset-analysis-config"], queryFn: () => api<{ enabled: boolean; reservationUsd: number; dailyLimitUsd: number; estimatedSpentUsd: number; heldUsd: number; remainingUsd: number }>(`${endpoint}/analysis/config`), refetchInterval: 15000 });
+  const config = useQuery({ queryKey: ["asset-analysis-config"], queryFn: () => api<{ enabled: boolean }>(`${endpoint}/analysis/config`) });
   const updateDraft = (value: Draft) => setDrafts(items => items.map(item => item.key === value.key ? value : item));
   const finishDraft = (key: string) => setDrafts(items => items.filter(item => item.key !== key));
   const save = useMutation({
@@ -83,10 +83,8 @@ export default function KnowledgeBase() {
         stopped: () => queue.current.stop || !mounted.current,
         analyze: async value => {
           patch(value.key, { analysis: "analyzing", analysisError: undefined });
-          try {
-            const result = await api<Analysis>(`${endpoint}/analyze`, json("POST", value.asset ? { assetId: value.asset.id } : { fileName: value.file!.name, fileDataBase64: value.data }));
-            patch(value.key, { ...result.metadata, keywords: result.metadata.keywords.join(", "), analysis: "ready" });
-          } finally { void queryClient.invalidateQueries({ queryKey: ["asset-analysis-config"] }); }
+          const result = await api<Analysis>(`${endpoint}/analyze`, json("POST", value.asset ? { assetId: value.asset.id } : { fileName: value.file!.name, fileDataBase64: value.data }));
+          patch(value.key, { ...result.metadata, keywords: result.metadata.keywords.join(", "), analysis: "ready", estimatedCostUsd: result.usage.estimatedCostUsd });
         },
         failed: (value, error) => patch(value.key, { analysis: "failed", analysisError: error.message }),
       });
@@ -145,9 +143,8 @@ export default function KnowledgeBase() {
     <div className="grid items-start gap-6 xl:grid-cols-[.85fr_1.15fr]">
       <Card id="asset-editor" className="min-w-0"><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{draft?.asset ? "Edit saved asset" : "Knowledge base upload"}</CardTitle><CardDescription>PDF, PNG, JPG, JPEG, or WebP. Up to 25 MB each. Files are analyzed automatically. Review and save each file when the batch finishes.</CardDescription></CardHeader><CardContent>
         <div className="mb-4 space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
-          {config.data ? <><p>Daily app budget: <strong>${config.data.remainingUsd.toFixed(2)} available</strong> of ${config.data.dailyLimitUsd.toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">Estimated usage ${config.data.estimatedSpentUsd.toFixed(4)} · Reserved ${config.data.heldUsd.toFixed(2)}. Shared with assessments and sequences.</p></> : <p>{config.isError ? "Budget unavailable. Uploads can still be reviewed manually." : "Loading AI budget…"}</p>}
-          <p className="text-xs text-muted-foreground">{config.data?.enabled ? `Selecting files sends them to OpenAI for analysis, one at a time. Each call temporarily reserves $${config.data.reservationUsd.toFixed(2)}; completed usage releases the unused amount. No automatic retries.` : "AI analysis is unavailable. You can enter and save metadata manually."}</p>
+          <p>No app spending cap.</p>
+          <p className="text-xs text-muted-foreground">{config.data?.enabled ? "Selecting files sends them to OpenAI for paid analysis, one at a time. Existing results are reused. No automatic retries." : config.isLoading ? "Checking AI setup…" : "AI analysis is unavailable. You can enter and save metadata manually."}</p>
         </div>
         {!!draft && !draft.asset && <div className="mb-4 space-y-2 rounded-md border p-3" aria-live="polite">
           <p className="text-sm font-medium">{analyzing ? "Analyzing uploads…" : drafts.some(item => item.analysis === "queued") ? "Analysis queue paused" : "Batch ready for review"}</p>
@@ -164,6 +161,7 @@ export default function KnowledgeBase() {
           <div className="space-y-2 rounded-md border p-3">
             <Button variant="outline" disabled={busy || !config.data?.enabled} onClick={() => void analyzeBatch([draft])}>{analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{analyzing ? "Reading file…" : draft.analysis === "ready" ? "Reload AI suggestions" : "Analyze this file"}</Button>
             {draft.analysisError && <p role="alert" className="text-sm text-destructive">{draft.analysisError}</p>}
+            {draft.estimatedCostUsd !== undefined && <p className="text-xs text-muted-foreground">Estimated analysis cost: ${draft.estimatedCostUsd.toFixed(4)}. Reloading suggestions reuses this result without another AI call.</p>}
 
           </div>
           <fieldset disabled={busy} className="space-y-4 disabled:opacity-70">

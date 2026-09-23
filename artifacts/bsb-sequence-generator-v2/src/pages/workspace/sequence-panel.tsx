@@ -113,7 +113,6 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
       api<{
         enabled: boolean;
         missing: string[];
-        reservationUsd: number;
         model: string;
       }>("/sequence-config"),
   });
@@ -369,7 +368,6 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
             <p className="text-xs text-muted-foreground">
               {job.usage.length} completed model calls · estimated API cost $
               {job.usage.reduce((n, u) => n + u.estimatedCostUsd, 0).toFixed(4)}{" "}
-              · reserved ${job.reservedUsd.toFixed(2)}
             </p>
             {job.canRegenerate && (
               <Button
@@ -388,8 +386,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
             {job.canRegenerate && (
               <p className="text-xs text-muted-foreground">
                 Uses the same assignments and preserves validated touches. Two
-                calls; another $0.70 reservation must fit your per-job and daily
-                limits.
+                paid calls. No app spending cap.
               </p>
             )}
           </div>

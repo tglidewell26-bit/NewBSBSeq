@@ -282,7 +282,6 @@ export interface AssessmentRun {
   id: string;
   state: AssessmentRunState;
   attempt: number;
-  reservedUsd: number;
   startedAt: string;
   error?: ValidationFailure;
   usage?: AssessmentUsage;
@@ -365,7 +364,4 @@ export interface AssessmentConfig {
   enabled: boolean;
   missing: string[];
   model: string;
-  reservationUsd: number;
-  dailyLimitUsd: number;
 }
-

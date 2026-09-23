@@ -354,7 +354,7 @@ describe("durable sequence HTTP workflow", () => {
     expect(calls).toHaveLength(2);
     const jobs = (await pool.query("SELECT * FROM bsb_v2_sequence_jobs WHERE packet_id=$1", [id])).rows;
     expect(jobs).toHaveLength(1);
-    expect(jobs[0].reserved_micro_usd).toBe(700000);
+    expect(jobs[0].reserved_micro_usd).toBe(0);
     expect((await request(`/sequences/${first.id}`)).body.canRegenerate).toBe(true);
   });
   it("regenerates only rejected touches once and revalidates the entire sequence", async () => {
@@ -553,7 +553,7 @@ describe("durable sequence HTTP workflow", () => {
       (await request(`/packets/${id}/sequences`, body())).body.id,
     );
     expect(job.state).toBe("RECOVERY_REQUIRED");
-    expect(job.reservedUsd).toBe(0.7);
+    expect(job).not.toHaveProperty("reservedUsd");
     expect((await request(`/packets/${id}/sequences`, body())).status).toBe(
       409,
     );
@@ -581,30 +581,22 @@ describe("durable sequence HTTP workflow", () => {
       409,
     );
   });
-  it("shares the daily cap with assessment and respects the regeneration job cap", async () => {
+  it("ignores old spending caps and reservations for generation and regeneration", async () => {
     const id = await packet();
     vi.stubEnv("BSB_AI_DAILY_BUDGET_USD", "1");
     await pool.query(
       "INSERT INTO bsb_v2_assessment_runs(id,packet_id,evidence_version,attempt,state,reserved_micro_usd,model,prompt_version) VALUES($1,$2,'v',1,'COMPLETED',350000,'test','test')",
       [randomUUID(), id],
     );
-    expect((await request(`/packets/${id}/sequences`, body())).status).toBe(
-      429,
-    );
-    expect(calls).toHaveLength(0);
-    vi.stubEnv("BSB_AI_DAILY_BUDGET_USD", "5");
-    vi.stubEnv("BSB_AI_MAX_JOB_USD", "1");
+    vi.stubEnv("BSB_AI_DAILY_BUDGET_USD", "0");
+    vi.stubEnv("BSB_AI_MAX_JOB_USD", "0");
     reviewer = async () => providerResponse(unsafeReview());
     const first = await terminal(
       (await request(`/packets/${id}/sequences`, body())).body.id,
     );
-    expect(
-      (
-        await request(`/sequences/${first.id}/regenerate`, {
-          idempotencyKey: randomUUID(),
-        })
-      ).status,
-    ).toBe(429);
-    expect(calls).toHaveLength(2);
+    const next = await request(`/sequences/${first.id}/regenerate`, { idempotencyKey: randomUUID() });
+    expect(next.status).toBe(202);
+    await terminal(next.body.id);
+    expect(calls).toHaveLength(4);
   });
 });

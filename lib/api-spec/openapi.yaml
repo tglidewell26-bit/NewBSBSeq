@@ -351,13 +351,11 @@ components:
 
     AssessmentConfig:
       type: object
-      required: [enabled, missing, model, reservationUsd, dailyLimitUsd]
+      required: [enabled, missing, model]
       properties:
         enabled: { type: boolean }
         missing: { type: array, items: { type: string } }
         model: { type: string }
-        reservationUsd: { type: number }
-        dailyLimitUsd: { type: number }
     AssessmentUsage:
       type: object
       required: [inputTokens, outputTokens, estimatedCostUsd, model]
@@ -377,12 +375,11 @@ components:
         reason: { type: string }
     AssessmentRun:
       type: object
-      required: [id, state, attempt, reservedUsd, startedAt]
+      required: [id, state, attempt, startedAt]
       properties:
         id: { type: string }
         state: { type: string, enum: [RUNNING, COMPLETED, FAILED, OUTCOME_UNKNOWN] }
         attempt: { type: integer }
-        reservedUsd: { type: number }
         startedAt: { type: string, format: date-time }
         error: { $ref: "#/components/schemas/ValidationFailure" }
         usage: { $ref: "#/components/schemas/AssessmentUsage" }

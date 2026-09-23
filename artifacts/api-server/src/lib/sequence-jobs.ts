@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { initializeSavedTrips } from "./saved-trips";
-import { dailyAiReserved, initializeAssetAnalysisRuns } from "./ai-budget";
+import { initializeAssetAnalysisRuns } from "./asset-analysis";
 import { initializeKnowledgeAssets } from "./knowledge-assets";
 import { loadSequenceAssets } from "./sequence-assets";
 import { pool } from "@workspace/db";
@@ -17,7 +17,6 @@ import {
   AssessmentError,
   callAssessmentModel,
   liveConfiguration,
-  RESERVATION_MICRO_USD,
 } from "./live-assessment";
 import {
   planSequence,
@@ -49,15 +48,11 @@ export async function initializeSequenceJobs() {
 }
 export const sequenceConfig = () => {
   const c = liveConfiguration();
-  const missing = [...c.missing];
-  if (c.jobLimitMicroUsd < RESERVATION_MICRO_USD * 2)
-    missing.push("BSB_AI_MAX_JOB_USD (at least 0.70 for two sequence calls)");
   return {
-    enabled: missing.length === 0,
-    missing,
+    enabled: c.enabled,
+    missing: c.missing,
     model: c.model,
     maxCalls: 2,
-    reservationUsd: (RESERVATION_MICRO_USD * 2) / 1e6,
   };
 };
 function publicJob(r: any): SequenceJob {
@@ -80,7 +75,6 @@ function publicJob(r: any): SequenceJob {
       !r.revision_of &&
       r.violations.length > 0 &&
       r.violations.every((v: any) => touchIds.includes(v.touchId)),
-    reservedUsd: r.reserved_micro_usd / 1e6,
     createdAt: new Date(r.created_at).toISOString(),
   };
 }
@@ -115,36 +109,6 @@ export async function getSequenceJob(id: string) {
   ).rows[0];
   return publicJob(latest);
 }
-async function reserve(client: any, amount: number, rootId: string | null) {
-  const c = liveConfiguration();
-  if (!c.enabled)
-    throw new AssessmentError(
-      "NOT_CONFIGURED",
-      "Configure OpenAI assessment before generating sequences.",
-      503,
-    );
-  const prior = rootId
-    ? (
-        await client.query(
-          "SELECT COALESCE(SUM(reserved_micro_usd),0)::bigint AS total FROM bsb_v2_sequence_jobs WHERE root_id=$1",
-          [rootId],
-        )
-      ).rows[0].total
-    : 0;
-  if (Number(prior) + amount > c.jobLimitMicroUsd)
-    throw new AssessmentError(
-      "BUDGET_EXHAUSTED",
-      "This sequence and its regeneration would exceed BSB_AI_MAX_JOB_USD. No paid call was started.",
-      429,
-    );
-  if (await dailyAiReserved(client) + amount > c.dailyLimitMicroUsd)
-    throw new AssessmentError(
-      "BUDGET_EXHAUSTED",
-      "The shared daily AI budget is exhausted. No paid call was started.",
-      429,
-    );
-}
-
 export async function createSequenceJob(
   packetId: string,
   input: unknown,
@@ -168,7 +132,8 @@ export async function createSequenceJob(
   let edits = request.edits;
   try {
     await c.query("BEGIN");
-    await c.query("SELECT pg_advisory_xact_lock(724019)");
+    // Serialize matching action keys without a shared spending-budget lock.
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [request.idempotencyKey]);
     const existing = (
       await c.query("SELECT * FROM bsb_v2_sequence_jobs WHERE action_key=$1", [
         request.idempotencyKey,
@@ -247,7 +212,7 @@ export async function createSequenceJob(
           : "A sequence is already running for this packet. Reload its status.",
         409,
       );
-    // Preflight the request before any budget reservation. Edits are not approved here.
+    // Preflight the request before starting a job. Edits are not approved here.
     sequenceModelRequest(
       request.editOf ? "VALIDATING" : "WRITING",
       authority,
@@ -255,8 +220,8 @@ export async function createSequenceJob(
       retryOf ? touchIds.filter((t) => !parent.safe_touches.some((p: DraftTouch) => p.touchId === t)) : undefined,
       retryOf ? parent.violations : undefined,
     );
-    const amount = RESERVATION_MICRO_USD * (request.editOf ? 1 : 2);
-    await reserve(c, amount, retryOf ? parent.root_id : null);
+    if (!liveConfiguration().enabled)
+      throw new AssessmentError("NOT_CONFIGURED", "Configure OpenAI assessment before generating sequences.", 503);
     id = randomUUID();
     await c.query(
       `INSERT INTO bsb_v2_sequence_jobs(id,packet_id,action_key,input_hash,state,authority,authority_hash,revision_of,retry_of,root_id,reserved_micro_usd)
@@ -271,7 +236,7 @@ export async function createSequenceJob(
         request.editOf ?? null,
         retryOf ?? null,
         retryOf ? parent.root_id : id,
-        amount,
+        0, // Legacy database column; new jobs do not reserve money.
       ],
     );
     await c.query("COMMIT");

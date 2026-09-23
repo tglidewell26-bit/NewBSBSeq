@@ -77,12 +77,12 @@ describe("live assessment evidence boundaries", () => {
   });
 });
 
-describe("provider and cost configuration", () => {
-  it("stays disabled without explicit model and job/daily budgets", () => {
+describe("provider configuration", () => {
+  it("requires the API key and model, but no spending settings", () => {
     expect(liveConfiguration({}).enabled).toBe(false);
-    const env = { BSB_LIVE_ASSESSMENT: "true", OPENAI_API_KEY: "test-key", BSB_ASSESSMENT_MODEL: "gpt-5.6-terra", BSB_AI_MAX_JOB_USD: "0.50", BSB_AI_DAILY_BUDGET_USD: "5" };
+    const env = { BSB_LIVE_ASSESSMENT: "true", OPENAI_API_KEY: "test-key", BSB_ASSESSMENT_MODEL: "gpt-5.6-terra" };
     expect(liveConfiguration(env).enabled).toBe(true);
-    expect(liveConfiguration({ ...env, BSB_AI_MAX_JOB_USD: "0.10" }).enabled).toBe(false);
+    expect(liveConfiguration({ ...env, BSB_AI_MAX_JOB_USD: "0", BSB_AI_DAILY_BUDGET_USD: "invalid" }).enabled).toBe(true);
     expect(liveConfiguration({ ...env, BSB_ASSESSMENT_MODEL: "unpriced-model" }).enabled).toBe(false);
   });
   it("bounds input without dropping evidence or mixing packet text with instructions", () => {

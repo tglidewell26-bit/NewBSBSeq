@@ -176,7 +176,6 @@ export type SequenceJob = {
   revisionOf: string | null;
   retryOf: string | null;
   canRegenerate: boolean;
-  reservedUsd: number;
   createdAt: string;
 };
 

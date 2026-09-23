@@ -1,10 +1,9 @@
 import { initializeSequenceJobs } from "./sequence-jobs";
-import { dailyAiReserved } from "./ai-budget";
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
 import { normalizeEvidence, hashPacket, validateFrozenRequest } from "./bsb-v2";
 import { AssessmentError, buildAssessmentRequest, callAssessmentModel, liveConfiguration,
-  validateModelAssessment, MODEL, PROMPT_VERSION, RESERVATION_MICRO_USD, TIMEOUT_MS } from "./live-assessment";
+  validateModelAssessment, MODEL, PROMPT_VERSION, TIMEOUT_MS } from "./live-assessment";
 
 // Additive only: existing packet columns, records and reviews are never migrated.
 export async function initializeAssessmentRuns() {
@@ -20,7 +19,7 @@ export async function initializeAssessmentRuns() {
 
 export const failurePayload = (error: AssessmentError) => ({
   error: error.message, errorType: error.code, failedStage: "ASSESSMENT",
-  issues: error.issues, retryable: !["OUTCOME_UNKNOWN", "BUDGET_EXHAUSTED", "ATTEMPT_LIMIT"].includes(error.code),
+  issues: error.issues, retryable: !["OUTCOME_UNKNOWN", "ATTEMPT_LIMIT"].includes(error.code),
 });
 
 export async function getAssessmentRun(packetId: string) {
@@ -29,14 +28,14 @@ export async function getAssessmentRun(packetId: string) {
   if (!run) return undefined;
   const stale = run.state === "RUNNING" && Date.now() - new Date(run.started_at).getTime() > TIMEOUT_MS + 30000;
   return { id: run.id, state: stale ? "OUTCOME_UNKNOWN" : run.state, attempt: run.attempt,
-    reservedUsd: run.reserved_micro_usd / 1e6, startedAt: new Date(run.started_at).toISOString(),
-    error: stale ? failurePayload(new AssessmentError("OUTCOME_UNKNOWN", "The assessment was interrupted. Reload to check for a saved result. Its cost reservation remains held; do not submit another paid request.")) : run.error ?? undefined,
+    startedAt: new Date(run.started_at).toISOString(),
+    error: stale ? failurePayload(new AssessmentError("OUTCOME_UNKNOWN", "The assessment was interrupted. Reload to check for a saved result before submitting another request.")) : run.error ?? undefined,
     usage: run.usage ?? undefined };
 }
 
 export async function runLiveAssessment(packetId: string, retry = false) {
   const config = liveConfiguration();
-  if (!config.enabled) throw new AssessmentError("NOT_CONFIGURED", "Live assessment is disabled until the API model and spending limits are configured.", 503,
+  if (!config.enabled) throw new AssessmentError("NOT_CONFIGURED", "Live assessment is disabled until the API key and model are configured.", 503,
     config.missing.map(name => ({ path: "configuration", message: name })));
   const client = await pool.connect();
   let runId = "";
@@ -45,9 +44,7 @@ export async function runLiveAssessment(packetId: string, retry = false) {
   let normalized: ReturnType<typeof normalizeEvidence>["normalized"];
   try {
     await client.query("BEGIN");
-    // One brief, database-wide budget lock covers all replicas and concurrent
-    // submissions. Never hold a transaction or connection during the model call.
-    await client.query("SELECT pg_advisory_xact_lock(724019)");
+    // The packet row lock prevents duplicate submissions across replicas.
     row = (await client.query("SELECT * FROM bsb_v2_packets WHERE id=$1 FOR UPDATE", [packetId])).rows[0];
     if (!row) throw new AssessmentError("NOT_FOUND", "Packet not found.", 404);
     if (row.assessment?.provider === "OPENAI") { await client.query("COMMIT"); return row.assessment; }
@@ -62,13 +59,11 @@ export async function runLiveAssessment(packetId: string, retry = false) {
     if (previous?.state === "RUNNING" || previous?.state === "OUTCOME_UNKNOWN") throw new AssessmentError("OUTCOME_UNKNOWN", "An assessment is already running or its outcome is uncertain. Reload its status; no additional paid call was started.", 409);
     if (previous && !retry) throw new AssessmentError("RETRY_CONFIRMATION_REQUIRED", "The previous attempt failed. Use the explicit retry action to authorize one more bounded call.", 409);
     if (previous?.attempt >= 2) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. Review the reported failure before further work.", 409);
-    if (((previous?.attempt ?? 0) + 1) * RESERVATION_MICRO_USD > config.jobLimitMicroUsd) throw new AssessmentError("BUDGET_EXHAUSTED", "Another attempt would exceed this packet's per-job spending limit. No paid call was started.", 429);
-    if (await dailyAiReserved(client) + RESERVATION_MICRO_USD > config.dailyLimitMicroUsd) throw new AssessmentError("BUDGET_EXHAUSTED", "The shared daily AI budget is exhausted. No paid call was started. Uncertain calls retain their reservations.", 429);
     runId = randomUUID();
     await client.query(`INSERT INTO bsb_v2_assessment_runs
       (id,packet_id,evidence_version,attempt,state,reserved_micro_usd,model,prompt_version)
       VALUES ($1,$2,$3,$4,'RUNNING',$5,$6,$7)`,
-      [runId, packetId, row.evidence_version, (previous?.attempt ?? 0) + 1, RESERVATION_MICRO_USD, MODEL, PROMPT_VERSION]);
+      [runId, packetId, row.evidence_version, (previous?.attempt ?? 0) + 1, 0, MODEL, PROMPT_VERSION]);
     await client.query("UPDATE bsb_v2_packets SET stage='ASSESSING', updated_at=now() WHERE id=$1", [packetId]);
     await client.query("COMMIT");
   } catch (error) {
@@ -96,7 +91,7 @@ export async function runLiveAssessment(packetId: string, retry = false) {
     return assessment;
   } catch (error) {
     const failure = error instanceof AssessmentError ? error : new AssessmentError("OUTCOME_UNKNOWN", "The assessment could not be saved. Reload to check the outcome before attempting further work.", 502);
-    // Preserve the reservation audit; known usage settles in daily accounting. No automatic model repair
+    // Preserve usage history. No automatic model repair
     // or transport retries. Error payloads contain no provider body or secrets.
     const fail = await pool.connect();
     try {
