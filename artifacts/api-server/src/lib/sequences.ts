@@ -23,7 +23,7 @@ import { hashPacket, normalizeEvidence } from "./bsb-v2";
 import { attachSequenceAssets } from "./sequence-assets";
 
 export const PLAN_VERSION = "bsb-plan-3-reviewed-assets";
-export const VOICE_VERSION = "tim-outreach-5-two-trips";
+export const VOICE_VERSION = "tim-outreach-6-local-times";
 export const digest = hashPacket;
 const fail = (message: string) => {
   throw new AssessmentError("INVALID_SEQUENCE_INPUT", message, 400);
@@ -266,7 +266,7 @@ export function meetingBlock(s: OutreachSettings, second = false) {
     (slot) =>
       `${new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${slot.date}T12:00:00Z`))}: ${clock(slot.start)}–${clock(slot.end)}`,
   );
-  return `I’ll be ${second && s.trip2.length ? "back in" : "in"} the area, are you available to meet during the following days and times?\n${dates.join("\n")}\nTimes: ${s.timezone}\nLook forward to possibly connecting.`;
+  return `I’ll be ${second && s.trip2.length ? "back in" : "in"} the area, are you available to meet during the following days and times?\n${dates.join("\n")}\nLook forward to possibly connecting.`;
 }
 export function renderSequence(
   touches: DraftTouch[],

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { sequenceBodyParts, sequenceBodyText, sequenceBodyHtml } from "@workspace/api-zod/sequence-format";
 import type { PacketRecord } from "@workspace/api-client-react";
 import type {
   DraftTouch,
@@ -47,12 +48,26 @@ const initial: OutreachSettings = {
 };
 const active = (j: SequenceJob) =>
   ["QUEUED", "WRITING", "VALIDATING"].includes(j.state);
+async function copyMessage(body: string) {
+  const text = sequenceBodyText(body);
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/plain": new Blob([text], { type: "text/plain" }),
+        "text/html": new Blob([sequenceBodyHtml(body)], { type: "text/html" }),
+      })]);
+      return;
+    } catch { /* Fall back to readable plain text when rich copy is unsupported. */ }
+  }
+  await navigator.clipboard.writeText(text);
+}
 export default function SequencePanel({ packet }: { packet: PacketRecord }) {
   const [settings, setSettings] = useState<OutreachSettings>(() => {
     try {
       return {
         ...initial,
         ...restoreTripDraft(localStorage.getItem(TRIP_DRAFT_KEY)),
+        timezone: initial.timezone,
       };
     } catch {
       return initial;
@@ -160,7 +175,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
         setSettings((s) => ({
           ...s,
           [key]: trip.slots.map((slot) => ({ ...slot })),
-          timezone: trip.timezone,
+          timezone: initial.timezone,
         }))
       }
     />
@@ -225,18 +240,10 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                 </div>
                 {settings.meetingMode === "IN_PERSON" && (
                   <>
-                    <label className="block text-sm max-w-sm">
-                      Timezone
-                      <Input
-                        value={settings.timezone}
-                        onChange={(e) => set("timezone", e.target.value)}
-                        placeholder="America/Los_Angeles"
-                      />
-                    </label>
                     <p className="text-xs text-muted-foreground">
                       Your current selection is remembered in this browser.
                       Named trips are saved in the workspace and can be loaded
-                      for either trip. Both trips use the timezone above.
+                      for either trip.
                     </p>
                     {tripStorageError && (
                       <p role="alert" className="text-sm text-destructive">
@@ -450,7 +457,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      await navigator.clipboard.writeText(
+                      await copyMessage(
                         job
                           .sequence!.map(
                             (t) =>
@@ -554,9 +561,11 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                           }}>Copy subject</Button>
                         </div>
                       )}
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.body}</p>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{sequenceBodyParts(t.body).map((part, i) => part.href
+                        ? <a key={i} className="text-primary underline" href={part.href} target="_blank" rel="noreferrer">{part.text}</a>
+                        : part.text)}</p>
                       <Button variant="outline" size="sm" onClick={async () => {
-                        try { await navigator.clipboard.writeText(t.body); setCopyStatus("Copied body text. Suggested files must be attached separately."); }
+                        try { await copyMessage(t.body); setCopyStatus("Copied body and links. Suggested files must be attached separately."); }
                         catch { setCopyStatus("Clipboard unavailable. Select the body to copy it."); }
                       }}>Copy body</Button>
                       <TouchAssets authority={job.authority} touchId={t.touchId} />
