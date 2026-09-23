@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { sequenceBodyText } from "@workspace/api-zod/sequence-format";
 import { listSavedTrips, saveTrip } from "../lib/saved-trips";
 import {
   createSequenceJob,
@@ -113,7 +114,7 @@ router.get(
       job.sequence
         .map(
           (t) =>
-            `${t.touchId}\n${t.subject ? `Subject: ${t.subject}\n\n` : ""}${t.body}${attachmentNotes(job.authority, t.touchId)}`,
+            `${t.touchId}\n${t.subject ? `Subject: ${t.subject}\n\n` : ""}${sequenceBodyText(t.body)}${attachmentNotes(job.authority, t.touchId)}`,
         )
         .join("\n\n---\n\n"),
     );

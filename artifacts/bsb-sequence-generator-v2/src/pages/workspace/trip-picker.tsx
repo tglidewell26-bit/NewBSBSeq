@@ -61,7 +61,7 @@ export default function TripPicker({ title, slots, timezone, savedTrips, loading
       <Button type="button" variant="outline" disabled={!selectedTrip} onClick={() => {
         const trip = savedTrips.find(t => t.id === selectedTrip); if (!trip) return;
         onLoad(trip); setStart(trip.slots[0].date); setEnd(trip.slots.at(-1)!.date);
-        setName(trip.name); setUnavailable([]); setMessage(`Loaded “${trip.name}”. Both trips use ${trip.timezone}.`);
+        setName(trip.name); setUnavailable([]); setMessage(`Loaded “${trip.name}”.`);
       }}>Load trip</Button>
     </div>
     <div className="flex flex-wrap items-end gap-3">
