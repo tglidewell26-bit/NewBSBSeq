@@ -13,7 +13,6 @@ export interface AssessmentRun {
   id: string;
   state: AssessmentRunState;
   attempt: number;
-  reservedUsd: number;
   startedAt: Date;
   error?: ValidationFailure;
   usage?: AssessmentUsage;

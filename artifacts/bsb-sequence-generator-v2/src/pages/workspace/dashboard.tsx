@@ -483,7 +483,7 @@ function AssessmentActions({ packet }: { packet: PacketRecord }) {
         {demoConfirmed ? "Run Synthetic Demo" : retryAllowed ? "Retry assessment (paid)" : "Assess company"}
       </Button>
     </div>
-    {!demoConfirmed && config?.enabled && <p className="text-xs text-muted-foreground">One AI call · reserves ${config.reservationUsd.toFixed(2)} from the ${config.dailyLimitUsd.toFixed(2)} daily limit. No automatic retries.</p>}
+    {!demoConfirmed && config?.enabled && <p className="text-xs text-muted-foreground">One paid AI call. No app spending cap or automatic retries.</p>}
   </div>;
   return packet.stage === "ASSESSED" ? <ReviewDialog packet={packet} /> : null;
 }

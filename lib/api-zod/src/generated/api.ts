@@ -11,9 +11,7 @@ import * as zod from 'zod';
 export const GetAssessmentConfigResponse = zod.object({
   "enabled": zod.boolean(),
   "missing": zod.array(zod.string()),
-  "model": zod.string(),
-  "reservationUsd": zod.number(),
-  "dailyLimitUsd": zod.number()
+  "model": zod.string()
 })
 
 
@@ -551,7 +549,6 @@ export const SubmitResearchPacketResponse = zod.object({
   "id": zod.string(),
   "state": zod.enum(['RUNNING', 'COMPLETED', 'FAILED', 'OUTCOME_UNKNOWN']),
   "attempt": zod.number().int(),
-  "reservedUsd": zod.number(),
   "startedAt": zod.coerce.date(),
   "error": zod.object({
   "error": zod.string(),
@@ -889,7 +886,6 @@ export const GetResearchPacketResponse = zod.object({
   "id": zod.string(),
   "state": zod.enum(['RUNNING', 'COMPLETED', 'FAILED', 'OUTCOME_UNKNOWN']),
   "attempt": zod.number().int(),
-  "reservedUsd": zod.number(),
   "startedAt": zod.coerce.date(),
   "error": zod.object({
   "error": zod.string(),
@@ -1009,5 +1005,4 @@ export const ReviewAssessmentResponse = zod.object({
   "validatedRealAssessment": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
-
 

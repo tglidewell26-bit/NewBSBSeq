@@ -1,8 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
-import { dailyAiReserved } from "./ai-budget";
 import { assetInstruments, assetResearchAreas, assetTypes, fileInfo, validateAsset } from "./knowledge-assets";
-import { AssessmentError, callAssessmentModel, liveConfiguration, MODEL, RESERVATION_MICRO_USD } from "./live-assessment";
+import { AssessmentError, callAssessmentModel, liveConfiguration, MODEL } from "./live-assessment";
+
+export async function initializeAssetAnalysisRuns() {
+  // Keep legacy columns and history intact; new analyses reserve no money.
+  await pool.query(`CREATE TABLE IF NOT EXISTS bsb_v2_asset_analysis_runs (
+    id text PRIMARY KEY, input_hash text UNIQUE NOT NULL, state text NOT NULL,
+    reserved_micro_usd integer NOT NULL, result jsonb, error jsonb, usage jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz);
+    ALTER TABLE bsb_v2_asset_analysis_runs ADD COLUMN IF NOT EXISTS usage jsonb;`);
+}
 
 const VERSION = "asset-definer-1";
 const properties = {
@@ -30,59 +38,34 @@ Use a concise display name preserving source identity. Write at least three comp
   };
 }
 
-// Count the actual multimodal input before generation. Byte size alone does not
-// bound PDF/image tokens. Leave headroom below the existing 100k/$0.35 limit.
-async function checkInputTokens(request: ReturnType<typeof buildAssetRequest>, fetcher: typeof fetch) {
-  const { model, input, instructions, text, reasoning } = request;
-  let response: Response;
-  try {
-    response = await fetcher("https://api.openai.com/v1/responses/input_tokens", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model, input, instructions, text, reasoning }), signal: AbortSignal.timeout(60000),
-    });
-    if (!response.ok) throw new Error();
-    const count = ((await response.json()) as { input_tokens: number }).input_tokens;
-    if (!Number.isSafeInteger(count) || count < 1) throw new Error();
-    if (count > 90000) throw new AssessmentError("INPUT_TOO_LARGE", "This file exceeds the AI analysis limit. Enter its metadata manually; the original file can still be saved.", 413);
-  } catch (error) {
-    if (error instanceof AssessmentError) throw error;
-    throw new AssessmentError("TOKEN_CHECK_FAILED", "The file's AI input size could not be verified. No generation was started. Enter metadata manually or check the provider configuration.", 502);
-  }
-}
-
 export async function analyzeAsset(fileName: string, base64: string, fetcher: typeof fetch = fetch) {
   let file: ReturnType<typeof fileInfo>;
   try { file = fileInfo(fileName, base64); }
   catch (error) { throw new AssessmentError("INVALID_FILE", (error as Error).message, 400); }
   const config = liveConfiguration();
-  if (!config.enabled) throw new AssessmentError("NOT_CONFIGURED", "AI suggestions are unavailable until the existing AI model and spending limits are configured. You can still enter metadata manually.", 503);
+  if (!config.enabled) throw new AssessmentError("NOT_CONFIGURED", "AI suggestions are unavailable until the API key and model are configured. You can still enter metadata manually.", 503);
   const hash = createHash("sha256").update(VERSION).update(MODEL).update(fileName).update(file.data).digest("hex");
   const id = randomUUID();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(724019)");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [hash]);
     const previous = (await client.query("SELECT * FROM bsb_v2_asset_analysis_runs WHERE input_hash=$1", [hash])).rows[0];
-    if (previous?.state === "FAILED" && previous.reserved_micro_usd === 0 && previous.error?.code === "TOKEN_CHECK_FAILED") {
-      // A user may repeat a failed preflight: no generation was ever started.
+    if (previous?.state === "FAILED" && previous.reserved_micro_usd === 0 && ["TOKEN_CHECK_FAILED", "INPUT_TOO_LARGE"].includes(previous.error?.code)) {
+      // Retire legacy token-preflight failures: no generation ever started.
       await client.query("DELETE FROM bsb_v2_asset_analysis_runs WHERE id=$1", [previous.id]);
     } else if (previous) {
       if (previous.state === "COMPLETE") { await client.query("COMMIT"); return previous.result; }
       if (previous.error) throw new AssessmentError(previous.error.code, previous.error.message, previous.error.status);
       throw new AssessmentError("ANALYSIS_PENDING", "This file's analysis is running or was interrupted. Check again for the same result; a second paid call will not be started. Manual metadata is still available.", 409);
     }
-    if (await dailyAiReserved(client) + RESERVATION_MICRO_USD > config.dailyLimitMicroUsd)
-      throw new AssessmentError("BUDGET_EXHAUSTED", "The shared daily app budget has insufficient room for another analysis reservation. Review the budget above, enter metadata manually, or continue after the daily reset.", 429);
-    await client.query("INSERT INTO bsb_v2_asset_analysis_runs(id,input_hash,state,reserved_micro_usd) VALUES($1,$2,'RUNNING',$3)", [id, hash, RESERVATION_MICRO_USD]);
+    await client.query("INSERT INTO bsb_v2_asset_analysis_runs(id,input_hash,state,reserved_micro_usd) VALUES($1,$2,'RUNNING',0)", [id, hash]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
 
-  let generationStarted = false;
   try {
     const request = buildAssetRequest(fileName, file);
-    await checkInputTokens(request, fetcher);
-    generationStarted = true;
     const response = await callAssessmentModel(request, fetcher);
     await pool.query("UPDATE bsb_v2_asset_analysis_runs SET usage=$1::jsonb WHERE id=$2", [JSON.stringify(response.usage), id]);
     const value = response.value as Record<string, unknown> | null;
@@ -99,9 +82,9 @@ export async function analyzeAsset(fileName: string, base64: string, fetcher: ty
     return result;
   } catch (error) {
     const failure = error instanceof AssessmentError ? error : new AssessmentError("OUTCOME_UNKNOWN", "Analysis was interrupted. No automatic retry was made; enter metadata manually.", 502);
-    await pool.query("UPDATE bsb_v2_asset_analysis_runs SET state=$1,error=$2::jsonb,reserved_micro_usd=$3,finished_at=now() WHERE id=$4", [
+    await pool.query("UPDATE bsb_v2_asset_analysis_runs SET state=$1,error=$2::jsonb,finished_at=now() WHERE id=$3", [
       failure.code === "OUTCOME_UNKNOWN" ? "OUTCOME_UNKNOWN" : "FAILED",
-      JSON.stringify({ code: failure.code, message: failure.message, status: failure.status }), generationStarted ? RESERVATION_MICRO_USD : 0, id,
+      JSON.stringify({ code: failure.code, message: failure.message, status: failure.status }), id,
     ]);
     throw failure;
   }

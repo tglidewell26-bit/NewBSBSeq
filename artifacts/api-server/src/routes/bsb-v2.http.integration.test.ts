@@ -128,7 +128,8 @@ describe("BSB V2 shared workspace through the production Express app", () => {
     const invalid = await request("/api/bsb-v2/assets/analyze", { method: "POST", body: JSON.stringify({ fileName: "test.pdf", fileDataBase64: "invalid" }) });
     expect(invalid.status).toBe(400);
     expect(invalid.body.errorType).toBe("INVALID_FILE");
-    expect((await request("/api/bsb-v2/assets/analysis/config")).body).toHaveProperty("reservationUsd", 0.35);
+    expect((await request("/api/bsb-v2/assets/analysis/config")).body).toHaveProperty("enabled");
+    expect((await request("/api/bsb-v2/assets/analysis/config")).body).not.toHaveProperty("remainingUsd");
   });
 
   it("opens without credentials and rejects malformed intake without invoking the provider", async () => {

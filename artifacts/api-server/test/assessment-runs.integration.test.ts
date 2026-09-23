@@ -76,7 +76,7 @@ describe("bounded live assessment through actual HTTP and SQL", () => {
     expect(result.body.mock).toBe(false);
     const reload = (await request(`/packets/${packet.id}`)).body;
     expect(reload.researchPacket).toEqual(packet.researchPacket);
-    expect(reload.assessmentRun).toMatchObject({ state: "COMPLETED", attempt: 1, reservedUsd: 0.35 });
+    expect(reload.assessmentRun).toMatchObject({ state: "COMPLETED", attempt: 1 });
     expect(reload.assessmentRun.usage.inputTokens).toBe(1200);
     const review = { assessmentId: result.body.id, evidenceVersion: packet.inputHash, decision: "APPROVE", approvedInstruments: ["GeoMx"], note: "Synthetic review", confirmSecond: false };
     expect((await request(`/packets/${packet.id}/reviews`, review)).status).toBe(409);
@@ -94,12 +94,12 @@ describe("bounded live assessment through actual HTTP and SQL", () => {
     expect(providerCalls).toBe(1);
   });
 
-  it("serializes the global daily budget across different packets", async () => {
-    vi.stubEnv("BSB_AI_DAILY_BUDGET_USD", "0.35");
+  it("allows concurrent different packets regardless of legacy daily cap", async () => {
+    vi.stubEnv("BSB_AI_DAILY_BUDGET_USD", "0");
     const a = await submit(), b = await submit();
     const responses = await Promise.all([a, b].map(packet => request(`/packets/${packet.id}/assess`, { mode: "REAL_INPUT" })));
-    expect(responses.map(r => r.status).sort()).toEqual([200, 429]);
-    expect(providerCalls).toBe(1);
+    expect(responses.map(r => r.status).sort()).toEqual([200, 200]);
+    expect(providerCalls).toBe(2);
   });
 
   it("rejects unsupported output without saving it and requires an explicit bounded retry", async () => {
@@ -112,7 +112,7 @@ describe("bounded live assessment through actual HTTP and SQL", () => {
     expect(rejected.body.issues[0].path).toContain("evidenceIds");
     const reload = (await request(`/packets/${packet.id}`)).body;
     expect(reload.assessment).toBeUndefined();
-    expect(reload.assessmentRun).toMatchObject({ state: "FAILED", reservedUsd: 0.35 });
+    expect(reload.assessmentRun).toMatchObject({ state: "FAILED" });
     expect((await request(`/packets/${packet.id}/assess`, { mode: "REAL_INPUT" })).status).toBe(409);
     expect(providerCalls).toBe(1);
     provider = async () => providerResponse(assessmentFixture().model);
@@ -120,7 +120,7 @@ describe("bounded live assessment through actual HTTP and SQL", () => {
     expect(providerCalls).toBe(2);
   });
 
-  it("retains uncertain costs across midnight and blocks another paid attempt", async () => {
+  it("keeps duplicate protection local to an uncertain packet, not a shared budget", async () => {
     vi.stubEnv("BSB_AI_DAILY_BUDGET_USD", "0.35");
     const packet = await submit();
     provider = async () => { throw new Error("simulated timeout"); };
@@ -128,18 +128,16 @@ describe("bounded live assessment through actual HTTP and SQL", () => {
     await pool.query("UPDATE bsb_v2_assessment_runs SET started_at=now()-interval '2 days' WHERE packet_id=$1", [packet.id]);
     expect((await request(`/packets/${packet.id}/assess`, { mode: "REAL_INPUT", retry: true })).status).toBe(409);
     const another = await submit();
-    expect((await request(`/packets/${another.id}/assess`, { mode: "REAL_INPUT" })).status).toBe(429);
-    expect(providerCalls).toBe(1);
+    provider = async () => providerResponse(assessmentFixture().model);
+    expect((await request(`/packets/${another.id}/assess`, { mode: "REAL_INPUT" })).status).toBe(200);
+    expect(providerCalls).toBe(2);
   });
 
-  it("enforces the per-job cap across retries and the two-attempt ceiling", async () => {
+  it("ignores the legacy per-job cap while keeping the explicit two-attempt ceiling", async () => {
     const packet = await submit();
     provider = async () => new Response("unavailable", { status: 503 });
     expect((await request(`/packets/${packet.id}/assess`, { mode: "REAL_INPUT" })).status).toBe(502);
     vi.stubEnv("BSB_AI_MAX_JOB_USD", "0.50");
-    expect((await request(`/packets/${packet.id}/assess`, { mode: "REAL_INPUT", retry: true })).status).toBe(429);
-    expect(providerCalls).toBe(1);
-    vi.stubEnv("BSB_AI_MAX_JOB_USD", "1");
     expect((await request(`/packets/${packet.id}/assess`, { mode: "REAL_INPUT", retry: true })).status).toBe(502);
     expect((await request(`/packets/${packet.id}/assess`, { mode: "REAL_INPUT", retry: true })).body.errorType).toBe("ATTEMPT_LIMIT");
     expect(providerCalls).toBe(2);

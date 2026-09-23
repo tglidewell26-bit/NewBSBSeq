@@ -18,8 +18,7 @@ const provider = new DeterministicFakeProvider();
 
 router.get("/bsb-v2/assessment-config", (_req, res) => {
   const config = liveConfiguration();
-  res.json({ enabled: config.enabled, missing: config.missing, model: config.model,
-    reservationUsd: config.reservationUsd, dailyLimitUsd: config.dailyLimitMicroUsd / 1e6 });
+  res.json(config);
 });
 
 router.get("/bsb-v2/packets", async (_req, res): Promise<void> => {

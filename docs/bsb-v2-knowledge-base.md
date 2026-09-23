@@ -5,19 +5,19 @@ The asset library provides AI metadata suggestions, human review, and relevant r
 ## User workflow
 
 1. Open Workspace → Knowledge Base and choose PDFs or PNG/JPEG/WebP images. Select up to 10 files, 25 MB each, 50 MB total.
-2. Selecting files starts AI analysis automatically, one file at a time. Watch each file’s status, or pause after the current file. File-specific failures let the queue continue; budget, configuration, or provider failures pause it without retrying. Resume untouched files with **Analyze remaining files**, or enter metadata manually. Keep the page open; this is a browser queue, not a background import service.
+2. Selecting files starts AI analysis automatically, one file at a time. Watch each file’s status, or pause after the current file. File-specific failures let the queue continue; configuration or provider failures pause it without retrying. Resume untouched files with **Analyze remaining files**, or enter metadata manually. Keep the page open; this is a browser queue, not a background import service.
 3. Review the display name, instrument, asset type, research area, description, five distinct keywords, and classification reasoning. Descriptions require at least three sentences. Unknown is allowed; Panels and Brochures use no research area.
 4. Save the reviewed file. Unsaved files remain in the current page only; finish saving before navigating away.
 5. Browse Instrument → Asset type → Research area, search/filter, download, copy filenames, edit, or delete. Editing preserves file bytes, filename, MIME type, and size. Stale edits return a conflict rather than overwrite newer metadata.
 
 ## AI operation
 
-- Reuses the existing `BSB_LIVE_ASSESSMENT`, `OPENAI_API_KEY`, `BSB_ASSESSMENT_MODEL=gpt-5.6-terra`, `BSB_AI_MAX_JOB_USD`, and `BSB_AI_DAILY_BUDGET_USD` configuration. No new secret is needed.
+- Reuses the existing `BSB_LIVE_ASSESSMENT`, `OPENAI_API_KEY`, `BSB_ASSESSMENT_MODEL=gpt-5.6-terra` configuration. No new secret is needed.
 - Sends the selected file to OpenAI using Responses PDF/image inputs, `store:false`, no tools, and a strict metadata schema. File text and filenames are treated as untrusted content.
-- Reserves $0.35 under the same database lock and daily budget as assessment and sequence generation. Completed calls settle to recorded token-based cost estimates; the unused reservation is released. The library shows estimated usage, held reservations, and remaining budget. Historical completed asset results are read without rerunning the model. The token-count endpoint checks the actual multimodal request before generation; inputs over 90,000 tokens are rejected, with an 8,000-output-token limit.
+- No app dollar spending cap, daily balance, or reservation is applied. The old budget-based token preflight has been removed; each file goes directly to one generation request. Upload-size limits, provider context limits, and the 8,000-output-token limit still apply. Recorded cost estimates remain visible after analysis.
 - One generation per file bytes + filename + model + prompt version. Duplicate requests return a cached draft or an in-progress/error response, never an extra generation. This is not an automatic re-suggest/regenerate feature.
-- Failed token checks can be repeated manually because generation never began. Failures with known completed usage settle to that estimate; failures without usable usage retain the reservation; uncertain outcomes remain held across day boundaries. Manual metadata remains available. No automatic retries or fabricated fallback metadata.
-- Analysis history is independent of saved files. Deleting a saved file does not erase its cost reservation.
+- Files previously blocked by the old token preflight can now be analyzed. Uncertain outcomes are not automatically repeated. Manual metadata remains available; no fabricated fallback metadata.
+- Analysis history is independent of saved files. Deleting a saved file does not erase its recorded analysis usage.
 - AI suggestions never create or edit a saved asset by themselves. Only Save does that.
 
 ## Persistence and deployment
@@ -28,9 +28,9 @@ API additions: `GET /api/bsb-v2/assets/analysis/config`, `POST /api/bsb-v2/asset
 
 ## Verification
 
-Verified in a disposable database using synthetic files and a fake provider: metadata-only AI drafts, cached results, duplicate concurrent requests, token preflight failures and limits, interrupted calls, invalid output, shared budget exhaustion, invalid file input, metadata editing, stale revision conflicts, duplicate keywords, and byte-for-byte downloads after editing. No live paid calls were made.
+Verified in a disposable database using synthetic files and a fake provider: metadata-only AI drafts, cached results, duplicate concurrent requests, legacy preflight recovery, interrupted calls, invalid output, removal of spending caps, invalid file input, metadata editing, stale revision conflicts, duplicate keywords, and byte-for-byte downloads after editing. No live paid calls were made.
 
-The user confirmed the published upload/AI-review/save flow works. Retrieval validation adds deterministic matching, wrong-instrument and broad-label exclusion, sample/species conflicts, negation, duplicate suppression, immutable resource snapshots, stale-resource blocking, unrelated-upload stability, and exported attachment checklists. The full suite passes (181 tests), along with shared/API/frontend type checks and both production builds. Retrieval tests use a fake provider; no paid calls were made. Browser acceptance of the automatic upload queue and budget display remains a deployment check because the browser cannot reach the local preview.
+The user confirmed the published upload/AI-review/save flow works. Retrieval validation adds deterministic matching, wrong-instrument and broad-label exclusion, sample/species conflicts, negation, duplicate suppression, immutable resource snapshots, stale-resource blocking, unrelated-upload stability, and exported attachment checklists. The full suite passes (174 tests), along with shared/API/frontend type checks and both production builds. Retrieval tests use a fake provider; no paid calls were made. Browser acceptance of the automatic upload queue and no-cap display remains a deployment check because the browser cannot reach the local preview.
 
 ## Sequence retrieval
 
@@ -45,15 +45,19 @@ The user confirmed the published upload/AI-review/save flow works. Retrieval val
 
 After publishing: open an approved packet, generate a **new** sequence, inspect Suggested attachment and the Evidence and message plan, download the selected file, and verify the text export's separate attachment checklist. An empty match is valid when the saved library lacks an instrument/workflow match.
 
-Official API references used for the file input and token preflight contract:
-- https://developers.openai.com/api/docs/guides/file-inputs
-- https://developers.openai.com/api/docs/guides/token-counting
-- https://developers.openai.com/api/reference/typescript/resources/responses/subresources/input_tokens/methods/count
+## No app spending cap
 
-## Shared daily budget
+The budget implementation and its remaining-balance UI have been deleted. Old
+`BSB_AI_DAILY_BUDGET_USD` and `BSB_AI_MAX_JOB_USD` settings are ignored. No
+replacement $100 cap has been added. Provider billing and provider-imposed limits
+still apply. The shared workspace remains accessible without login.
 
-The daily limit is an app spending guard, not the OpenAI account credit balance. `BSB_AI_DAILY_BUDGET_USD` in Replit controls it; this change does not increase the configured amount. To choose a higher cap, edit that environment variable in Replit and republish. It applies across document analysis, assessments, and sequence generation. The per-job cap remains separate.
+Existing assets, analyzed metadata, and usage history are preserved. Old reservation
+amounts have no effect on new requests. The database retains legacy columns for
+compatibility, with zero written for new runs. No daily reset is needed.
 
-The existing reservation values remain in the audit history. Completed assessments/assets with usable usage and completed sequence jobs with every expected stage count their recorded estimates. Active calls, uncertain outcomes, partial sequences, and legacy rows without usage keep their full hold. Uncertain holds carry across the daily reset. Calls finished today are included even if started yesterday. Estimates are not provider invoices.
-
-Batch verification covers sequential processing, file-specific failures, budget/provider pauses, stop-after-current behavior, cached results, legacy settlement, and six analyses fitting under a $0.40 synthetic test cap. Tests use a fake provider; no live API credits were used.
+Regression tests cover ten successful analyses with both former caps set to zero
+and a $100 uncertain historical reservation, plus assessment and sequence generation
+with obsolete budget settings. Duplicate-call protection, explicit retries,
+file limits, and human metadata review remain. Tests use a fake provider and
+disposable database; no live API credits were used.

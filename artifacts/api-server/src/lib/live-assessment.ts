@@ -5,10 +5,6 @@ import type { LocatedEvidence } from "./bsb-v2";
 export const MODEL = "gpt-5.6-terra";
 export const PROMPT_VERSION = "bsb-assessment-2";
 export const MAX_OUTPUT_TOKENS = 8000;
-// Conservative reservation: <=100k input tokens at $2.50/M (including cache
-// writes) + 8k output at $12/M, rounded up. No tools, images or long context.
-// Pricing checked 2026-09-19: https://developers.openai.com/api/docs/models/gpt-5.6-terra
-export const RESERVATION_MICRO_USD = 350000;
 export const TIMEOUT_MS = 120000;
 
 export class AssessmentError extends Error {
@@ -21,14 +17,7 @@ export function liveConfiguration(env = process.env) {
   if (env.BSB_LIVE_ASSESSMENT !== "true") missing.push("BSB_LIVE_ASSESSMENT=true");
   if (!env.OPENAI_API_KEY?.trim()) missing.push("OPENAI_API_KEY");
   if (env.BSB_ASSESSMENT_MODEL !== MODEL) missing.push(`BSB_ASSESSMENT_MODEL=${MODEL}`);
-  const jobLimit = Number(env.BSB_AI_MAX_JOB_USD);
-  const dailyLimit = Number(env.BSB_AI_DAILY_BUDGET_USD);
-  if (!Number.isFinite(jobLimit) || jobLimit < RESERVATION_MICRO_USD / 1e6) missing.push("BSB_AI_MAX_JOB_USD (at least 0.35)");
-  if (!Number.isFinite(dailyLimit) || dailyLimit <= 0 || dailyLimit > 1000) missing.push("BSB_AI_DAILY_BUDGET_USD (greater than 0, at most 1000)");
-  return { enabled: missing.length === 0, missing, model: MODEL,
-    reservationUsd: RESERVATION_MICRO_USD / 1e6,
-    jobLimitMicroUsd: Number.isFinite(jobLimit) ? Math.floor(jobLimit * 1e6) : 0,
-    dailyLimitMicroUsd: Number.isFinite(dailyLimit) ? Math.floor(dailyLimit * 1e6) : 0 };
+  return { enabled: missing.length === 0, missing, model: MODEL };
 }
 
 export const assessmentInstructions = `You assess instrument fit for Tim Glidewell at Bruker Spatial Biology.
@@ -64,8 +53,7 @@ export function buildAssessmentRequest(brief: string, evidence: LocatedEvidence[
     input: JSON.stringify({ brief, evidence }),
     text: { format: { type: "json_schema", name: "bsb_assessment", strict: true, schema: modelAssessmentJsonSchema } },
   };
-  // UTF-8 bytes conservatively bound text tokens; leave substantial headroom for
-  // API framing under the 100k input-token reservation. Never truncate evidence.
+  // Bound request size without silently truncating evidence.
   if (Buffer.byteLength(JSON.stringify(request), "utf8") > 64000) {
     throw new AssessmentError("INPUT_TOO_LARGE", "The assessment exceeds the 64 KB request limit. Shorten the brief or supplied excerpts without removing relevant evidence.");
   }
@@ -177,7 +165,7 @@ export async function callAssessmentModel(request: { model: string; max_output_t
       body: JSON.stringify(request), signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch {
-    throw new AssessmentError("OUTCOME_UNKNOWN", "The provider connection ended before its outcome was known. The cost reservation is retained; no automatic retry was made.", 502);
+    throw new AssessmentError("OUTCOME_UNKNOWN", "The provider connection ended before its outcome was known. No automatic retry was made.", 502);
   }
   if (!response.ok) throw new AssessmentError("PROVIDER_FAILED", `The AI provider returned HTTP ${response.status}. Check the API key, model access or provider limits. No automatic retry was made.`, 502);
   let body: any;
@@ -190,7 +178,7 @@ export async function callAssessmentModel(request: { model: string; max_output_t
   try { value = JSON.parse(text); } catch { throw new AssessmentError("INVALID_MODEL_OUTPUT", "The provider returned unreadable assessment JSON. No assessment was saved."); }
   const inputTokens = body.usage?.input_tokens;
   const outputTokens = body.usage?.output_tokens;
-  if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || inputTokens > 100000 || !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > MAX_OUTPUT_TOKENS) throw new AssessmentError("INVALID_USAGE", "Provider usage exceeded the configured bounds or was missing. The full reservation is retained.", 502);
+  if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > MAX_OUTPUT_TOKENS) throw new AssessmentError("INVALID_USAGE", "Provider usage was invalid or missing.", 502);
   return { value, usage: { inputTokens, outputTokens,
     estimatedCostUsd: (inputTokens * 2.5 + outputTokens * 12) / 1e6,
     model: body.model ?? MODEL, responseId: body.id } };

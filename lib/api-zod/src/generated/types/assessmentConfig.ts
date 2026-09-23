@@ -10,6 +10,4 @@ export interface AssessmentConfig {
   enabled: boolean;
   missing: string[];
   model: string;
-  reservationUsd: number;
-  dailyLimitUsd: number;
 }

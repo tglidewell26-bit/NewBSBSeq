@@ -1,63 +1,55 @@
 # Live company assessment
 
 Pull GitHub main into Replit and republish. The app still opens without login.
-Research packets and existing records retain their original shape. Server startup
-adds one assessment-run table and index; it does not reset or migrate packet data.
-The database role needs permission to create that table/index.
+Existing packets, reviews, files, and usage history are preserved.
 
-## Enable only after choosing spending limits
+## Configuration
 
 Set these in **Replit Secrets**, including the published deployment's environment.
-Do not put the API key into a packet, browser code, GitHub, or a chat message.
+Never put the API key into a packet, browser code, GitHub, or a chat message.
 
 | Variable | Value |
 | --- | --- |
 | `OPENAI_API_KEY` | Your OpenAI API key with access to the selected model |
 | `BSB_ASSESSMENT_MODEL` | `gpt-5.6-terra` |
-| `BSB_AI_MAX_JOB_USD` | Agreed per-packet limit in USD; at least `0.35` |
-| `BSB_AI_DAILY_BUDGET_USD` | Agreed shared daily limit in USD |
-| `BSB_LIVE_ASSESSMENT` | `true` after all settings are ready |
+| `BSB_LIVE_ASSESSMENT` | `true` |
 
-An initial **$1 per packet and $5 per day** is a proposal, not a configured or
-approved budget. Live assessment remains disabled if any required setting is
-missing. To stop new paid calls, set `BSB_LIVE_ASSESSMENT=false` and restart or
-republish. Already submitted provider calls may still finish and incur charges.
+The app has **no daily or per-job dollar spending cap**. The former
+`BSB_AI_MAX_JOB_USD` and `BSB_AI_DAILY_BUDGET_USD` variables are ignored and
+can be removed from Replit. No replacement $100 limit has been introduced.
+Provider billing, account quotas, and rate limits still apply.
 
-Each attempt reserves $0.35 before making one Responses API call. Reservations
-are shared across visitors and server instances, persist in PostgreSQL, and
-count against the per-packet and UTC daily limits. Completed and failed attempts
-retain their full daily reservation, even when estimated usage is lower. A
-known failure allows one explicit retry if both budgets permit; two attempts is
-the maximum per packet. Double-clicks and refreshes do not authorize new calls.
-Successful assessments are reused. There are no automatic repair or retry loops.
+The workspace has no login. Anyone able to reach it can initiate paid requests.
+This change does not add authentication. To disable new paid calls, set
+`BSB_LIVE_ASSESSMENT=false` and restart or republish. Calls already submitted
+may finish and incur charges.
 
-An interrupted or uncertain call retains its reservation across midnight and
-blocks another attempt for that packet. Check the saved result and provider
-usage before investigating a stuck run; do not resubmit copies to bypass it.
-Provider errors and incomplete outputs may lack recorded token usage, but their
-full reservation remains held. The displayed cost is an estimate, not an invoice.
-The limits cover this app's assessment calls, not Replit hosting or other API use.
-Because the workspace has no login, anyone able to reach it shares these limits.
+## Calls and usage
 
-The reservation conservatively covers bounded input and 8,000 output tokens at
-the model pricing checked on 2026-09-19, including input cache-write headroom.
-Recheck pricing before changing the model or request limits:
-[model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-terra),
-[structured output documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
+Each assessment makes one model call. A known failure permits one explicitly
+requested retry; the existing two-attempt ceiling remains. Double-clicks and
+refreshes do not authorize new calls. Successful assessments are reused.
+There are no automatic repair or retry loops.
 
-## First live check
+An uncertain outcome still blocks a duplicate attempt for that same packet,
+but cannot consume a shared balance or block unrelated documents or packets.
+Input-size bounds, output validation, and evidence checks remain.
+Recorded token usage and estimated costs are available on completed calls;
+cost estimates are not invoices. Provider failures can lack usage information.
 
-1. Open the published workspace and confirm it shows AI assessment enabled.
-2. Paste the complete Noetik research packet, including `qualificationEvidence`.
-   The existing exact packet can be reused if it only has the old unapprovable mock.
-3. Click **Assess company** once. A reload shows the saved running/completed state.
-4. Review CosMx fit, active use, installed-base status, and unknown commercial
-   readiness separately. Confirm every positive finding cites supplied evidence.
-   Public excerpts remain supplied excerpts, not independently retrieved sources.
-5. Approve only after reviewing the result. Report any specific field/rule error
-   before authorizing a retry. Sequence writing is not implemented yet.
+Legacy reservation columns remain solely to preserve database compatibility
+and historical records. New runs write zero; no request reads or totals those
+columns to decide whether another call is allowed.
 
-The implementation checks structure, exact quotations, evidence IDs, rubric
-ownership, and several contradiction/claim safeguards. Semantic assessment is
-still model judgment and requires human review; it is not independent factual
-verification. No live model accuracy result is claimed by the automated tests.
+## Published acceptance
+
+1. Confirm AI assessment is enabled with only the three settings above.
+2. Open a valid research packet and assess it once.
+3. Review instrument fit and evidence before approving the assessment.
+4. Upload several knowledge files and confirm automatic analysis begins
+   without a balance or reservation warning. Review and save their metadata.
+5. Inspect completed assessment/sequence usage or the analyzed file's estimated
+   cost. No live paid calls are required for the automated test suite.
+
+The implementation checks structure, quotations, evidence IDs, rubric ownership,
+and claim safeguards. Semantic assessment still requires human review.
