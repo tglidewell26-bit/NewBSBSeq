@@ -1,4 +1,4 @@
-import { ChangeEvent, ReactNode, useMemo, useState } from "react";
+import { ChangeEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Download, FileText, Image, LibraryBig, Loader2, Pencil, Search, Sparkles, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
+import { runAnalysisQueue } from "./asset-analysis-queue";
+
 const instruments = ["GeoMx", "CosMx", "CellScape", "Unknown"];
 const areas = ["Neuroscience", "Cancer", "Infectious disease", "Genetic disorders", "Aging", "Kidney disease", "Cardiology", "Unknown"];
 const types = ["Publications", "Tech notes", "Images", "Panels and Brochures"];
 type Metadata = { displayName: string; instrument: string; researchArea: string | null; assetType: string; description: string; keywords: string[]; classificationReasoning: string };
 type Asset = Metadata & { id: string; revision: number; fileName: string; fileSize: number; fileKind: "document" | "image" };
-type Draft = Omit<Metadata, "keywords"> & { key: string; keywords: string; asset?: Asset; file?: File; data?: string };
+type Draft = Omit<Metadata, "keywords"> & { key: string; keywords: string; asset?: Asset; file?: File; data?: string; analysis?: "queued" | "analyzing" | "ready" | "failed"; analysisError?: string };
 type Analysis = { metadata: Metadata; usage: { estimatedCostUsd: number } };
 const bytes = (size: number) => size < 1024 * 1024 ? `${Math.round(size / 1024)} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`;
 const assetKey = ["knowledge-assets"] as const;
@@ -21,7 +23,7 @@ const json = (method: string, body: unknown): RequestInit => ({ method, headers:
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error([body?.error, ...(body?.issues ?? [])].filter(Boolean).join(" ") || "The knowledge-base request failed.");
+  if (!response.ok) throw Object.assign(new Error([body?.error, ...(body?.issues ?? [])].filter(Boolean).join(" ") || "The knowledge-base request failed."), { code: body?.errorType });
   return body;
 }
 async function readFile(file: File) {
@@ -34,7 +36,7 @@ async function readFile(file: File) {
 }
 const fileKind = (name: string) => /\.pdf$/i.test(name) ? "document" : "image";
 function uploadDraft(file: File, data: string): Draft {
-  return { key: crypto.randomUUID(), file, data, displayName: file.name.replace(/\.[^.]+$/, ""), instrument: "Unknown",
+  return { key: crypto.randomUUID(), file, data, analysis: "queued", displayName: file.name.replace(/\.[^.]+$/, ""), instrument: "Unknown",
     researchArea: "Unknown", assetType: fileKind(file.name) === "image" ? "Images" : "Publications", description: "", keywords: "", classificationReasoning: "" };
 }
 
@@ -47,10 +49,15 @@ export default function KnowledgeBase() {
   const [areaFilter, setAreaFilter] = useState("");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [reading, setReading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [pauseRequested, setPauseRequested] = useState(false);
+  const queue = useRef({ running: false, stop: false });
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; queue.current.stop = true; }; }, []);
   const draft = drafts[0];
   const library = useQuery({ queryKey: assetKey, queryFn: () => api<Asset[]>(endpoint) });
   const assets = library.data ?? [];
-  const config = useQuery({ queryKey: ["asset-analysis-config"], queryFn: () => api<{ enabled: boolean; reservationUsd: number; dailyLimitUsd: number }>(`${endpoint}/analysis/config`) });
+  const config = useQuery({ queryKey: ["asset-analysis-config"], queryFn: () => api<{ enabled: boolean; reservationUsd: number; dailyLimitUsd: number; estimatedSpentUsd: number; heldUsd: number; remainingUsd: number }>(`${endpoint}/analysis/config`), refetchInterval: 15000 });
   const updateDraft = (value: Draft) => setDrafts(items => items.map(item => item.key === value.key ? value : item));
   const finishDraft = (key: string) => setDrafts(items => items.filter(item => item.key !== key));
   const save = useMutation({
@@ -64,21 +71,36 @@ export default function KnowledgeBase() {
     onSuccess: (_, value) => { queryClient.invalidateQueries({ queryKey: assetKey }); finishDraft(value.key); toast({ title: value.asset ? "Asset updated." : "Asset saved to the knowledge base." }); },
     onError: error => toast({ title: "Asset was not saved", description: error.message, variant: "destructive" }),
   });
-  const analyze = useMutation({
-    retry: false,
-    mutationFn: (value: Draft) => api<Analysis>(`${endpoint}/analyze`, json("POST", value.asset ? { assetId: value.asset.id } : { fileName: value.file!.name, fileDataBase64: value.data })),
-    onSuccess: (result, value) => {
-      updateDraft({ ...value, ...result.metadata, keywords: result.metadata.keywords.join(", ") });
-      toast({ title: "AI suggestions ready for review", description: `Nothing has been saved. Estimated analysis cost: $${result.usage.estimatedCostUsd.toFixed(4)}. Repeated requests for this file reuse the same result.` });
-    },
-    onError: error => toast({ title: "AI suggestions unavailable", description: error.message, variant: "destructive" }),
-  });
+  const analyzeBatch = async (items: Draft[]) => {
+    if (queue.current.running || !items.length) return;
+    queue.current = { running: true, stop: false };
+    setPauseRequested(false); setAnalyzing(true);
+    const patch = (key: string, value: Partial<Draft>) => {
+      if (mounted.current) setDrafts(current => current.map(item => item.key === key ? { ...item, ...value } : item));
+    };
+    try {
+      await runAnalysisQueue(items, {
+        stopped: () => queue.current.stop || !mounted.current,
+        analyze: async value => {
+          patch(value.key, { analysis: "analyzing", analysisError: undefined });
+          try {
+            const result = await api<Analysis>(`${endpoint}/analyze`, json("POST", value.asset ? { assetId: value.asset.id } : { fileName: value.file!.name, fileDataBase64: value.data }));
+            patch(value.key, { ...result.metadata, keywords: result.metadata.keywords.join(", "), analysis: "ready" });
+          } finally { void queryClient.invalidateQueries({ queryKey: ["asset-analysis-config"] }); }
+        },
+        failed: (value, error) => patch(value.key, { analysis: "failed", analysisError: error.message }),
+      });
+    } finally {
+      queue.current.running = false;
+      if (mounted.current) { setAnalyzing(false); setPauseRequested(false); }
+    }
+  };
   const remove = useMutation({
     mutationFn: (id: string) => api(`${endpoint}/${id}`, { method: "DELETE" }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: assetKey }); toast({ title: "Asset deleted." }); },
     onError: error => toast({ title: "Asset was not deleted", description: error.message, variant: "destructive" }),
   });
-  const busy = save.isPending || analyze.isPending || reading;
+  const busy = save.isPending || analyzing || reading;
   const filtered = useMemo(() => assets.filter(asset => (!query.trim() || [asset.fileName, asset.displayName, asset.description, ...asset.keywords].join(" ").toLowerCase().includes(query.trim().toLowerCase())) && (!instrumentFilter || asset.instrument === instrumentFilter) && (!typeFilter || asset.assetType === typeFilter) && (!areaFilter || asset.researchArea === areaFilter)), [assets, query, instrumentFilter, typeFilter, areaFilter]);
   const selectFiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []); event.target.value = "";
@@ -87,12 +109,18 @@ export default function KnowledgeBase() {
       toast({ title: "Upload limit exceeded", description: "Choose up to 10 files, up to 25 MB each and 50 MB combined. Empty files cannot be uploaded.", variant: "destructive" }); return;
     }
     setReading(true);
-    try { setDrafts(await Promise.all(files.map(async file => uploadDraft(file, await readFile(file))))); }
+    try {
+      const uploads = await Promise.all(files.map(async file => uploadDraft(file, await readFile(file))));
+      if (!mounted.current) return;
+      setDrafts(uploads);
+      const analysisConfig = config.data ?? (await config.refetch()).data;
+      if (mounted.current && analysisConfig?.enabled) await analyzeBatch(uploads);
+    }
     catch (error) { toast({ title: "File could not be read", description: (error as Error).message, variant: "destructive" }); }
     finally { setReading(false); }
   };
   const edit = (asset: Asset) => {
-    save.reset(); analyze.reset();
+    save.reset();
     setDrafts([{ ...asset, key: asset.id, asset, keywords: asset.keywords.join(", ") }]);
     document.getElementById("asset-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -115,22 +143,34 @@ export default function KnowledgeBase() {
   return <div className="space-y-6 pb-10">
     <section><p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Knowledge base</p><h1 className="mt-2 text-3xl font-bold">Bruker asset library</h1><p className="mt-2 max-w-3xl text-muted-foreground">Upload reference files, review AI suggestions, and organize your library. New outreach sequences select relevant files using the approved instrument and documented company workflows.</p></section>
     <div className="grid items-start gap-6 xl:grid-cols-[.85fr_1.15fr]">
-      <Card id="asset-editor" className="min-w-0"><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{draft?.asset ? "Edit saved asset" : "Knowledge base upload"}</CardTitle><CardDescription>PDF, PNG, JPG, JPEG, or WebP. Up to 25 MB each. Review and save each file separately.</CardDescription></CardHeader><CardContent>
+      <Card id="asset-editor" className="min-w-0"><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{draft?.asset ? "Edit saved asset" : "Knowledge base upload"}</CardTitle><CardDescription>PDF, PNG, JPG, JPEG, or WebP. Up to 25 MB each. Files are analyzed automatically. Review and save each file when the batch finishes.</CardDescription></CardHeader><CardContent>
+        <div className="mb-4 space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
+          {config.data ? <><p>Daily app budget: <strong>${config.data.remainingUsd.toFixed(2)} available</strong> of ${config.data.dailyLimitUsd.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground">Estimated usage ${config.data.estimatedSpentUsd.toFixed(4)} · Reserved ${config.data.heldUsd.toFixed(2)}. Shared with assessments and sequences.</p></> : <p>{config.isError ? "Budget unavailable. Uploads can still be reviewed manually." : "Loading AI budget…"}</p>}
+          <p className="text-xs text-muted-foreground">{config.data?.enabled ? `Selecting files sends them to OpenAI for analysis, one at a time. Each call temporarily reserves $${config.data.reservationUsd.toFixed(2)}; completed usage releases the unused amount. No automatic retries.` : "AI analysis is unavailable. You can enter and save metadata manually."}</p>
+        </div>
+        {!!draft && !draft.asset && <div className="mb-4 space-y-2 rounded-md border p-3" aria-live="polite">
+          <p className="text-sm font-medium">{analyzing ? "Analyzing uploads…" : drafts.some(item => item.analysis === "queued") ? "Analysis queue paused" : "Batch ready for review"}</p>
+          <ul className="max-h-44 space-y-1 overflow-y-auto text-xs">{drafts.map(item => <li key={item.key} className="break-words">{item.file?.name} — {item.analysis === "ready" ? "Ready for review" : item.analysis === "failed" ? "Needs attention" : item.analysis === "analyzing" ? "Analyzing…" : "Queued"}{item.analysisError && <p className="text-destructive">{item.analysisError}</p>}</li>)}</ul>
+          {analyzing ? <Button size="sm" variant="outline" disabled={pauseRequested} onClick={() => { queue.current.stop = true; setPauseRequested(true); }}>{pauseRequested ? "Pausing after current file…" : "Pause after current file"}</Button>
+            : drafts.some(item => item.analysis === "queued") && <Button size="sm" variant="outline" disabled={busy || !config.data?.enabled} onClick={() => void analyzeBatch(drafts.filter(item => item.analysis === "queued"))}>Analyze remaining files</Button>}
+          <p className="text-xs text-muted-foreground">Keep this page open until you save your files. Nothing is saved automatically.</p>
+        </div>}
         {!draft ? <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center hover:bg-muted/50">
           {reading ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <Upload className="mb-3 h-7 w-7 text-muted-foreground" />}<span className="font-medium">Choose files</span><span className="mt-1 text-sm text-muted-foreground">Up to 10 files / 50 MB combined</span>
           <input className="sr-only" type="file" multiple disabled={busy} accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={selectFiles} />
         </label> : <div className="space-y-4" key={draft.key}>
           <div className="rounded-md border bg-muted/30 p-3"><p className="break-all font-medium">{draft.asset?.fileName ?? draft.file?.name}</p><p className="text-sm text-muted-foreground">{bytes(draft.asset?.fileSize ?? draft.file!.size)}{drafts.length > 1 && ` · ${drafts.length} files awaiting review`}</p></div>
           <div className="space-y-2 rounded-md border p-3">
-            <Button variant="outline" disabled={busy || !config.data?.enabled} onClick={() => analyze.mutate(draft)}>{analyze.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{analyze.isPending ? "Reading file…" : "Suggest metadata with AI"}</Button>
-            <p className="text-xs text-muted-foreground">{config.data?.enabled ? `Sends this file to OpenAI. One generation reserves $${config.data.reservationUsd.toFixed(2)} from your shared $${config.data.dailyLimitUsd.toFixed(2)} daily limit. No automatic retries. Existing results are reused.` : "AI suggestions are unavailable. You can enter and save metadata manually."}</p>
-            {analyze.isError && analyze.variables?.key === draft.key && <p role="alert" className="text-sm text-destructive">{analyze.error.message}</p>}
+            <Button variant="outline" disabled={busy || !config.data?.enabled} onClick={() => void analyzeBatch([draft])}>{analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{analyzing ? "Reading file…" : draft.analysis === "ready" ? "Reload AI suggestions" : "Analyze this file"}</Button>
+            {draft.analysisError && <p role="alert" className="text-sm text-destructive">{draft.analysisError}</p>}
+
           </div>
           <fieldset disabled={busy} className="space-y-4 disabled:opacity-70">
             <MetadataEditor draft={draft} change={updateDraft} />
             <p className="text-xs text-muted-foreground">Review every field against the original file. Saving records your reviewed metadata; it does not verify scientific claims.</p>
             {save.isError && save.variables?.key === draft.key && <p role="alert" className="text-sm text-destructive">{save.error.message}</p>}
-            <div className="flex flex-wrap gap-2"><Button onClick={() => save.mutate(draft)}>{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{draft.asset ? "Save changes" : "Save to knowledge base"}</Button><Button variant="outline" onClick={() => { finishDraft(draft.key); save.reset(); analyze.reset(); }}>{draft.asset ? "Cancel" : "Discard file"}</Button></div>
+            <div className="flex flex-wrap gap-2"><Button onClick={() => save.mutate(draft)}>{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{draft.asset ? "Save changes" : "Save to knowledge base"}</Button><Button variant="outline" onClick={() => { finishDraft(draft.key); save.reset(); }}>{draft.asset ? "Cancel" : "Discard file"}</Button></div>
           </fieldset>
         </div>}
       </CardContent></Card>

@@ -96,7 +96,7 @@ export async function runLiveAssessment(packetId: string, retry = false) {
     return assessment;
   } catch (error) {
     const failure = error instanceof AssessmentError ? error : new AssessmentError("OUTCOME_UNKNOWN", "The assessment could not be saved. Reload to check the outcome before attempting further work.", 502);
-    // Keep every reservation, including failed calls. No automatic model repair
+    // Preserve the reservation audit; known usage settles in daily accounting. No automatic model repair
     // or transport retries. Error payloads contain no provider body or secrets.
     const fail = await pool.connect();
     try {

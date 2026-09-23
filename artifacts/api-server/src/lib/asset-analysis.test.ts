@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { pool } from "@workspace/db";
 import { analyzeAsset as runAnalysis, buildAssetRequest } from "./asset-analysis";
-import { dailyAiReserved } from "./ai-budget";
+import { dailyAiReserved, dailyAiBudget } from "./ai-budget";
 import { initializeAssessmentRuns } from "./assessment-runs";
 import { fileInfo, initializeKnowledgeAssets, validateAsset } from "./knowledge-assets";
 
@@ -44,7 +44,16 @@ describe("reviewed asset analysis", () => {
     expect(countRequest.input).toEqual(generation.input);
     expect(generation.store).toBe(false);
     expect(generation.input[0].content[1].image_url).toBe(`data:image/png;base64,${png}`);
-    expect(await dailyAiReserved(pool)).toBeGreaterThanOrEqual(350000);
+    expect(await dailyAiReserved(pool)).toBe(7250);
+  });
+
+  it("settles legacy successful results and allows a batch beyond the old reservation count", async () => {
+    vi.stubEnv("BSB_AI_DAILY_BUDGET_USD", "0.40");
+    for (let i = 0; i < 5; i++) await analyzeAsset(`${randomUUID()}.png`, png, provider());
+    await pool.query("UPDATE bsb_v2_asset_analysis_runs SET usage=NULL WHERE input_hash = ANY($1::text[])", [[...testHashes]]);
+    expect(await dailyAiBudget()).toEqual({ spentMicroUsd: 36250, heldMicroUsd: 0, totalMicroUsd: 36250 });
+    await analyzeAsset(`${randomUUID()}.png`, png, provider());
+    expect(await dailyAiReserved(pool)).toBe(43500);
   });
 
   it("sends PDF bytes as a file instead of treating the filename as content", () => {
@@ -96,6 +105,7 @@ describe("reviewed asset analysis", () => {
 
   it("rejects unsupported metadata without saving fabricated defaults", async () => {
     await expect(analyzeAsset(`${randomUUID()}.png`, png, provider({ ...metadata, instrument: "Xenium" }))).rejects.toMatchObject({ code: "INVALID_MODEL_OUTPUT" });
+    expect(await dailyAiReserved(pool)).toBe(7250);
   });
 
   it("uses the shared daily budget and does not call a provider when exhausted", async () => {
