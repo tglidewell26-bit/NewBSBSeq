@@ -72,7 +72,7 @@ export async function analyzeAsset(fileName: string, base64: string, fetcher: ty
       throw new AssessmentError("ANALYSIS_PENDING", "This file's analysis is running or was interrupted. Check again for the same result; a second paid call will not be started. Manual metadata is still available.", 409);
     }
     if (await dailyAiReserved(client) + RESERVATION_MICRO_USD > config.dailyLimitMicroUsd)
-      throw new AssessmentError("BUDGET_EXHAUSTED", "The shared daily AI budget is exhausted. Enter metadata manually or try on a later day.", 429);
+      throw new AssessmentError("BUDGET_EXHAUSTED", "The shared daily app budget has insufficient room for another analysis reservation. Review the budget above, enter metadata manually, or continue after the daily reset.", 429);
     await client.query("INSERT INTO bsb_v2_asset_analysis_runs(id,input_hash,state,reserved_micro_usd) VALUES($1,$2,'RUNNING',$3)", [id, hash, RESERVATION_MICRO_USD]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
@@ -84,6 +84,7 @@ export async function analyzeAsset(fileName: string, base64: string, fetcher: ty
     await checkInputTokens(request, fetcher);
     generationStarted = true;
     const response = await callAssessmentModel(request, fetcher);
+    await pool.query("UPDATE bsb_v2_asset_analysis_runs SET usage=$1::jsonb WHERE id=$2", [JSON.stringify(response.usage), id]);
     const value = response.value as Record<string, unknown> | null;
     if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(properties).some(k => !(k in value)) ||
       ["displayName", "instrument", "assetType", "description", "classificationReasoning"].some(k => typeof value[k] !== "string"))

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import { db, knowledgeAssetsTable } from "@workspace/db";
 import { assetId, assetInstruments, assetResearchAreas, assetTypes, fileInfo, storagePaths, validateAsset } from "../lib/knowledge-assets";
+import { dailyAiBudget } from "../lib/ai-budget";
 import { analyzeAsset } from "../lib/asset-analysis";
 import { AssessmentError, liveConfiguration } from "../lib/live-assessment";
 
@@ -45,9 +46,12 @@ router.post("/bsb-v2/assets", async (req, res) => {
   res.status(201).json(record(saved));
 });
 
-router.get("/bsb-v2/assets/analysis/config", (_req, res) => {
+router.get("/bsb-v2/assets/analysis/config", async (_req, res) => {
   const config = liveConfiguration();
-  res.json({ enabled: config.enabled, reservationUsd: config.reservationUsd, dailyLimitUsd: config.dailyLimitMicroUsd / 1e6 });
+  const budget = await dailyAiBudget();
+  res.json({ enabled: config.enabled, reservationUsd: config.reservationUsd, dailyLimitUsd: config.dailyLimitMicroUsd / 1e6,
+    estimatedSpentUsd: budget.spentMicroUsd / 1e6, heldUsd: budget.heldMicroUsd / 1e6,
+    remainingUsd: Math.max(0, config.dailyLimitMicroUsd - budget.totalMicroUsd) / 1e6 });
 });
 
 router.post("/bsb-v2/assets/analyze", async (req, res) => {
