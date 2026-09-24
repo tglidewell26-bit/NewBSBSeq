@@ -587,22 +587,23 @@ function TouchAssets({ authority, touchId }: { authority: SequenceAuthority; tou
   const plan = authority.plan.find(p => p.touchId === touchId);
   const assets = (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
   const current = useQuery({ queryKey: ["knowledge-assets"], queryFn: () => api<Array<{ id: string; revision: number }>>("/assets"), enabled: assets.length > 0 });
-  if (!authority.assets || !["email1", "email2", "email3", "email5"].includes(touchId)) return null;
-  if (!assets.length) return <p className="mt-3 text-xs text-muted-foreground">No library file closely matched this message's documented workflow.</p>;
+  if (!authority.assets || !["email1", "email2", "email3", "email4", "email5"].includes(touchId) || !assets.length) return null;
   return <div className="mt-3 space-y-3 rounded-md border bg-muted/20 p-3">
-    <p className="text-sm font-medium">Suggested attachment</p>
+    <p className="text-sm font-medium">Optional library suggestions</p>
     {assets.map(asset => {
       const match = plan?.assetMatches?.find(m => m.assetId === asset.id);
       const available = current.data?.some(a => a.id === asset.id && a.revision === asset.revision);
+      const image = match?.kind === "image" || asset.fileKind === "image" || /\.(png|jpe?g|webp)$/i.test(asset.fileName);
       return <div key={asset.id} className="space-y-1 text-sm">
         <p className="font-medium break-words">{asset.displayName}</p>
-        <p className="text-xs text-muted-foreground break-all">{asset.fileName} · reviewed revision {asset.revision}</p>
+        <p className="text-xs text-muted-foreground break-all">{image ? "Suggested email image" : "Suggested attachment"} · {asset.fileName} · reviewed revision {asset.revision}</p>
+        {image && available && <img className="max-h-72 max-w-full rounded border bg-background object-contain" src={`/api/bsb-v2/assets/${asset.id}/preview?revision=${asset.revision}`} alt={asset.displayName} loading="lazy" />}
         <p>{match?.reason}</p>
         <p className="text-xs text-muted-foreground">Company evidence: {match?.evidenceIds.join(", ")}</p>
-        {available ? <a className="inline-block underline text-primary" href={`/api/bsb-v2/assets/${asset.id}/download?revision=${asset.revision}`}>Download attachment</a>
+        {available ? <a className="inline-block underline text-primary" href={`/api/bsb-v2/assets/${asset.id}/download?revision=${asset.revision}`}>{image ? "Download image" : "Download attachment"}</a>
           : <p role="status" className="text-xs text-muted-foreground">{current.isLoading ? "Checking file…" : current.isError ? "Could not check file availability. Reload before sending." : "This file was changed or deleted. Generate a new sequence to refresh its resource selection."}</p>}
       </div>;
     })}
-    <p className="text-xs text-muted-foreground">Review the original file before use. Copying the message does not attach it; download and attach it in your email tool.</p>
+    <p className="text-xs text-muted-foreground">Suggestions are optional. Review the file and add it to the email yourself if it fits; copying the message does not include it.</p>
   </div>;
 }
