@@ -41,7 +41,7 @@ describe("sequence resource retrieval", () => {
     expect(attachSequenceAssets({ ...a, plan: a.plan.map(p => ({ ...p, capabilityId: "cosmx-multiomics" })) }, [resource()]).assets).toEqual([]);
   });
 
-  it("is deterministic and never repeats files, while allowing relevant resources for second-trip emails", () => {
+  it("is deterministic, suggests assets only for fresh supporting evidence, and never repeats files", () => {
     const a = sequenceFixture().authority;
     const assets = ["d", "b", "a", "c"].map(id => resource({ id }));
     const result = attachSequenceAssets(a, assets);
@@ -49,7 +49,7 @@ describe("sequence resource retrieval", () => {
     const ids = result.plan.flatMap(p => p.assetIds);
     expect(new Set(ids).size).toBe(ids.length);
     const tripTwo = result.plan.find(p => p.touchId === "email4");
-    expect(tripTwo?.assetIds.length).toBeGreaterThan(0);
+    expect(result.plan.find(p => p.touchId === "email1")?.assetIds.length).toBeGreaterThan(0);\n    expect(tripTwo?.evidenceIds).toEqual([]);\n    expect(tripTwo?.assetIds).toEqual([]);
   });
 
   it("keeps older pinned resources valid after image metadata is added", async () => {
