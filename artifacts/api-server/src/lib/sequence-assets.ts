@@ -1,6 +1,7 @@
 import type { SequenceAsset, SequenceAuthority } from "@workspace/api-zod";
 import { AssessmentError } from "./live-assessment";
 import { hashPacket } from "./bsb-v2";
+import { capabilities } from "./sequence-catalog";
 
 type Client = { query: (sql: string, values?: any[]) => Promise<any> };
 const columns = `id, revision, file_name AS "fileName", display_name AS "displayName", instrument,
@@ -30,11 +31,11 @@ export async function loadSequenceAssets(client: Client, pinned?: SequenceAsset[
 const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ");
 // Narrow workflow concepts qualify a match; broad disease/marketing words never do.
 const concepts = [
-  { name: "tissue protein imaging", pattern: /\b(ihc|immunohistochem\w*|immunofluorescen\w*|cycif|codex|multiplex (?:protein|imaging)|protein (?:markers|imaging)|tissue protein)\b/, caps: ["cell-tissue-protein", "cell-antibodies"] },
-  { name: "antibody assays", pattern: /\b(antibod(?:y|ies)|adcs?|bispecific\w*|antibody drug conjugate)\b/, caps: ["cell-antibodies", "cell-tissue-protein"] },
-  { name: "single-cell spatial RNA", pattern: /\b(scrna seq|single cell (?:spatial )?(?:rna|transcriptom\w*)|spatial transcriptom\w*|xenium|rna in situ)\b/, caps: ["cosmx-rna"] },
+  { name: "tissue protein imaging", pattern: /\b(ihc|immunohistochem\w*|immunofluorescen\w*|cycif|codex|multiplex (?:protein|imaging)|protein (?:markers|imaging)|tissue protein)\b/, caps: capabilities.filter(c => c.instrument === "CellScape").map(c => c.id) },
+  { name: "antibody assays", pattern: /\b(antibod(?:y|ies)|adcs?|bispecific\w*|antibody drug conjugate)\b/, caps: capabilities.filter(c => c.instrument === "CellScape").map(c => c.id) },
+  { name: "single-cell spatial RNA", pattern: /\b(scrna seq|single cell (?:spatial )?(?:rna|transcriptom\w*)|spatial transcriptom\w*|xenium|rna in situ)\b/, caps: capabilities.filter(c => c.instrument === "CosMx" && c.id !== "cosmx-multiomics").map(c => c.id) },
   { name: "RNA and protein integration", pattern: /\b(multiomics?|rna and protein|rna protein|protein and rna)\b/, caps: ["cosmx-multiomics", "geomx-multiomics"] },
-  { name: "regional tissue profiling", pattern: /\b(regions? of interest|roi|regional (?:profiling|analysis)|tissue compartments?|morphology|pathology|pathologist\w*|histopatholog\w*|biobanks?|archived tissue|tissue cohorts?)\b/, caps: ["geomx-roi", "geomx-multiomics"] },
+  { name: "regional tissue profiling", pattern: /\b(regions? of interest|roi|regional (?:profiling|analysis)|tissue compartments?|morphology|pathology|pathologist\w*|histopatholog\w*|biobanks?|archived tissue|tissue cohorts?)\b/, caps: capabilities.filter(c => c.instrument === "GeoMx").map(c => c.id) },
 ] as const;
 const contexts = ["ffpe", "fresh frozen", "colorectal", "melanoma", "kidney", "brain", "lung", "breast", "epcam", "tumor microenvironment"];
 const negative = /\b(no|not|never|without|unknown|unconfirmed|unsupported|doesn t)\b/;

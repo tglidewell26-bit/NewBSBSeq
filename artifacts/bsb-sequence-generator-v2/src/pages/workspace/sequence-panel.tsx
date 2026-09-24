@@ -560,7 +560,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                       )}
                       <p className="whitespace-pre-wrap text-sm leading-relaxed">{sequenceBodyParts(t.body).map((part, i) => part.href
                         ? <a key={i} className="text-primary underline" href={part.href} target="_blank" rel="noreferrer">{part.text}</a>
-                        : part.text)}</p>
+                        : part.bold ? <strong key={i}>{part.text}</strong> : part.text)}</p>
                       <Button variant="outline" size="sm" onClick={async () => {
                         try { await copyMessage(t.body); setCopyStatus("Copied body and links. Suggested files must be attached separately."); }
                         catch { setCopyStatus("Clipboard unavailable. Select the body to copy it."); }
