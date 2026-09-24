@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SequenceAsset } from "@workspace/api-zod";
 import { sequenceFixture, settings } from "./sequence-fixture";
-import { attachSequenceAssets, attachmentNotes } from "../src/lib/sequence-assets";
+import { attachSequenceAssets, attachmentNotes, loadSequenceAssets } from "../src/lib/sequence-assets";
 import { planSequence, sequenceModelRequest, checkDraft } from "../src/lib/sequences";
 
 export const resource = (overrides: Partial<SequenceAsset> = {}): SequenceAsset => ({
@@ -17,7 +17,7 @@ describe("sequence resource retrieval", () => {
     expect(a.assets?.map(x => x.id)).toEqual(["synthetic-resource"]);
     expect(a.plan[0].assetMatches?.[0]).toMatchObject({ assetId: "synthetic-resource", evidenceIds: ["public-research"], topics: ["single-cell spatial RNA"] });
     expect(a.plan.filter(p => p.assetIds.length).map(p => p.touchId)).toEqual(["email1"]);
-    expect(a.plan.filter(p => p.touchId.startsWith("li") || ["email4", "email6"].includes(p.touchId)).every(p => !p.assetIds.length)).toBe(true);
+    expect(a.plan.filter(p => p.touchId.startsWith("li") || ["email6"].includes(p.touchId)).every(p => !p.assetIds.length)).toBe(true);
   });
 
   it("does not qualify broad disease labels, a filename, or a title alone", () => {
@@ -41,14 +41,32 @@ describe("sequence resource retrieval", () => {
     expect(attachSequenceAssets({ ...a, plan: a.plan.map(p => ({ ...p, capabilityId: "cosmx-multiomics" })) }, [resource()]).assets).toEqual([]);
   });
 
-  it("is deterministic, caps attachments, and never repeats a file", () => {
+  it("is deterministic and never repeats files, while allowing relevant resources for second-trip emails", () => {
     const a = sequenceFixture().authority;
     const assets = ["d", "b", "a", "c"].map(id => resource({ id }));
     const result = attachSequenceAssets(a, assets);
     expect(result).toEqual(attachSequenceAssets(a, [...assets].reverse()));
-    expect(result.assets!.length).toBeLessThanOrEqual(3);
     const ids = result.plan.flatMap(p => p.assetIds);
     expect(new Set(ids).size).toBe(ids.length);
+    const tripTwo = result.plan.find(p => p.touchId === "email4");
+    expect(tripTwo?.assetIds.length).toBeGreaterThan(0);
+  });
+
+  it("keeps older pinned resources valid after image metadata is added", async () => {
+    const pinned = resource();
+    const current = { ...pinned, fileKind: "document" as const, fileType: "application/pdf" };
+    const result = await loadSequenceAssets({ query: async () => ({ rows: [current] }) }, [pinned]);
+    expect(result).toEqual([pinned]);
+  });
+
+  it("keeps matching images separate from attachments and exposes them as optional image suggestions", () => {
+    const { row } = sequenceFixture();
+    const image = resource({ id: "image-match", fileName: "spatial.png", fileKind: "image", fileType: "image/png" });
+    const document = resource({ id: "doc-match" });
+    const a = planSequence(row, settings, [document, image]);
+    expect(a.plan[0].assetIds).toEqual(["doc-match", "image-match"]);
+    expect(a.plan[0].assetMatches?.map(m => m.kind)).toEqual(["attachment", "image"]);
+    expect(attachmentNotes(a, "email1")).toContain("Suggested image: spatial.png");
   });
 
   it("keeps library claims out of factual authority and copy", () => {

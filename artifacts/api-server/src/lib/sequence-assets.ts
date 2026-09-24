@@ -4,7 +4,7 @@ import { hashPacket } from "./bsb-v2";
 
 type Client = { query: (sql: string, values?: any[]) => Promise<any> };
 const columns = `id, revision, file_name AS "fileName", display_name AS "displayName", instrument,
-  research_area AS "researchArea", asset_type AS "assetType", description, keywords`;
+  file_kind AS "fileKind", file_type AS "fileType", research_area AS "researchArea", asset_type AS "assetType", description, keywords`;
 
 export async function loadSequenceAssets(client: Client, pinned?: SequenceAsset[]): Promise<SequenceAsset[]> {
   if (pinned) {
@@ -12,7 +12,15 @@ export async function loadSequenceAssets(client: Client, pinned?: SequenceAsset[
     // Hold selected rows while checking/saving, so an edit/delete cannot race
     // the authority check. Unrelated library changes do not invalidate a run.
     const { rows } = await client.query(`SELECT ${columns} FROM bsb_v2_knowledge_assets WHERE id=ANY($1::text[]) ORDER BY id FOR SHARE`, [pinned.map(a => a.id)]);
-    if (rows.length !== pinned.length || pinned.some(a => !rows.some((b: SequenceAsset) => b.id === a.id && hashPacket(a) === hashPacket(b))))
+    if (rows.length !== pinned.length || pinned.some(a => !rows.some((b: SequenceAsset) => {
+      if (b.id !== a.id) return false;
+      // Older saved sequences predate fileKind/fileType in their pinned
+      // snapshots; compare the fields present at generation time.
+      const comparable = { ...b };
+      if (a.fileKind === undefined) delete comparable.fileKind;
+      if (a.fileType === undefined) delete comparable.fileType;
+      return hashPacket(a) === hashPacket(comparable);
+    })))
       throw new AssessmentError("STALE_ASSET", "A selected knowledge-base file was edited or deleted. Generate a new sequence using the current library.", 409);
     return pinned;
   }
@@ -49,8 +57,8 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
   const assets: SequenceAsset[] = [];
   const plan = authority.plan.map(p => {
     const empty = { ...p, assetIds: [] as string[], assetMatches: [] as NonNullable<typeof p.assetMatches> };
-    // Keep LinkedIn, the second-trip opener, and the neutral close uncluttered.
-    if (!["email1", "email2", "email3", "email5"].includes(p.touchId) || !p.capabilityId || used.size >= 3) return empty;
+    // Keep suggestions optional and confined to the five substantive emails.
+    if (!["email1", "email2", "email3", "email4", "email5"].includes(p.touchId) || !p.capabilityId) return empty;
     const evidence = authority.evidence.filter(e => p.evidenceIds.includes(e.evidenceId));
     const candidates = library.filter(a => a.instrument === p.instrument && !used.has(a.id)).flatMap(asset => {
       const rawContent = [asset.description, ...asset.keywords].join("\n");
@@ -62,16 +70,18 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
         .filter(m => m.ids.length);
       if (!matches.length) return [];
       const bonus = contexts.filter(term => content.includes(term) && company.includes(term)).length;
-      return [{ asset, matches, score: matches.length * 10 + bonus }];
+      const image = asset.fileKind === "image" || (!asset.fileKind && /\.(png|jpe?g|webp)$/i.test(asset.fileName));
+      return [{ asset, kind: image ? "image" as const : "attachment" as const, matches, score: matches.length * 10 + bonus }];
     }).sort((a, b) => b.score - a.score || a.asset.id.localeCompare(b.asset.id));
-    const match = candidates[0];
-    if (!match) return empty;
-    used.add(match.asset.id); assets.push(match.asset);
-    const topics = match.matches.map(m => m.topic);
-    return { ...p, assetIds: [match.asset.id], assetMatches: [{ assetId: match.asset.id,
-      evidenceIds: [...new Set(match.matches.flatMap(m => m.ids))], topics,
-      reason: `${match.asset.instrument} resource matching documented ${topics.join(" and ")} and this message's assigned capability. Metadata was reviewed when saved; this is a relevance match, not independent scientific verification.`,
-    }] };
+    // A single relevant document and image may be suggested for an email. The
+    // same library file is never repeated elsewhere in the sequence.
+    const selected = (["attachment", "image"] as const).flatMap(kind => candidates.find(c => c.kind === kind) ?? []);
+    selected.forEach(match => { used.add(match.asset.id); assets.push(match.asset); });
+    return { ...p, assetIds: selected.map(m => m.asset.id), assetMatches: selected.map(match => {
+      const topics = match.matches.map(m => m.topic);
+      return { assetId: match.asset.id, kind: match.kind, evidenceIds: [...new Set(match.matches.flatMap(m => m.ids))], topics,
+        reason: `${match.asset.instrument} resource matching documented ${topics.join(" and ")} and this message's assigned capability. Metadata was reviewed when saved; this is a relevance match, not independent scientific verification.` };
+    }) };
   });
   return { ...authority, plan, assets };
 }
@@ -80,8 +90,9 @@ export function attachmentNotes(authority: SequenceAuthority, touchId: string): 
   const plan = authority.plan.find(p => p.touchId === touchId);
   const assets = (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
   if (!assets.length) return "";
-  return "\n\n[Attachment checklist — not email copy]\n" + assets.map(a => {
+  return "\n\n[Suggested resources — not email copy]\n" + assets.map(a => {
     const match = plan?.assetMatches?.find(m => m.assetId === a.id);
-    return `${a.fileName.replace(/[\r\n]/g, " ")} (reviewed revision ${a.revision})\n${match?.reason ?? "Selected reference resource."}\nDownload and attach this file before sending; copying text does not attach it.`;
+    const kind = match?.kind === "image" || a.fileKind === "image" || (!a.fileKind && /\.(png|jpe?g|webp)$/i.test(a.fileName)) ? "Suggested image" : "Suggested attachment";
+    return `${kind}: ${a.fileName.replace(/[\r\n]/g, " ")} (reviewed revision ${a.revision})\n${match?.reason ?? "Selected reference resource."}\nReview this resource before use; copying text does not include it in the email.`;
   }).join("\n\n");
 }
