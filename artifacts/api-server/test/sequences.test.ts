@@ -166,7 +166,7 @@ describe("sequence authority and fixed copy", () => {
     const substantive = authority.plan.filter(p => p.touchId !== "liConnect");
     expect(new Set(substantive.map(p => p.capabilityId)).size).toBe(8);
     expect(substantive.every(p => p.capabilityId)).toBe(true);
-    expect(substantive.slice(1).every(p => p.purpose.includes("No unused research facts remain"))).toBe(true);
+    expect(substantive.slice(1).every(p => p.purpose.includes("No unused reviewed research fact"))).toBe(true);\n    expect(substantive.slice(1).every(p => p.evidenceIds.length === 0)).toBe(true);\n    expect(substantive.flatMap(p => p.evidenceIds)).toEqual([substantive[0].evidenceIds[0]]);
     const writer = sequenceModelRequest("WRITING", authority).instructions;
     expect(writer).toContain("Scientific".toLowerCase());
     expect(writer).toContain("Questions about research or interest are allowed");
@@ -187,7 +187,7 @@ describe("sequence authority and fixed copy", () => {
     row.review.evidenceVersion = version;
     const authority = planSequence(row, settings);
     expect(authority.plan[0].evidenceIds).toEqual(["public-research"]);
-    expect(authority.plan[1].evidenceIds).toEqual(["additional-research"]);
+    expect(authority.plan[1].evidenceIds).toEqual(["additional-research"]);\n    expect(authority.plan[3].evidenceIds).toEqual([]);
     expect(authority.evidence.some(e => e.evidenceId === item.evidenceId)).toBe(true);
   });
   it("allows genuine questions but rejects scheduling and unwanted sales language", () => {
