@@ -148,6 +148,25 @@ describe("sequence authority and fixed copy", () => {
       a.capabilities.find((c) => c.id === a.plan[4].capabilityId)?.instrument,
     ).toBe("CellScape");
   });
+  it("keeps connection closings and sequence commentary in the fixed template", () => {
+    const { authority, touches } = sequenceFixture();
+    touches[2].middle = "Interested in CX-2051. Glad to connect.";
+    expect(checkDraft({ touches }, authority).violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: "FORBIDDEN_CLAIM_OR_VOICE" }),
+      ]),
+    );
+    touches[2].middle = "Interested in CX-2051.";
+    touches[8].middle = "One last research angle is image analysis.";
+    expect(checkDraft({ touches }, authority).violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: "FORBIDDEN_CLAIM_OR_VOICE" }),
+      ]),
+    );
+    const instructions = sequenceModelRequest("WRITING", authority).instructions;
+    expect(instructions).toContain("the app adds those");
+    expect(instructions).toContain("Avoid comments about sequence order");
+  });
   it("plans exactly nine touches from approved, permitted evidence", () => {
     const { authority, row } = sequenceFixture();
     expect(authority.plan.map((p) => p.touchId)).toEqual(touchIds);
