@@ -92,6 +92,21 @@ router.get("/bsb-v2/assets/:assetId/download", async (req, res) => {
   res.send(Buffer.from(asset.fileData, "base64"));
 });
 
+router.get("/bsb-v2/assets/:assetId/preview", async (req, res) => {
+  const [asset] = await db.select().from(knowledgeAssetsTable).where(eq(knowledgeAssetsTable.id, String(req.params.assetId))).limit(1);
+  if (!asset) { res.status(404).json({ error: "Asset not found" }); return; }
+  if (asset.fileKind !== "image" || !["image/png", "image/jpeg", "image/webp"].includes(asset.fileType)) {
+    res.status(415).json({ error: "Only supported image files can be previewed." }); return;
+  }
+  if (req.query.revision !== undefined && String(req.query.revision) !== String(asset.revision)) {
+    res.status(409).json({ error: "This image changed after the sequence was generated. Generate a new sequence to refresh its selection." }); return;
+  }
+  res.setHeader("Content-Type", asset.fileType);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(Buffer.from(asset.fileData, "base64"));
+});
+
 router.delete("/bsb-v2/assets/:assetId", async (req, res) => {
   const deleted = await db.delete(knowledgeAssetsTable).where(eq(knowledgeAssetsTable.id, String(req.params.assetId))).returning({ id: knowledgeAssetsTable.id });
   if (!deleted[0]) { res.status(404).json({ error: "Asset not found" }); return; }
