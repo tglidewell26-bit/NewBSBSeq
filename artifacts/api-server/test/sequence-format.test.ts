@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cleanSequenceBody, sequenceBodyHtml, sequenceBodyParts, sequenceBodyText } from "@workspace/api-zod/sequence-format";
-import { meetingBlock } from "../src/lib/sequences";
-import { settings } from "./sequence-fixture";
+import { meetingBlock, planSequence, renderSequence } from "../src/lib/sequences";
+import { sequenceFixture, settings } from "./sequence-fixture";
 
 describe("sequence display, copy and export formatting", () => {
   const links = "[CellScape](https://brukerspatialbiology.com/support/knowledgebase/cellscape-psp-kb/) | [Bruker Spatial Biology](https://brukerspatialbiology.com/)";
@@ -18,6 +18,26 @@ describe("sequence display, copy and export formatting", () => {
     const body = meetingBlock({ ...settings, meetingMode: "IN_PERSON", trip1: [{ date: "2099-04-06", start: "10:00", end: "13:00" }] });
     expect(body).toContain("10 AM–1 PM");
     expect(body).not.toMatch(/Times:|Los_Angeles/);
+  });
+  it("keeps the return-trip meeting ask in Email 4 only", () => {
+    const { row, touches } = sequenceFixture();
+    const authority = planSequence(row, {
+      ...settings,
+      meetingMode: "IN_PERSON",
+      trip1: [{ date: "2099-04-06", start: "10:00", end: "13:00" }],
+      trip2: [{ date: "2099-04-20", start: "13:00", end: "16:00" }],
+    });
+    const rendered = renderSequence(touches, authority);
+    const body = (id: string) => rendered.find(t => t.touchId === id)!.body;
+    expect(body("email1")).toContain("Monday, April 6, 2099");
+    expect(body("email3")).toContain("Monday, April 6, 2099");
+    expect(body("liMsg1")).toContain("Monday, April 6, 2099");
+    expect(body("email4")).toContain("Sorry I missed you last time.");
+    expect(body("email4")).toContain("Monday, April 20, 2099");
+    for (const id of ["email5", "liMsg2", "email6"]) {
+      expect(body(id)).not.toContain("April 20, 2099");
+      expect(body(id)).not.toContain("available to meet");
+    }
   });
   it("escapes HTML and never creates script or credential-bearing links", () => {
     const input = '<img src=x onerror=alert(1)> [unsafe](javascript:alert) [credential](https://user:pass@example.org/)';
