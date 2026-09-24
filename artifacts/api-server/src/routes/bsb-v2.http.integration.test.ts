@@ -111,6 +111,13 @@ describe("BSB V2 shared workspace through the production Express app", () => {
     }) });
     expect(edited.status).toBe(200);
     expect(edited.body).toMatchObject({ displayName: "Reviewed image", fileName: "synthetic.png", fileKind: "image", revision: 2 });
+    const preview = await fetch(`${baseUrl}/api/bsb-v2/assets/${created.body.id}/preview?revision=2`);
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("content-type")).toContain("image/png");
+    expect(preview.headers.get("content-disposition")).toBe("inline");
+    expect(Buffer.from(await preview.arrayBuffer()).toString("base64")).toBe(png);
+    const stalePreview = await fetch(`${baseUrl}/api/bsb-v2/assets/${created.body.id}/preview?revision=1`);
+    expect(stalePreview.status).toBe(409);
     expect((await request(`/api/bsb-v2/assets/${created.body.id}/download?revision=1`)).status).toBe(409);
     expect((await request(`/api/bsb-v2/assets/${created.body.id}`, { method: "PATCH", body: JSON.stringify(created.body) })).status).toBe(409);
     expect((await request(`/api/bsb-v2/assets/${created.body.id}`, { method: "PATCH", body: JSON.stringify({ ...edited.body, keywords: ["same", "same", "same", "same", "same"] }) })).status).toBe(400);
