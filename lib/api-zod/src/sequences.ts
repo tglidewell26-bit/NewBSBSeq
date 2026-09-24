@@ -113,10 +113,11 @@ export type TouchPlan = {
   evidenceIds: string[];
   capabilityId: string | null;
   assetIds: string[];
-  assetMatches?: Array<{ assetId: string; evidenceIds: string[]; topics: string[]; reason: string }>;
+  assetMatches?: Array<{ assetId: string; kind: "attachment" | "image"; evidenceIds: string[]; topics: string[]; reason: string }>;
 };
 export type SequenceAsset = {
   id: string; revision: number; fileName: string; displayName: string;
+  fileKind?: "document" | "image"; fileType?: string;
   instrument: string; researchArea: string | null; assetType: string;
   description: string; keywords: string[];
 };
