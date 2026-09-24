@@ -191,6 +191,36 @@ describe("sequence authority and fixed copy", () => {
     expect(writer).toContain("Questions about research or interest are allowed");
     expect(sequenceModelRequest("VALIDATING", authority, []).instructions).toContain("repeated research hooks");
   });
+  it("does not reserve Email 1 evidence for the connection request", () => {
+    const { row } = sequenceFixture();
+    for (const [evidenceId, claim] of [
+      ["second-topic", "The company reported a second research topic."],
+      ["connection-topic", "The company reported a third research topic."],
+    ]) {
+      const item = {
+        ...row.research_packet.qualificationEvidence.categories.workflows[1],
+        evidenceId, assessmentType: "PROGRAM" as const, claim, basisFacts: [claim],
+      };
+      row.research_packet.qualificationEvidence.categories.workflows.push(item);
+      row.assessment.evidenceReviews.push({ evidenceId, verdict: "ENTAILED", quote: claim, reason: "Directly stated." });
+    }
+    const version = hashPacket(row.research_packet);
+    row.evidence_version = version;
+    row.assessment.evidenceVersion = version;
+    row.review.evidenceVersion = version;
+    const authority = planSequence(row, settings);
+    expect(authority.plan.slice(0, 3).map(p => p.evidenceIds[0])).toEqual([
+      "public-research", "second-topic", "connection-topic",
+    ]);
+    expect(new Set(authority.plan.slice(0, 3).flatMap(p => p.evidenceIds)).size).toBe(3);
+  });
+  it("tells the writer to ask whether a reported workflow belongs to the recipient", () => {
+    const { authority } = sequenceFixture();
+    const instructions = sequenceModelRequest("WRITING", authority).instructions;
+    expect(instructions).toContain("do not call it “your workflow”");
+    expect(instructions).toContain("First ask whether that workflow is part of the recipient’s work");
+    expect(instructions).toContain("must be explicitly conditional");
+  });
   it("uses reviewed research beyond the instrument fit references", () => {
     const { row } = sequenceFixture();
     const item = { ...row.research_packet.qualificationEvidence.categories.workflows[1],
