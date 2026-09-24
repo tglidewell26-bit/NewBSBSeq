@@ -292,10 +292,16 @@ export function renderSequence(
     const resources = email
       ? `[${linkName}](${url}) | [Bruker Spatial Biology](https://brukerspatialbiology.com/)`
       : "";
-    const ending =
-      t.touchId === "liConnect"
-        ? "I’d be glad to connect."
-        : meetingBlock(s, ["email4", "email5", "liMsg2", "email6"].includes(t.touchId));
+    const secondTripSequence = s.meetingMode === "IN_PERSON" && s.trip2.length > 0;
+    const ending = t.touchId === "liConnect"
+      ? "I’d be glad to connect."
+      : secondTripSequence
+        ? t.touchId === "email4"
+          ? meetingBlock(s, true)
+          : ["email1", "email2", "email3", "liMsg1"].includes(t.touchId)
+            ? meetingBlock(s)
+            : ""
+        : meetingBlock(s, t.touchId === "email4");
     return {
       ...t,
       body: [
