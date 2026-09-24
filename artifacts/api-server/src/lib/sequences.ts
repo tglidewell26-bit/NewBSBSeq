@@ -22,8 +22,8 @@ import {
 import { hashPacket, normalizeEvidence } from "./bsb-v2";
 import { attachSequenceAssets } from "./sequence-assets";
 
-export const PLAN_VERSION = "bsb-plan-5-no-repeated-evidence";
-export const VOICE_VERSION = "tim-outreach-9-no-evidence-recycling";
+export const PLAN_VERSION = "bsb-plan-6-unique-evidence-all-touches";
+export const VOICE_VERSION = "tim-outreach-10-discovery-without-assumptions";
 export const digest = hashPacket;
 const fail = (message: string) => {
   throw new AssessmentError("INVALID_SEQUENCE_INPUT", message, 400);
@@ -230,27 +230,35 @@ export function planSequence(
     if (!connection) capabilityCounts.set(chosen.name, count + 1);
     // Start each instrument with its approved fit evidence. Then use additional
     // reviewed research facts before revisiting a fact from a new angle.
-    const pool = [
-      ...new Set([...chosen.evidence, ...research.map((e) => e.evidenceId)]),
-    ];
-    const fresh =
+    const availableResearch = research
+      .map((e) => e.evidenceId)
+      .filter(
+        (id) =>
+          chosen.evidence.includes(id) ||
+          !byInstrument.some(
+            (instrument) =>
+              instrument.name !== chosen.name &&
+              instrument.evidence.includes(id),
+          ),
+      );
+    const pool = [...new Set([...chosen.evidence, ...availableResearch])];
+    const preferred =
       count === 0
-        ? chosen.evidence[0]
-        : pool.find((id) => !usedEvidence.has(id));
-    const evidenceIds = connection
-      ? [chosen.evidence[0]]
-      : fresh
-        ? [fresh]
-        : [];
-    if (!connection && fresh) usedEvidence.add(fresh);
+        ? chosen.evidence.find((id) => !usedEvidence.has(id))
+        : undefined;
+    const fresh = preferred ?? pool.find((id) => !usedEvidence.has(id));
+    const evidenceIds = fresh ? [fresh] : [];
+    if (fresh) usedEvidence.add(fresh);
     return {
       touchId,
       purpose:
         purposes[index] +
-        (connection
-          ? ""
-          : fresh
-            ? " Use this research fact and the assigned feature for a distinct, relevant discussion."
+        (fresh
+          ? connection
+            ? " Use this unused research fact briefly; do not add a product pitch."
+            : " Use this research fact and the assigned feature for a distinct, relevant discussion."
+          : connection
+            ? " No unused reviewed research fact remains. Make a simple connection request without repeating a research claim or adding a product pitch."
             : " No unused reviewed research fact fits this touch. Ask an open discovery question related to the assigned feature; do not restate company background or infer a research need."),
       instrument: chosen.name as any,
       evidenceIds,
@@ -570,7 +578,7 @@ export function sequenceModelRequest(
           p.assetMatches?.find((m) => m.assetId === a.id)?.topics ?? [],
       })),
   }));
-  const sharedRules = `Use only each touch’s assigned evidenceIds for company facts and its assigned capability for product claims. Preserve what the source says, the named molecule, stage, attribution, uncertainty and relevant limitations. A question or request for correction is still a factual claim and needs the same support. Do not infer a need, outcome, clinical result, ownership or purchase intent. If no unused company fact fits, ask an open discovery question. Explain research in plain language; when helpful, briefly paraphrase the prospect’s published description and invite correction. Attribute only what the assigned source supports; never invent a website visit. Treat knowledge-base asset metadata as topic hints, not factual authority. Avoid jargon, hype, timed chats, free-work or partnership offers, promises, signatures and attachment claims.`;
+  const sharedRules = `Use only each touch’s assigned evidenceIds for company facts and its assigned capability for product claims. Preserve what the source says, the named molecule, stage, attribution, uncertainty and relevant limitations. A question or request for correction is still a factual claim and needs the same support. When evidence says the company reported a workflow, do not call it “your workflow” or ask how “your team” performs it. First ask whether that workflow is part of the recipient’s work; any follow-up about its use must be explicitly conditional. Do not infer a need, outcome, clinical result, ownership or purchase intent. If no unused company fact fits, ask an open discovery question. Explain research in plain language; when helpful, briefly paraphrase the prospect’s published description and invite correction. Attribute only what the assigned source supports; never invent a website visit. Treat knowledge-base asset metadata as topic hints, not factual authority. Avoid jargon, hype, timed chats, free-work or partnership offers, promises, signatures and attachment claims.`;
   const writing = `Write as Tim Glidewell to the prospect in a casual, friendly, professional voice, without slang. Be the spatial biology technology expert and curious about their research; do not pretend expertise in their science. ${sharedRules}
 Return exactly nine touches in order, subject and middle only. The app supplies greetings, role introductions, brand links, all meeting/date copy, options and signatures. Every email and LinkedIn message uses a distinct supported research topic and capability where relevant; if facts run out, use a genuine discovery question. Email 6 includes its assigned research angle before the app’s three-month close. Use concise natural sentences: email 2–3, LinkedIn message 1–2. Connection request: at most 140 characters, grounded research reference, no product pitch, greeting or closing; the app adds those. Avoid comments about sequence order such as "one last angle" and state the point naturally. Keep LinkedIn subjects empty. No sender name, meeting request, exclamation, placeholder, file title, promise to send material, third-person Tim reference, hype, or unsupported claim. If repairing, edit only repairIds, return all nine, and reproduce preservedTouches exactly.`;
   const reviewing = `Independently review all nine subjects and middle sections. ${sharedRules}
