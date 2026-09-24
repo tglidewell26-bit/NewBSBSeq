@@ -141,7 +141,7 @@ describe("sequence authority and fixed copy", () => {
       "CosMx",
       "CosMx",
       "CellScape",
-      null,
+      "CosMx",
     ]);
     expect(a.plan[4].evidenceIds).toEqual(["protein"]);
     expect(
@@ -161,6 +161,46 @@ describe("sequence authority and fixed copy", () => {
       ),
     ).toBe(true);
   });
+  it("assigns distinct features and uses grounded questions when research runs out", () => {
+    const { authority } = sequenceFixture();
+    const substantive = authority.plan.filter(p => p.touchId !== "liConnect");
+    expect(new Set(substantive.map(p => p.capabilityId)).size).toBe(8);
+    expect(substantive.every(p => p.capabilityId)).toBe(true);
+    expect(substantive.slice(1).every(p => p.purpose.includes("No unused research facts remain"))).toBe(true);
+    const writer = sequenceModelRequest("WRITING", authority).instructions;
+    expect(writer).toContain("Scientific".toLowerCase());
+    expect(writer).toContain("Questions about research or interest are allowed");
+    expect(sequenceModelRequest("VALIDATING", authority, []).instructions).toContain("repeated research hooks");
+  });
+  it("uses reviewed research beyond the instrument fit references", () => {
+    const { row } = sequenceFixture();
+    const item = { ...row.research_packet.qualificationEvidence.categories.workflows[1],
+      evidenceId: "additional-research", assessmentType: "PROGRAM" as const,
+      claim: "The company is developing an oncology research program.",
+      basisFacts: ["The company is developing an oncology research program."],
+    };
+    row.research_packet.qualificationEvidence.categories.workflows.push(item);
+    row.assessment.evidenceReviews.push({ evidenceId: item.evidenceId, verdict: "ENTAILED", quote: item.claim, reason: "Directly stated." });
+    const version = hashPacket(row.research_packet);
+    row.evidence_version = version;
+    row.assessment.evidenceVersion = version;
+    row.review.evidenceVersion = version;
+    const authority = planSequence(row, settings);
+    expect(authority.plan[0].evidenceIds).toEqual(["public-research"]);
+    expect(authority.plan[1].evidenceIds).toEqual(["additional-research"]);
+    expect(authority.evidence.some(e => e.evidenceId === item.evidenceId)).toBe(true);
+  });
+  it("allows genuine questions but rejects scheduling and unwanted sales language", () => {
+    const { authority, touches } = sequenceFixture();
+    for (const middle of ["Have you heard of spatial biology?", "Is this of interest to you?"]) {
+      touches[0].middle = middle;
+      expect(checkDraft({ touches }, authority).violations).toEqual([]);
+    }
+    for (const middle of ["Does it make sense to connect?", "Let’s partner.", "Do you have 15 min to chat?", "When can we meet?"]) {
+      touches[0].middle = middle;
+      expect(checkDraft({ touches }, authority).violations.length).toBeGreaterThan(0);
+    }
+  });
   it("blocks unapproved, mock, and stale assessments", () => {
     for (const change of [
       (r: any) => (r.stage = "ASSESSED"),
@@ -173,17 +213,17 @@ describe("sequence authority and fixed copy", () => {
       expect(() => planSequence(row, settings)).toThrow();
     }
   });
-  it("renders names, questions, signoffs and links without model control", () => {
+  it("renders role introductions and meeting requests without names or signatures", () => {
     const { touches, authority } = sequenceFixture();
     expect(checkDraft({ touches }, authority).violations).toEqual([]);
     const rendered = renderSequence(touches, authority);
     expect(rendered[0].body).toMatch(
-      /^Hello \{\{first_name\}\},\n\nMy name is Tim Glidewell/,
+      /^Hello \{\{first_name\}\},\n\nI’m your Spatial Regional Account Manager/,
     );
     expect(
       rendered
         .filter((t) => t.touchId.startsWith("email"))
-        .every((t) => t.body.endsWith("Best regards,\nTim Glidewell")),
+        .every((t) => !/Tim Glidewell|Best regards|\]\([^)]*\) \|/.test(t.body)),
     ).toBe(true);
     expect(
       rendered
