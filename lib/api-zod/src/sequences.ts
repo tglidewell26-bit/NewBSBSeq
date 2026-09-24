@@ -148,7 +148,10 @@ export type Violation = {
   capabilityId: string | null;
   nextAction: string;
 };
-export type RenderedTouch = DraftTouch & { body: string };
+export type RenderedTouch = DraftTouch & { body: string; assetSuggestions?: Array<{
+  asset: SequenceAsset;
+  match: NonNullable<TouchPlan["assetMatches"]>[number];
+}> };
 export type SequenceState =
   | "QUEUED"
   | "WRITING"

@@ -8,6 +8,7 @@ import type {
   SequenceJob,
   SavedTrip,
   SequenceAuthority,
+  RenderedTouch,
 } from "@workspace/api-zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -565,7 +566,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                         try { await copyMessage(t.body); setCopyStatus("Copied body and links. Suggested files must be attached separately."); }
                         catch { setCopyStatus("Clipboard unavailable. Select the body to copy it."); }
                       }}>Copy body</Button>
-                      <TouchAssets authority={job.authority} touchId={t.touchId} />
+                      <TouchAssets authority={job.authority} touchId={t.touchId} suggestions={t.assetSuggestions} />
                     </>
                   )}
                 </article>
@@ -583,15 +584,15 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
   );
 }
 
-function TouchAssets({ authority, touchId }: { authority: SequenceAuthority; touchId: string }) {
+function TouchAssets({ authority, touchId, suggestions }: { authority: SequenceAuthority; touchId: string; suggestions?: NonNullable<RenderedTouch["assetSuggestions"]> }) {
   const plan = authority.plan.find(p => p.touchId === touchId);
-  const assets = (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
+  const assets = suggestions?.map(s => s.asset) ?? (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
   const current = useQuery({ queryKey: ["knowledge-assets"], queryFn: () => api<Array<{ id: string; revision: number }>>("/assets"), enabled: assets.length > 0 });
   if (!authority.assets || !["email1", "email2", "email3", "email4", "email5"].includes(touchId) || !assets.length) return null;
   return <div className="mt-3 space-y-3 rounded-md border bg-muted/20 p-3">
     <p className="text-sm font-medium">Optional library suggestions</p>
     {assets.map(asset => {
-      const match = plan?.assetMatches?.find(m => m.assetId === asset.id);
+      const match = suggestions?.find(s => s.asset.id === asset.id)?.match ?? plan?.assetMatches?.find(m => m.assetId === asset.id);
       const available = current.data?.some(a => a.id === asset.id && a.revision === asset.revision);
       const image = match?.kind === "image" || asset.fileKind === "image" || /\.(png|jpe?g|webp)$/i.test(asset.fileName);
       return <div key={asset.id} className="space-y-1 text-sm">
