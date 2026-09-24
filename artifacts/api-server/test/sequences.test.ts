@@ -192,13 +192,24 @@ describe("sequence authority and fixed copy", () => {
   });
   it("allows genuine questions but rejects scheduling and unwanted sales language", () => {
     const { authority, touches } = sequenceFixture();
-    for (const middle of ["Have you heard of spatial biology?", "Is this of interest to you?"]) {
+    for (const middle of ["Have you heard of spatial biology?", "Is this of interest to you?", "From your published description, my understanding is that you integrate RNA with tissue morphology. Am I understanding that correctly?"]) {
       touches[0].middle = middle;
       expect(checkDraft({ touches }, authority).violations).toEqual([]);
     }
     for (const middle of ["Does it make sense to connect?", "Let’s partner.", "Do you have 15 min to chat?", "When can we meet?"]) {
       touches[0].middle = middle;
       expect(checkDraft({ touches }, authority).violations.length).toBeGreaterThan(0);
+    }
+  });
+  it("keeps evidence checks active for claims phrased as requests for correction", () => {
+    const { authority, touches } = sequenceFixture();
+    touches[0].middle = "My understanding is that you studied 999 patients. Did I get that right?";
+    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "UNSUPPORTED_NUMBER")).toBe(true);
+    for (const stage of ["WRITING", "VALIDATING"] as const) {
+      const request = sequenceModelRequest(stage, authority, touches);
+      expect(request.instructions).toContain("briefly explain your understanding");
+      expect(request.instructions).toContain("Asking for confirmation does not make a speculative mechanism, regulatory milestone, or outcome acceptable");
+      expect(request.instructions).toContain("Judge questions by the same evidence standard as statements");
     }
   });
   it("blocks unapproved, mock, and stale assessments", () => {
