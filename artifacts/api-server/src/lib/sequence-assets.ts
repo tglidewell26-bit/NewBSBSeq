@@ -67,8 +67,8 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
   const ordered = [...authority.plan].sort((a, b) => Number(b.capabilityId === "cell-assay-kits") - Number(a.capabilityId === "cell-assay-kits"));
   for (const p of ordered) {
     const empty = { ...p, assetIds: [] as string[], assetMatches: [] as NonNullable<typeof p.assetMatches> };
-    // Keep suggestions optional and confined to the five substantive emails.
-    if (!["email1", "email2", "email3", "email4", "email5"].includes(p.touchId) || !p.capabilityId) { selectedByTouch.set(p.touchId, empty); continue; }
+    // Keep source suggestions optional and available to all six emails.
+    if (!p.touchId.startsWith("email") || !p.capabilityId) { selectedByTouch.set(p.touchId, empty); continue; }
     const evidence = authority.evidence.filter(e => p.evidenceIds.includes(e.evidenceId));
     const candidates = library.filter(a => a.instrument === p.instrument && !used.has(a.id)).flatMap(asset => {
       const rawContent = [asset.description, ...asset.keywords].join("\n");
@@ -78,6 +78,15 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
       const matches: Array<{ topic: string; ids: string[] }> = concepts.filter(c => (c.caps as readonly string[]).includes(p.capabilityId!) && positiveConcept(rawContent, c.pattern))
         .map(c => ({ topic: c.name, ids: evidence.filter(e => positiveConcept(e.claim, c.pattern)).map(e => e.evidenceId) }))
         .filter(m => m.ids.length);
+      const broad = /^(?:cancer|oncology|spatial|biology|research|tissue|rna|protein|morphology|imaging|single cell rna)$/;
+      for (const keyword of asset.keywords) {
+        const term = normalized(keyword).trim();
+        if (term.length < 4 || broad.test(term)) continue;
+        const pattern = new RegExp(`\\b${term}\\b`);
+        if (!positiveConcept(asset.description, pattern)) continue;
+        const ids = evidence.filter(e => positiveConcept(e.claim, pattern)).map(e => e.evidenceId);
+        if (ids.length && !matches.some(m => m.topic === term)) matches.push({ topic: term, ids });
+      }
       const capabilityResource = capabilityResources[p.capabilityId!];
       if (capabilityResource?.pattern.test(rawContent))
         matches.push({ topic: capabilityResource.name, ids: evidence.map(e => e.evidenceId) });
@@ -131,3 +140,4 @@ export function attachmentNotes(authority: SequenceAuthority, touchId: string, w
     return `${kind}: ${a.fileName.replace(/[\r\n]/g, " ")} (reviewed revision ${a.revision})\n${match?.reason ?? "Selected reference resource."}\nReview this resource before use; copying text does not include it in the email.`;
   }).join("\n\n");
 }
+
