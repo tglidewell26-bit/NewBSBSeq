@@ -3,7 +3,7 @@ import { instruments, rubric, modelAssessmentSchema, modelAssessmentJsonSchema }
 import type { LocatedEvidence } from "./bsb-v2";
 
 export const MODEL = "gpt-5.6-terra";
-export const PROMPT_VERSION = "bsb-assessment-2";
+export const PROMPT_VERSION = "bsb-assessment-3";
 export const MAX_OUTPUT_TOKENS = 8000;
 export const TIMEOUT_MS = 120000;
 
@@ -33,7 +33,8 @@ Unsupported individual claims do not invalidate other valid company evidence. In
 Evaluate all three instruments. Scientific fit, active/historical use, account status and commercial readiness are separate.
 OUTPUT CONTRACT: For currentUse, accountStatus and readiness, UNKNOWN must be exactly {"value":"UNKNOWN","evidenceIds":[]}. Evidence items that describe missing information belong in evidenceReviews with verdict UNKNOWN and in limitations, never in a status's supporting evidenceIds. Every known status needs nonempty citations that were reviewed ENTAILED and specifically establish that status.
 Every STRONG_FIT or POTENTIAL_FIT needs nonempty evidenceIds AND nonempty instrument-specific ruleIds, INCLUDING instruments you do not select. selectedInstruments only chooses the outreach focus; it does not exempt alternatives from citation requirements. Cite distinct IDs reviewed ENTAILED from eligible supplied evidence, not unknowns, inferences or unsupported claims. Do not downgrade a supported alternative merely to avoid supplying citations.
-For CellScape use CELL-MULTIPLEX-PROTEIN or CELL-ANTIBODY-BIOLOGY; for CosMx use COSMX-SINGLE-CELL-RNA or COSMX-ACTIVE-WORKFLOW; for GeoMx use GEOMX-TISSUE-COHORT. Never transfer a rule between instruments. NOT_QUALIFIED also requires explicit supported citations; an unestablished fit is INSUFFICIENT_EVIDENCE.
+For CellScape use CELL-MULTIPLEX-PROTEIN or CELL-ANTIBODY-BIOLOGY; for CosMx use COSMX-SINGLE-CELL-RNA or COSMX-ACTIVE-WORKFLOW; for GeoMx use GEOMX-TISSUE-COHORT or GEOMX-REGIONAL-HYPOTHESIS. Never transfer a rule between instruments. NOT_QUALIFIED also requires explicit supported citations; an unestablished fit is INSUFFICIENT_EVIDENCE.
+For GEOMX-REGIONAL-HYPOTHESIS, cite the documented program AND the relevant assay or biological evidence. Explain the particular regional tissue question as a proposed application, conditional on suitable sample access, not as a company-stated need. Use POTENTIAL_FIT for this exploratory case; do not imply STRONG_FIT, an existing spatial workflow, retained biopsy tissue or instrument readiness. A historical optional biopsy establishes neither a current cohort nor sample access. Do not require FFPE, instrument use, budget or a company-published wish for spatial profiling to establish this conditional scientific fit. A company merely developing drugs without a specific supported organ/disease mechanism and relevant experimental work remains INSUFFICIENT_EVIDENCE.
 Strong active CosMx use supports strong CosMx fit and installed-base messaging, even with unknown budget. A research aspiration to infer disease from tissue is NOT validated diagnostic performance.
 Ownership or past purchases do not establish a new buying project, present budget, timeline or evaluation. Unknown readiness never blocks scientific fit.
 Fit does not require instrument ownership. Generic AI, oncology, antibody or spatial descriptions alone are insufficient.
@@ -98,6 +99,11 @@ export function validateModelAssessment(value: unknown, evidence: LocatedEvidenc
     else if (item.evidenceIds.some(id => !byId.has(id))) fail(`${path}.evidenceIds`, "Unknown evidence ID.");
     if (positive && !item.ruleIds.length) fail(`${path}.ruleIds`, "Positive fit requires an instrument-specific rubric rule.");
     if (item.ruleIds.some(id => rubric[id].instrument !== item.instrument)) fail(`${path}.ruleIds`, "A rubric rule belongs to another instrument.");
+    if (item.ruleIds.includes("GEOMX-REGIONAL-HYPOTHESIS")) {
+      if (item.fit !== "POTENTIAL_FIT") fail(`${path}.fit`, "A proposed regional application supports potential fit, not strong fit.");
+      const types = item.evidenceIds.map(id => byId.get(id)?.assessmentType);
+      if (!types.includes("PROGRAM") || !types.includes("WORKFLOW")) fail(`${path}.evidenceIds`, "A proposed regional application requires supported program and experimental workflow evidence.");
+    }
     for (const key of ["currentUse", "accountStatus", "readiness"] as const) {
       const dimension = item[key];
       if (dimension.value !== "UNKNOWN") referenced(dimension.evidenceIds, `${path}.${key}`);
