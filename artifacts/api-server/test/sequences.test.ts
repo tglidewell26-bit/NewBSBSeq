@@ -190,32 +190,14 @@ describe("sequence authority and fixed copy", () => {
       ),
     ).toBe(true);
   });
-  it("assigns distinct features and uses grounded questions when research runs out", () => {
+  it("keeps later touches grounded when only one research fact is available", () => {
     const { authority } = sequenceFixture();
-    const substantive = authority.plan.filter((p) => p.touchId !== "liConnect");
-    expect(new Set(substantive.map((p) => p.capabilityId)).size).toBe(8);
-    expect(substantive.every((p) => p.capabilityId)).toBe(true);
-    expect(
-      substantive
-        .slice(1)
-        .every((p) => p.purpose.includes("No unused reviewed research fact")),
-    ).toBe(true);
-    expect(substantive.slice(1).every((p) => p.evidenceIds.length === 0)).toBe(
-      true,
-    );
-    expect(substantive.flatMap((p) => p.evidenceIds)).toEqual([
-      substantive[0].evidenceIds[0],
-    ]);
-    const writer = sequenceModelRequest("WRITING", authority).instructions;
-    expect(writer).toContain(
-      "Every email and LinkedIn message uses a distinct supported research topic",
-    );
-    expect(writer).toContain(
-      "A question or request for correction is still a factual claim and needs the same support",
-    );
-    expect(
-      sequenceModelRequest("VALIDATING", authority, []).instructions,
-    ).toContain("repeated research hooks");
+    const substantive = authority.plan.filter(p => p.touchId !== "liConnect");
+    expect(new Set(substantive.map(p => p.capabilityId)).size).toBeLessThan(8);
+    expect(substantive.every(p => p.capabilityId)).toBe(true);
+    expect(authority.plan.every(p => p.evidenceIds.includes("public-research"))).toBe(true);
+    expect(authority.evidence).toHaveLength(1);
+    expect(substantive.some(p => /segmentation|informatics|pipelines|imaging-readout/.test(p.capabilityId!))).toBe(false);
   });
   it("does not reserve Email 1 evidence for the connection request", () => {
     const { row } = sequenceFixture();
@@ -252,7 +234,7 @@ describe("sequence authority and fixed copy", () => {
       new Set(authority.plan.slice(0, 3).flatMap((p) => p.evidenceIds)).size,
     ).toBe(3);
   });
-  it("tells the writer to ask whether a reported workflow belongs to the recipient", () => {
+  it("keeps proposed applications conditional without forcing workflow screening", () => {
     const { authority } = sequenceFixture();
     const instructions = sequenceModelRequest(
       "WRITING",
@@ -260,9 +242,9 @@ describe("sequence authority and fixed copy", () => {
     ).instructions;
     expect(instructions).toContain("do not call it “your workflow”");
     expect(instructions).toContain(
-      "First ask whether that workflow is part of the recipient’s work",
+      "keep proposed applications conditional",
     );
-    expect(instructions).toContain("must be explicitly conditional");
+    expect(instructions).not.toContain("First ask whether");
   });
   it("uses reviewed research beyond the instrument fit references", () => {
     const { row } = sequenceFixture();
@@ -287,7 +269,7 @@ describe("sequence authority and fixed copy", () => {
     const authority = planSequence(row, settings);
     expect(authority.plan[0].evidenceIds).toEqual(["public-research"]);
     expect(authority.plan[1].evidenceIds).toEqual(["additional-research"]);
-    expect(authority.plan[3].evidenceIds).toEqual([]);
+    expect(authority.plan[3].evidenceIds.length).toBeGreaterThan(0);
     expect(
       authority.evidence.some((e) => e.evidenceId === item.evidenceId),
     ).toBe(true);
@@ -332,7 +314,7 @@ describe("sequence authority and fixed copy", () => {
         "A question or request for correction is still a factual claim and needs the same support",
       );
       expect(request.instructions).toContain(
-        "If no unused company fact fits, ask an open discovery question",
+        "Reuse an assigned research fact from a new angle",
       );
     }
   });
@@ -578,3 +560,4 @@ describe("sequence authority and fixed copy", () => {
     expect(JSON.parse(review.input).assignments).toEqual(assignments);
   });
 });
+

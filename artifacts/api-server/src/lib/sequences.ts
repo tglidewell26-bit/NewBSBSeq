@@ -22,8 +22,8 @@ import {
 import { hashPacket, normalizeEvidence } from "./bsb-v2";
 import { attachSequenceAssets } from "./sequence-assets";
 
-export const PLAN_VERSION = "bsb-plan-7-no-competitor-hooks";
-export const VOICE_VERSION = "tim-outreach-12-concrete-email-one";
+export const PLAN_VERSION = "bsb-plan-8-reuse-research";
+export const VOICE_VERSION = "tim-outreach-13-research-led-followups";
 export const digest = hashPacket;
 // Exclude competitor references from customer-facing evidence assignments as
 // well as model output. NanoString is Bruker-owned and intentionally allowed.
@@ -208,14 +208,14 @@ export function planSequence(
     );
   const purposes = [
     "One specific research hook, a direct question about how the prospect studies that biology, and a concrete explanation of how the assigned instrument could compare relevant samples or tissue regions; the application introduces the sender.",
-    "Follow up with a different capability or practical workflow consideration.",
+    "Connect another documented program or method to a concrete measurement or comparison.",
     "Brief connection request naming a specific supported research interest.",
     "Short research-specific LinkedIn follow-up.",
-    "Discuss a different capability; introduce the second approved instrument here if present.",
+    "Develop a new research question from the documented work; introduce the second approved instrument here if present.",
     "Renew interest for the second visit; the application supplies the missed-you introduction.",
-    "Follow up on the second visit with a supported practical consideration.",
+    "Explain a useful scientific capability in more depth and connect it to the documented research.",
     "Short workflow-focused LinkedIn follow-up for the second visit, without pretending they replied.",
-    "One last concise research angle and useful feature; the application supplies the respectful three-month close.",
+    "Briefly summarize the strongest instrument-specific research reason to meet; the application supplies the three-month close.",
   ];
   const research = allowed.filter((e) =>
     ["CAPABILITY", "PROGRAM", "WORKFLOW"].includes(e.assessmentType),
@@ -251,19 +251,16 @@ export function planSequence(
         ? chosen.evidence.find((id) => !usedEvidence.has(id))
         : undefined;
     const fresh = preferred ?? pool.find((id) => !usedEvidence.has(id));
-    const evidenceIds = fresh ? [fresh] : [];
+    const evidenceId = fresh ?? pool[index % pool.length];
+    const evidenceIds = evidenceId ? [evidenceId] : [];
     if (fresh) usedEvidence.add(fresh);
     return {
       touchId,
       purpose:
         purposes[index] +
-        (fresh
-          ? connection
-            ? " Use this unused research fact briefly; do not add a product pitch."
-            : " Use this research fact and the assigned feature for a distinct, relevant discussion."
-          : connection
-            ? " No unused reviewed research fact remains. Make a simple connection request without repeating a research claim or adding a product pitch."
-            : " No unused reviewed research fact fits this touch. Ask an open discovery question related to the assigned feature; do not restate company background or infer a research need."),
+        (connection
+          ? " Briefly name the research that prompted the connection; the application adds the invitation to connect."
+          : " Explain a concrete application of the assigned capability to the assigned research. You may revisit a fact from a new angle; avoid repeating the earlier explanation."),
       instrument: chosen.name as any,
       evidenceIds,
       capabilityId: cap?.id ?? null,
@@ -373,7 +370,7 @@ export function renderSequence(
       t.touchId === "email1"
         ? "I'm Tim Glidewell, your Spatial Regional Account Manager at Bruker Spatial Biology. It's nice to e-meet you. We help researchers study where genes and proteins are located in tissue."
         : t.touchId === "email4"
-          ? `${returnVisit ? `Sorry I missed you last time. ${reminder} I’ll be back in the area **${tripDateRange(s.trip2)}**.` : reminder}`
+          ? `${returnVisit ? `Sorry I missed you last time. ${reminder}` : reminder}`
           : "";
     const alternatives =
       s.meetingMode === "IN_PERSON" &&
@@ -384,12 +381,12 @@ export function renderSequence(
       t.touchId === "email3" && returnVisit
         ? `If these dates don’t work and you’d prefer to meet in person, I’ll also be back **${tripDateRange(s.trip2)}**.`
         : "";
-    const optOut = ["email3", "email5"].includes(t.touchId)
-      ? "If this isn’t of interest, please let me know and I won’t keep following up. If later in the year is better, or another colleague or group would be a better fit, let me know."
+    const optOut = t.touchId === "email5"
+      ? "If this isn’t of interest, please let me know and I won’t keep following up. If another colleague would be a better fit, I’d appreciate the direction."
       : "";
     const close =
       t.touchId === "email6"
-        ? `Since I haven’t heard back, I’ll reach out again in three months. ${s.meetingMode === "IN_PERSON" ? "There’s still time to meet during this visit." : "We can still schedule a virtual meeting in the meantime."}`
+        ? "Since I haven’t heard back, I’ll reach out again in three months. You’re welcome to reach out sooner if the timing changes."
         : "";
     const ending =
       t.touchId === "liConnect"
@@ -402,10 +399,10 @@ export function renderSequence(
       greeting,
       intro,
       addNanoStringContext(t.middle),
-      close,
       ...(t.touchId === "email3"
         ? [ending, futureVisit, alternatives, optOut]
         : [futureVisit, alternatives, optOut, ending]),
+      close,
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -594,11 +591,11 @@ export function sequenceModelRequest(
           p.assetMatches?.find((m) => m.assetId === a.id)?.topics ?? [],
       })),
   }));
-  const sharedRules = `Use only each touch’s assigned evidenceIds for company facts and its assigned capability for product claims. Preserve what the source says, the named molecule, stage, attribution, uncertainty and relevant limitations. A question or request for correction is still a factual claim and needs the same support. When evidence says the company reported a workflow, do not call it “your workflow” or ask how “your team” performs it. First ask whether that workflow is part of the recipient’s work; any follow-up about its use must be explicitly conditional. Do not infer a need, outcome, clinical result, ownership or purchase intent. If no unused company fact fits, ask an open discovery question. Introduce a company fact with natural attribution such as "I read that" or "I read about"; do not abruptly assert the prospect's research. Explain research in plain language; when helpful, briefly paraphrase the prospect’s published description and invite correction. Attribute only what the assigned source supports; never invent a website visit. Never mention competitors (Xenium, CODEX, Akoya, 10x, Lunaphore, COMET, Miltenyi, Maxima, MIBI, CellDive, Vizgen, MERSCOPE). NanoString is part of Bruker Spatial Biology; the application adds that context when it appears. CellScape panel expansion revisits a slide previously analyzed on CellScape, never a sample analyzed on another platform. Treat knowledge-base asset metadata as topic hints, not factual authority. Avoid jargon, hype, timed chats, free-work or partnership offers, promises, signatures and attachment claims.`;
+  const sharedRules = `Use only each touch’s assigned evidenceIds for company facts and its assigned capability for product claims. Preserve what the source says, the named molecule, stage, attribution, uncertainty and relevant limitations. A question or request for correction is still a factual claim and needs the same support. When evidence says the company reported a workflow, do not call it “your workflow” or ask how “your team” performs it. A direct question about their approach is welcome; keep proposed applications conditional when sample access or the recipient’s involvement is unconfirmed. Do not infer a need, outcome, clinical result, ownership or purchase intent. Reuse an assigned research fact from a new angle when appropriate; do not substitute generic equipment or sample-screening questions for a useful product application. Introduce a company fact with natural attribution such as "I read that" or "I read about"; do not abruptly assert the prospect's research. Explain research in plain language; when helpful, briefly paraphrase the prospect’s published description and invite correction. Attribute only what the assigned source supports; never invent a website visit. Never mention competitors (Xenium, CODEX, Akoya, 10x, Lunaphore, COMET, Miltenyi, Maxima, MIBI, CellDive, Vizgen, MERSCOPE). NanoString is part of Bruker Spatial Biology; the application adds that context when it appears. CellScape panel expansion revisits a slide previously analyzed on CellScape, never a sample analyzed on another platform. Treat knowledge-base asset metadata as topic hints, not factual authority. Avoid jargon, hype, timed chats, free-work or partnership offers, promises, signatures and attachment claims.`;
   const writing = `Write as Tim Glidewell to the prospect in a casual, friendly, professional voice, without slang. Be the spatial biology technology expert and curious about their research; do not pretend expertise in their science. ${sharedRules}
-Return exactly nine touches in order, subject and middle only. The app supplies greetings, role introductions, brand links, all meeting/date copy, options and signatures. Every email and LinkedIn message uses a distinct supported research topic and capability where relevant; if facts run out, use a genuine discovery question. Email 1 should name the assigned instrument, ask one direct question about the relevant biology or current measurement approach, and explain in plain language what it measures and what comparison it could enable for the documented project. Use a conditional example when tissue or paired samples have not been verified; do not imply the prospect already has them. Give Email 1 enough room for this useful product explanation (roughly 3–5 sentences in the middle); keep later emails concise (2–3 sentences), LinkedIn messages 1–2. Do not default to abstract phrases such as "distinct tissue compartments" without saying what could be compared. Email 6 includes its assigned research angle before the app’s three-month close. Connection request: at most 140 characters, grounded research reference, no product pitch, greeting or closing; the app adds those. Avoid comments about sequence order such as "one last angle" and state the point naturally. Keep LinkedIn subjects empty. No sender name, meeting request, exclamation, placeholder, file title, promise to send material, third-person Tim reference, hype, or unsupported claim. If repairing, edit only repairIds, return all nine, and reproduce preservedTouches exactly.`;
+Return exactly nine touches in order, subject and middle only. The app supplies greetings, role introductions, brand links, all meeting/date copy, options and signatures. Every email and LinkedIn message names its assigned instrument and connects a documented program or method to a concrete measurement, comparison, or scientific question. Vary the angle, not the feature for its own sake. Reusing relevant research and capabilities is allowed; repeating the same pitch is not. Ask at most one research question per touch, and do not repeatedly lead with "if you have tissue". Explain what the instrument enables with confident, plain language. Keep assay limitations where they materially affect the claim instead of appending boilerplate such as "subject to compatibility and service requirements". Use short, research-relevant subjects. The connection request briefly names the research interest and leaves the invitation to connect to the app. Email 1 should name the assigned instrument, ask one direct question about the relevant biology or current measurement approach, and explain in plain language what it measures and what comparison it could enable for the documented project. Use a conditional example when tissue or paired samples have not been verified; do not imply the prospect already has them. Give Email 1 enough room for this useful product explanation (roughly 3–5 sentences in the middle); keep later emails concise (2–3 sentences), LinkedIn messages 1–2. Do not default to abstract phrases such as "distinct tissue compartments" without saying what could be compared. Email 6 includes its assigned research angle before the app’s three-month close. Connection request: at most 140 characters, grounded research reference, no product pitch, greeting or closing; the app adds those. Avoid comments about sequence order such as "one last angle" and state the point naturally. Keep LinkedIn subjects empty. No sender name, meeting request, exclamation, placeholder, file title, promise to send material, third-person Tim reference, hype, or unsupported claim. If repairing, edit only repairIds, return all nine, and reproduce preservedTouches exactly.`;
   const reviewing = `Independently review all nine subjects and middle sections. ${sharedRules}
-Return each touch once with exact quoted spans for any factual or voice issue, otherwise an empty violations list. Flag repeated research hooks/features, sequence meta-commentary, a repeated connection closing, jargon-heavy copy, assumed needs, meeting requests, hype, promises, false source attribution, or a sender signature. For Email 1, also flag a product mention that gives no concrete measurement or relevant comparison, or that treats a proposed pre/post experiment as an established company workflow. Allow sincere scientific and interest questions. Email 6 may discuss its assigned research angle. Fixed application copy is outside this review. Do not rewrite.`;
+Return each touch once with exact quoted spans for any factual or voice issue, otherwise an empty violations list. Flag repetitive explanations or pitches (reusing a research fact or capability from a new angle is allowed), sequence meta-commentary, a repeated connection closing, jargon-heavy copy, assumed needs, meeting requests, hype, promises, false source attribution, or a sender signature. For Email 1, also flag a product mention that gives no concrete measurement or relevant comparison, or that treats a proposed pre/post experiment as an established company workflow. Allow sincere scientific and interest questions. Email 6 may discuss its assigned research angle. Fixed application copy is outside this review. Do not rewrite.`;
   const request = {
     model: MODEL,
     store: false,
@@ -633,3 +630,4 @@ Return each touch once with exact quoted spans for any factual or voice issue, o
     );
   return request;
 }
+

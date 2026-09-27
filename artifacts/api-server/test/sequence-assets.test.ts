@@ -130,7 +130,7 @@ describe("sequence resource retrieval", () => {
     ).toEqual([]);
   });
 
-  it("is deterministic, attaches resources only when fresh evidence supports them, and never repeats files", () => {
+  it("is deterministic and reuses research without repeating resources", () => {
     const a = sequenceFixture().authority;
     const assets = ["d", "b", "a", "c"].map((id) => resource({ id }));
     const result = attachSequenceAssets(a, assets);
@@ -140,8 +140,8 @@ describe("sequence resource retrieval", () => {
     const firstTouch = result.plan.find((p) => p.touchId === "email1");
     const tripTwo = result.plan.find((p) => p.touchId === "email4");
     expect(firstTouch?.assetIds.length).toBeGreaterThan(0);
-    expect(tripTwo?.evidenceIds).toEqual([]);
-    expect(tripTwo?.assetIds).toEqual([]);
+    expect(tripTwo?.evidenceIds).toEqual(firstTouch?.evidenceIds);
+    expect(tripTwo?.assetIds.length).toBeGreaterThan(0);
   });
 
   it("keeps older pinned resources valid after image metadata is added", async () => {
@@ -236,3 +236,4 @@ describe("sequence resource retrieval", () => {
     expect(attachmentNotes(a, "liConnect")).toBe("");
   });
 });
+

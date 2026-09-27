@@ -1,6 +1,7 @@
 import type { Capability } from "@workspace/api-zod";
-export const CATALOG_VERSION = "bsb-capabilities-2026-09-27-v4";
-// Reviewed qualitative claims only. Numeric panels and legacy proof assets are not imported.
+export const CATALOG_VERSION = "bsb-capabilities-2026-09-27-v5";
+// Core scientific capabilities for outreach. Specialized workflow features do
+// not justify a touch merely because they are next in the catalog.
 export const capabilities: Capability[] = [
   {
     id: "cell-tissue-protein",
@@ -98,16 +99,6 @@ export const capabilities: Capability[] = [
     reviewedAt: "2026-09-24",
   },
   {
-    id: "cell-imaging-area",
-    instrument: "CellScape",
-    claim: "CellScape supports large tissue imaging areas.",
-    limitation: "Usable coverage depends on sample and imaging setup.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/",
-    sourceSection: "Engineered for flexible spatial proteomics",
-    reviewedAt: "2026-09-24",
-  },
-  {
     id: "cell-assay-kits",
     instrument: "CellScape",
     claim: "CellScape offers prevalidated antibody assay kits.",
@@ -115,37 +106,6 @@ export const capabilities: Capability[] = [
     sourceUrl:
       "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/",
     sourceSection: "Streamlined assay development",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "cell-cycle-alignment",
-    instrument: "CellScape",
-    claim: "CellScape automatically aligns images across staining cycles.",
-    limitation: "Image quality and assay validation still matter.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/",
-    sourceSection: "How it works",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "cell-analysis-output",
-    instrument: "CellScape",
-    claim: "CellScape exports OME-TIFF images for downstream analysis.",
-    limitation: "Check compatibility with the intended analysis software.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/",
-    sourceSection: "Engineered for flexible spatial proteomics",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "cosmx-segmentation",
-    instrument: "CosMx",
-    claim:
-      "CosMx segmentation defines cell boundaries and assigns transcripts to cells.",
-    limitation: "Dense tissue still requires segmentation quality review.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/",
-    sourceSection: "Accurate Cell Segmentation",
     reviewedAt: "2026-09-24",
   },
   {
@@ -170,37 +130,6 @@ export const capabilities: Capability[] = [
     reviewedAt: "2026-09-24",
   },
   {
-    id: "cosmx-informatics",
-    instrument: "CosMx",
-    claim: "CosMx integrates with AtoMx for spatial data exploration.",
-    limitation: "Analysis requires quality control and suitable workflows.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/",
-    sourceSection: "Integrated Spatial Informatics Platform",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "cosmx-imaging-readout",
-    instrument: "CosMx",
-    claim:
-      "CosMx uses cyclic fluorescent hybridization and imaging to measure RNA.",
-    limitation: "Requires compatible assays and sample preparation.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/",
-    sourceSection: "From sample to spatial insights",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "cosmx-analysis-pipelines",
-    instrument: "CosMx",
-    claim: "CosMx data analysis through AtoMx supports open-source pipelines.",
-    limitation: "Confirm pipeline suitability and validate analysis choices.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/",
-    sourceSection: "Integrated Spatial Informatics Platform",
-    reviewedAt: "2026-09-24",
-  },
-  {
     id: "geomx-transcriptome",
     instrument: "GeoMx",
     claim:
@@ -210,38 +139,6 @@ export const capabilities: Capability[] = [
       "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
     sourceSection:
       "Profile the Whole Transcriptome and 1200+ Proteins from Intact Tissue",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "geomx-contour",
-    instrument: "GeoMx",
-    claim: "GeoMx contour profiling examines regions along tissue boundaries.",
-    limitation:
-      "Requires appropriate morphology markers and regional sampling.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
-    sourceSection: "Contour",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "geomx-tma",
-    instrument: "GeoMx",
-    claim: "GeoMx can profile tissue microarrays.",
-    limitation: "Sample quality, assays and sampling design matter.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
-    sourceSection: "Scalability",
-    reviewedAt: "2026-09-24",
-  },
-  {
-    id: "geomx-custom-targets",
-    instrument: "GeoMx",
-    claim:
-      "GeoMx supports custom target additions through probe and antibody barcoding services.",
-    limitation: "Confirm assay compatibility and service requirements.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
-    sourceSection: "Customization",
     reviewedAt: "2026-09-24",
   },
   {
@@ -255,16 +152,5 @@ export const capabilities: Capability[] = [
       "Profile the Whole Transcriptome and 1200+ Proteins from Intact Tissue",
     reviewedAt: "2026-09-24",
   },
-  {
-    id: "geomx-histology",
-    instrument: "GeoMx",
-    claim:
-      "GeoMx workflows support automated staining on compatible histology systems.",
-    limitation:
-      "Requires supported staining instruments and validated protocols.",
-    sourceUrl:
-      "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
-    sourceSection: "Scalability",
-    reviewedAt: "2026-09-24",
-  },
 ];
+
