@@ -7,6 +7,7 @@ export const rubric = {
   "COSMX-SINGLE-CELL-RNA": { instrument: "CosMx", text: "Single-cell RNA integration with spatial context, rare-cell resolution, or supported single-cell spatial multi-omics needs." },
   "COSMX-ACTIVE-WORKFLOW": { instrument: "CosMx", text: "Explicit active CosMx assay use establishes workflow fit and supports installed-base outreach. It does not imply budget, another instrument purchase, or clinically validated outcomes." },
   "GEOMX-TISSUE-COHORT": { instrument: "GeoMx", text: "Pathology-led translational cohorts, FFPE archives, biobanks, or regional tissue biomarker questions. FFPE alone is a compatibility signal, not a decisive instrument preference." },
+  "GEOMX-REGIONAL-HYPOTHESIS": { instrument: "GeoMx", text: "A documented organ- or disease-focused therapeutic program plus relevant biological assays supports a specific, conditional question about RNA or protein differences across tissue regions. This permits POTENTIAL_FIT for exploratory outreach even when tissue access is unknown. Generic drug development alone does not qualify; it does not establish an existing tissue workflow, assay feasibility or buying readiness." },
 } as const;
 
 const text = z.string().max(2000);
