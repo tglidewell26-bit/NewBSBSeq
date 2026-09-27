@@ -66,7 +66,8 @@ describe("sequence authority and fixed copy", () => {
       trip1: [{ date: "2099-04-06", start: "09:00", end: "12:00" }],
       trip2: [{ date: "2099-05-06", start: "10:00", end: "14:00" }],
     });
-    touches[5].middle = "Tim can revisit the spatial biology angle around that work.";
+    touches[5].middle =
+      "Tim can revisit the spatial biology angle around that work.";
     const request = sequenceModelRequest("VALIDATING", authority, touches);
     const close = JSON.parse(request.input).touches[5];
     expect(close).not.toHaveProperty("applicationCopy");
@@ -74,13 +75,19 @@ describe("sequence authority and fixed copy", () => {
     expect(request.input).not.toContain("Sorry I missed you last time.");
     expect(request.input).not.toContain("2099-05-06");
     expect(close.middle).toBe(touches[5].middle);
-    expect(renderSequence(touches, authority)[5].body).toContain("Sorry I missed you last time.");
+    expect(renderSequence(touches, authority)[5].body).toContain(
+      "Sorry I missed you last time.",
+    );
     expect(checkDraft({ touches }, authority).violations).toEqual(
-      expect.arrayContaining([expect.objectContaining({ touchId: "email4", ruleId: "SENDER_VOICE" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ touchId: "email4", ruleId: "SENDER_VOICE" }),
+      ]),
     );
     touches[5].middle = "Sorry I missed you last time.";
     expect(checkDraft({ touches }, authority).violations).toEqual(
-      expect.arrayContaining([expect.objectContaining({ touchId: "email4", ruleId: "FIXED_COPY" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ touchId: "email4", ruleId: "FIXED_COPY" }),
+      ]),
     );
   });
   it("requires explicit permission when only account-confirmed outreach evidence is available", () => {
@@ -163,7 +170,10 @@ describe("sequence authority and fixed copy", () => {
         expect.objectContaining({ ruleId: "FORBIDDEN_CLAIM_OR_VOICE" }),
       ]),
     );
-    const instructions = sequenceModelRequest("WRITING", authority).instructions;
+    const instructions = sequenceModelRequest(
+      "WRITING",
+      authority,
+    ).instructions;
     expect(instructions).toContain("the app adds those");
     expect(instructions).toContain("Avoid comments about sequence order");
   });
@@ -182,14 +192,30 @@ describe("sequence authority and fixed copy", () => {
   });
   it("assigns distinct features and uses grounded questions when research runs out", () => {
     const { authority } = sequenceFixture();
-    const substantive = authority.plan.filter(p => p.touchId !== "liConnect");
-    expect(new Set(substantive.map(p => p.capabilityId)).size).toBe(8);
-    expect(substantive.every(p => p.capabilityId)).toBe(true);
-    expect(substantive.slice(1).every(p => p.purpose.includes("No unused reviewed research fact"))).toBe(true);\n    expect(substantive.slice(1).every(p => p.evidenceIds.length === 0)).toBe(true);\n    expect(substantive.flatMap(p => p.evidenceIds)).toEqual([substantive[0].evidenceIds[0]]);
+    const substantive = authority.plan.filter((p) => p.touchId !== "liConnect");
+    expect(new Set(substantive.map((p) => p.capabilityId)).size).toBe(8);
+    expect(substantive.every((p) => p.capabilityId)).toBe(true);
+    expect(
+      substantive
+        .slice(1)
+        .every((p) => p.purpose.includes("No unused reviewed research fact")),
+    ).toBe(true);
+    expect(substantive.slice(1).every((p) => p.evidenceIds.length === 0)).toBe(
+      true,
+    );
+    expect(substantive.flatMap((p) => p.evidenceIds)).toEqual([
+      substantive[0].evidenceIds[0],
+    ]);
     const writer = sequenceModelRequest("WRITING", authority).instructions;
-    expect(writer).toContain("Scientific".toLowerCase());
-    expect(writer).toContain("Questions about research or interest are allowed");
-    expect(sequenceModelRequest("VALIDATING", authority, []).instructions).toContain("repeated research hooks");
+    expect(writer).toContain(
+      "Every email and LinkedIn message uses a distinct supported research topic",
+    );
+    expect(writer).toContain(
+      "A question or request for correction is still a factual claim and needs the same support",
+    );
+    expect(
+      sequenceModelRequest("VALIDATING", authority, []).instructions,
+    ).toContain("repeated research hooks");
   });
   it("does not reserve Email 1 evidence for the connection request", () => {
     const { row } = sequenceFixture();
@@ -199,66 +225,115 @@ describe("sequence authority and fixed copy", () => {
     ]) {
       const item = {
         ...row.research_packet.qualificationEvidence.categories.workflows[1],
-        evidenceId, assessmentType: "PROGRAM" as const, claim, basisFacts: [claim],
+        evidenceId,
+        assessmentType: "PROGRAM" as const,
+        claim,
+        basisFacts: [claim],
       };
       row.research_packet.qualificationEvidence.categories.workflows.push(item);
-      row.assessment.evidenceReviews.push({ evidenceId, verdict: "ENTAILED", quote: claim, reason: "Directly stated." });
+      row.assessment.evidenceReviews.push({
+        evidenceId,
+        verdict: "ENTAILED",
+        quote: claim,
+        reason: "Directly stated.",
+      });
     }
     const version = hashPacket(row.research_packet);
     row.evidence_version = version;
     row.assessment.evidenceVersion = version;
     row.review.evidenceVersion = version;
     const authority = planSequence(row, settings);
-    expect(authority.plan.slice(0, 3).map(p => p.evidenceIds[0])).toEqual([
-      "public-research", "second-topic", "connection-topic",
+    expect(authority.plan.slice(0, 3).map((p) => p.evidenceIds[0])).toEqual([
+      "public-research",
+      "second-topic",
+      "connection-topic",
     ]);
-    expect(new Set(authority.plan.slice(0, 3).flatMap(p => p.evidenceIds)).size).toBe(3);
+    expect(
+      new Set(authority.plan.slice(0, 3).flatMap((p) => p.evidenceIds)).size,
+    ).toBe(3);
   });
   it("tells the writer to ask whether a reported workflow belongs to the recipient", () => {
     const { authority } = sequenceFixture();
-    const instructions = sequenceModelRequest("WRITING", authority).instructions;
+    const instructions = sequenceModelRequest(
+      "WRITING",
+      authority,
+    ).instructions;
     expect(instructions).toContain("do not call it “your workflow”");
-    expect(instructions).toContain("First ask whether that workflow is part of the recipient’s work");
+    expect(instructions).toContain(
+      "First ask whether that workflow is part of the recipient’s work",
+    );
     expect(instructions).toContain("must be explicitly conditional");
   });
   it("uses reviewed research beyond the instrument fit references", () => {
     const { row } = sequenceFixture();
-    const item = { ...row.research_packet.qualificationEvidence.categories.workflows[1],
-      evidenceId: "additional-research", assessmentType: "PROGRAM" as const,
+    const item = {
+      ...row.research_packet.qualificationEvidence.categories.workflows[1],
+      evidenceId: "additional-research",
+      assessmentType: "PROGRAM" as const,
       claim: "The company is developing an oncology research program.",
       basisFacts: ["The company is developing an oncology research program."],
     };
     row.research_packet.qualificationEvidence.categories.workflows.push(item);
-    row.assessment.evidenceReviews.push({ evidenceId: item.evidenceId, verdict: "ENTAILED", quote: item.claim, reason: "Directly stated." });
+    row.assessment.evidenceReviews.push({
+      evidenceId: item.evidenceId,
+      verdict: "ENTAILED",
+      quote: item.claim,
+      reason: "Directly stated.",
+    });
     const version = hashPacket(row.research_packet);
     row.evidence_version = version;
     row.assessment.evidenceVersion = version;
     row.review.evidenceVersion = version;
     const authority = planSequence(row, settings);
     expect(authority.plan[0].evidenceIds).toEqual(["public-research"]);
-    expect(authority.plan[1].evidenceIds).toEqual(["additional-research"]);\n    expect(authority.plan[3].evidenceIds).toEqual([]);
-    expect(authority.evidence.some(e => e.evidenceId === item.evidenceId)).toBe(true);
+    expect(authority.plan[1].evidenceIds).toEqual(["additional-research"]);
+    expect(authority.plan[3].evidenceIds).toEqual([]);
+    expect(
+      authority.evidence.some((e) => e.evidenceId === item.evidenceId),
+    ).toBe(true);
   });
   it("allows genuine questions but rejects scheduling and unwanted sales language", () => {
     const { authority, touches } = sequenceFixture();
-    for (const middle of ["Have you heard of spatial biology?", "Is this of interest to you?", "From your published description, my understanding is that you integrate RNA with tissue morphology. Am I understanding that correctly?"]) {
+    for (const middle of [
+      "Have you heard of spatial biology?",
+      "Is this of interest to you?",
+      "From your published description, my understanding is that you integrate RNA with tissue morphology. Am I understanding that correctly?",
+    ]) {
       touches[0].middle = middle;
       expect(checkDraft({ touches }, authority).violations).toEqual([]);
     }
-    for (const middle of ["Does it make sense to connect?", "Let’s partner.", "Do you have 15 min to chat?", "When can we meet?"]) {
+    for (const middle of [
+      "Does it make sense to connect?",
+      "Let’s partner.",
+      "Do you have 15 min to chat?",
+      "When can we meet?",
+    ]) {
       touches[0].middle = middle;
-      expect(checkDraft({ touches }, authority).violations.length).toBeGreaterThan(0);
+      expect(
+        checkDraft({ touches }, authority).violations.length,
+      ).toBeGreaterThan(0);
     }
   });
   it("keeps evidence checks active for claims phrased as requests for correction", () => {
     const { authority, touches } = sequenceFixture();
-    touches[0].middle = "My understanding is that you studied 999 patients. Did I get that right?";
-    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "UNSUPPORTED_NUMBER")).toBe(true);
+    touches[0].middle =
+      "My understanding is that you studied 999 patients. Did I get that right?";
+    expect(
+      checkDraft({ touches }, authority).violations.some(
+        (v) => v.ruleId === "UNSUPPORTED_NUMBER",
+      ),
+    ).toBe(true);
     for (const stage of ["WRITING", "VALIDATING"] as const) {
       const request = sequenceModelRequest(stage, authority, touches);
-      expect(request.instructions).toContain("briefly explain your understanding");
-      expect(request.instructions).toContain("Asking for confirmation does not make a speculative mechanism, regulatory milestone, or outcome acceptable");
-      expect(request.instructions).toContain("Judge questions by the same evidence standard as statements");
+      expect(request.instructions).toContain(
+        "briefly paraphrase the prospect’s published description",
+      );
+      expect(request.instructions).toContain(
+        "A question or request for correction is still a factual claim and needs the same support",
+      );
+      expect(request.instructions).toContain(
+        "If no unused company fact fits, ask an open discovery question",
+      );
     }
   });
   it("blocks unapproved, mock, and stale assessments", () => {
@@ -273,17 +348,19 @@ describe("sequence authority and fixed copy", () => {
       expect(() => planSequence(row, settings)).toThrow();
     }
   });
-  it("renders role introductions and meeting requests without names or signatures", () => {
+  it("renders fixed role introductions and meeting requests without signatures", () => {
     const { touches, authority } = sequenceFixture();
     expect(checkDraft({ touches }, authority).violations).toEqual([]);
     const rendered = renderSequence(touches, authority);
     expect(rendered[0].body).toMatch(
-      /^Hello \{\{first_name\}\},\n\nI’m your Spatial Regional Account Manager/,
+      /^Hello \{\{first_name\}\},\n\nI'm Tim Glidewell, your Spatial Regional Account Manager/,
     );
     expect(
       rendered
         .filter((t) => t.touchId.startsWith("email"))
-        .every((t) => !/Tim Glidewell|Best regards|\]\([^)]*\) \|/.test(t.body)),
+        .every(
+          (t) => !/Best regards|\]\([^)]*\) \|/.test(t.body),
+        ),
     ).toBe(true);
     expect(
       rendered
@@ -292,6 +369,36 @@ describe("sequence authority and fixed copy", () => {
     ).toBe(true);
     authority.settings = { ...settings, mode: "INDIVIDUAL", firstName: "Alex" };
     expect(renderSequence(touches, authority)[0].body).toMatch(/^Hello Alex,/);
+  });
+  it("excludes competitor research hooks and rejects names introduced by the writer", () => {
+    const { row, touches, authority } = sequenceFixture();
+    const competitorEvidence = {
+      ...row.research_packet.qualificationEvidence.categories.workflows[1],
+      evidenceId: "xenium-workflow",
+      claim: "The company reported Xenium analysis of patient biopsies.",
+      basisFacts: ["The company reported Xenium analysis of patient biopsies."],
+    };
+    row.research_packet.qualificationEvidence.categories.workflows.push(competitorEvidence);
+    row.assessment.evidenceReviews.push({ evidenceId: "xenium-workflow", verdict: "ENTAILED", quote: competitorEvidence.claim, reason: "Directly stated." });
+    const version = hashPacket(row.research_packet);
+    row.evidence_version = version;
+    row.assessment.evidenceVersion = version;
+    row.review.evidenceVersion = version;
+    expect(planSequence(row, settings).evidence.some(e => e.evidenceId === "xenium-workflow")).toBe(false);
+    for (const name of ["Xenium", "CODEX", "Akoya", "10x", "Lunaphore", "COMET", "Miltenyi", "Maxima", "MIBI", "CellDive", "Vizgen", "MERSCOPE"]) {
+      touches[1].middle = `I read about ${name}.`;
+      expect(checkDraft({ touches }, authority).violations).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId: "COMPETITOR_MENTION" })]));
+    }
+  });
+  it("adds Bruker context to NanoString references and scopes CellScape re-interrogation", () => {
+    const { touches, authority } = sequenceFixture();
+    touches[3].middle = "I read that CytomX reported NanoString analysis of paired tumor biopsies.";
+    expect(renderSequence(touches, authority)[3].body).toContain("NanoString analysis of paired tumor biopsies. Did you know that NanoString is now part of Bruker Spatial Biology?");
+    authority.plan[4].capabilityId = "cell-expand-panels";
+    touches[4].middle = "CellScape can add markers to previously analyzed samples.";
+    expect(checkDraft({ touches }, authority).violations).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId: "PLATFORM_SCOPE" })]));
+    touches[4].middle = "CellScape can re-interrogate a slide previously analyzed on CellScape with compatible markers.";
+    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "PLATFORM_SCOPE")).toBe(false);
   });
   it.each([7, 31])(
     "keeps LinkedIn connection copy short with %i travel days",
@@ -319,24 +426,44 @@ describe("sequence authority and fixed copy", () => {
   );
   it("starts the second trip at email4 and keeps all later touches on that trip", () => {
     const { touches, authority } = sequenceFixture();
-    authority.settings = validateSettings({ ...settings, meetingMode: "IN_PERSON",
+    authority.settings = validateSettings({
+      ...settings,
+      meetingMode: "IN_PERSON",
       trip1: [{ date: "2099-04-06", start: "09:00", end: "12:00" }],
       trip2: [{ date: "2099-05-06", start: "10:00", end: "14:00" }],
     });
     const rendered = renderSequence(touches, authority);
-    expect(rendered.map(t => t.touchId)).toEqual(["email1", "email2", "liConnect", "liMsg1", "email3", "email4", "email5", "liMsg2", "email6"]);
+    expect(rendered.map((t) => t.touchId)).toEqual([
+      "email1",
+      "email2",
+      "liConnect",
+      "liMsg1",
+      "email3",
+      "email4",
+      "email5",
+      "liMsg2",
+      "email6",
+    ]);
     for (const t of rendered) {
       if (t.touchId === "liConnect") {
         expect(t.body).not.toContain("2099");
       } else {
-        const second = ["email4", "email5", "liMsg2", "email6"].includes(t.touchId);
+        const second = ["email4", "email5", "liMsg2", "email6"].includes(
+          t.touchId,
+        );
         expect(t.body).toContain(second ? "May 6, 2099" : "April 6, 2099");
         expect(t.body).not.toContain(second ? "April 6, 2099" : "May 6, 2099");
       }
-      expect(t.body.includes("Sorry I missed you last time.")).toBe(t.touchId === "email4");
+      expect(t.body.includes("Sorry I missed you last time.")).toBe(
+        t.touchId === "email4",
+      );
     }
     authority.settings = settings;
-    expect(renderSequence(touches, authority).every(t => !t.body.includes("Sorry I missed"))).toBe(true);
+    expect(
+      renderSequence(touches, authority).every(
+        (t) => !t.body.includes("Sorry I missed"),
+      ),
+    ).toBe(true);
   });
   it.each([
     { timezone: "No/SuchZone" },
@@ -412,7 +539,8 @@ describe("sequence authority and fixed copy", () => {
     const { authority } = sequenceFixture();
     const claim = "Shared evidence " + "x".repeat(8000);
     authority.evidence = [{ ...authority.evidence[0], claim }];
-    for (const p of authority.plan) p.evidenceIds = [authority.evidence[0].evidenceId];
+    for (const p of authority.plan)
+      p.evidenceIds = [authority.evidence[0].evidenceId];
     const request = sequenceModelRequest("WRITING", authority);
     expect(request.input.split(claim)).toHaveLength(2);
     expect(JSON.parse(request.input).evidence).toEqual(authority.evidence);
@@ -423,12 +551,18 @@ describe("sequence authority and fixed copy", () => {
     expect(write.text.format.strict).toBe(true);
     expect(write.input).not.toContain("account-workflow");
     const review = sequenceModelRequest("VALIDATING", authority, touches);
-    expect(review.input).not.toContain("Would you be available for a short virtual meeting?");
+    expect(review.input).not.toContain(
+      "Would you be available for a short virtual meeting?",
+    );
     const { assignments } = JSON.parse(write.input);
     for (const assignment of assignments) {
-      const plan = authority.plan.find((p) => p.touchId === assignment.touchId)!;
+      const plan = authority.plan.find(
+        (p) => p.touchId === assignment.touchId,
+      )!;
       expect(assignment.evidenceIds).toEqual(plan.evidenceIds);
-      expect(assignment.capability).toEqual(authority.capabilities.find((c) => c.id === plan.capabilityId) ?? null);
+      expect(assignment.capability).toEqual(
+        authority.capabilities.find((c) => c.id === plan.capabilityId) ?? null,
+      );
     }
     expect(JSON.parse(review.input).assignments).toEqual(assignments);
   });

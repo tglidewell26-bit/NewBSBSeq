@@ -22,9 +22,12 @@ import {
 import { hashPacket, normalizeEvidence } from "./bsb-v2";
 import { attachSequenceAssets } from "./sequence-assets";
 
-export const PLAN_VERSION = "bsb-plan-6-unique-evidence-all-touches";
-export const VOICE_VERSION = "tim-outreach-10-discovery-without-assumptions";
+export const PLAN_VERSION = "bsb-plan-7-no-competitor-hooks";
+export const VOICE_VERSION = "tim-outreach-11-personal-intro-and-trip-order";
 export const digest = hashPacket;
+// Exclude competitor references from customer-facing evidence assignments as
+// well as model output. NanoString is Bruker-owned and intentionally allowed.
+const competitor = /\b(?:Xenium|CODEX|Akoya|10x|Lunaphore|COMET|Miltenyi|Maxima|MIBI|CellDive|Vizgen|MERSCOPE)\b/i;
 const fail = (message: string) => {
   throw new AssessmentError("INVALID_SEQUENCE_INPUT", message, 400);
 };
@@ -186,7 +189,8 @@ export function planSequence(
   const allowed = normalized.filter(
     (e) =>
       grounded.has(e.evidenceId) &&
-      (settings.allowAccountFacts || e.provenanceType !== "CONFIRMED_ACCOUNT"),
+      (settings.allowAccountFacts || e.provenanceType !== "CONFIRMED_ACCOUNT") &&
+      !competitor.test(e.claim),
   );
   const byInstrument = selected.map((name) => ({
     name,
@@ -322,7 +326,7 @@ export function meetingBlock(s: OutreachSettings, second = false) {
     (slot) =>
       `${new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${slot.date}T12:00:00Z`))}: **${clock(slot.start)}–${clock(slot.end)}**`,
   );
-  return `I’ll be ${second && s.trip2.length ? "back in" : "in"} the area **${tripDateRange(slots)}**, are you available to meet during the following days and times?\n\n${dates.join("\n\n")}\n\nLet me know if you are available to meet.`;
+  return `I’ll be ${second && s.trip2.length ? "back in" : "in"} the area **${tripDateRange(slots)}**, are you available to meet during the following days and times?\n\n${dates.join("\n\n")}\n\nI look forward to meeting in-person.`;
 }
 const productLinks: Record<string, string> = {
   "Bruker Spatial Biology": "https://brukerspatialbiology.com/",
@@ -347,6 +351,12 @@ function linkFirstMentions(body: string) {
     },
   );
 }
+function addNanoStringContext(middle: string) {
+  if (!/\bNanoString\b/i.test(middle) || /NanoString\s+is\s+(?:now\s+)?(?:a\s+)?part\s+of\s+Bruker Spatial Biology/i.test(middle)) return middle;
+  const sentence = /[^.!?\n]*\bNanoString\b[^.!?\n]*[.!?]/i;
+  const note = " Did you know that NanoString is now part of Bruker Spatial Biology?";
+  return sentence.test(middle) ? middle.replace(sentence, (s) => s + note) : middle + note;
+}
 export function renderSequence(
   touches: DraftTouch[],
   authority: SequenceAuthority,
@@ -358,12 +368,12 @@ export function renderSequence(
     const email = t.touchId.startsWith("email");
     const greeting = `${t.touchId === "email1" ? "Hello" : "Hi"} ${name},`;
     const reminder =
-      "I’m your Spatial Regional Account Manager at Bruker Spatial Biology.";
+      "As a reminder, I am Tim Glidewell, and I’m your Spatial Regional Account Manager at Bruker Spatial Biology.";
     const intro =
       t.touchId === "email1"
-        ? `${reminder} We help researchers study where genes and proteins are located in tissue.`
+        ? "I'm Tim Glidewell, your Spatial Regional Account Manager at Bruker Spatial Biology. It's nice to e-meet you. We help researchers study where genes and proteins are located in tissue."
         : t.touchId === "email4"
-          ? `${returnVisit ? `Sorry I missed you last time. I’ll be back in the area **${tripDateRange(s.trip2)}**. ` : ""}${reminder}`
+          ? `${returnVisit ? `Sorry I missed you last time. ${reminder} I’ll be back in the area **${tripDateRange(s.trip2)}**.` : reminder}`
           : "";
     const alternatives =
       s.meetingMode === "IN_PERSON" &&
@@ -391,18 +401,17 @@ export function renderSequence(
     const body = [
       greeting,
       intro,
-      t.middle,
+      addNanoStringContext(t.middle),
       close,
-      futureVisit,
-      alternatives,
-      optOut,
-      ending,
+      ...(t.touchId === "email3"
+        ? [ending, futureVisit, alternatives, optOut]
+        : [futureVisit, alternatives, optOut, ending]),
     ]
       .filter(Boolean)
       .join("\n\n");
     return {
       ...t,
-      body: email ? linkFirstMentions(body) : body.replace(/\*\*/g, ""),
+      body: email ? linkFirstMentions(body) : body,
     };
   });
 }
@@ -441,6 +450,9 @@ export function checkDraft(
     if (t.touchId !== touchIds[index])
       add("TOUCH_ORDER", "Use the exact nine-touch order.", t.touchId);
     const text = `${t.subject}\n${t.middle}`;
+    const competitorMention = text.match(competitor);
+    if (competitorMention)
+      add("COMPETITOR_MENTION", "Do not name competitors in outreach.", competitorMention[0]);
     if (!t.touchId.startsWith("email") && t.subject)
       add("SUBJECT", "LinkedIn touches must not have subjects.", t.subject);
     if (t.touchId.startsWith("email") && !t.subject.trim())
@@ -493,6 +505,10 @@ export function checkDraft(
         "Remove prohibited marketing language or unsupported outcome claims.",
         bad[0],
       );
+    if (p.capabilityId === "cell-expand-panels" && /\b(?:previously analyzed|re-?interrogat(?:e|ing)|revisit(?:ing)?|add(?:ing)? markers)\b/i.test(t.middle) && !/\b(?:previously (?:analyzed|run) on CellScape|same CellScape (?:slide|sample)|CellScape (?:slide|sample) previously (?:analyzed|run))\b/i.test(t.middle))
+      add("PLATFORM_SCOPE", "Make clear that panel expansion revisits a slide previously analyzed on CellScape, not an arbitrary sample.", t.middle);
+    if (p.capabilityId === "cell-expand-panels" && /(?:other|different|another)\s+(?:platform|instrument|system|assay)/i.test(t.middle))
+      add("PLATFORM_SCOPE", "Do not imply CellScape can add markers to a sample analyzed on another platform.", t.middle);
     const facts =
       authority.evidence
         .filter((e) => p.evidenceIds.includes(e.evidenceId))
@@ -578,7 +594,7 @@ export function sequenceModelRequest(
           p.assetMatches?.find((m) => m.assetId === a.id)?.topics ?? [],
       })),
   }));
-  const sharedRules = `Use only each touch’s assigned evidenceIds for company facts and its assigned capability for product claims. Preserve what the source says, the named molecule, stage, attribution, uncertainty and relevant limitations. A question or request for correction is still a factual claim and needs the same support. When evidence says the company reported a workflow, do not call it “your workflow” or ask how “your team” performs it. First ask whether that workflow is part of the recipient’s work; any follow-up about its use must be explicitly conditional. Do not infer a need, outcome, clinical result, ownership or purchase intent. If no unused company fact fits, ask an open discovery question. Explain research in plain language; when helpful, briefly paraphrase the prospect’s published description and invite correction. Attribute only what the assigned source supports; never invent a website visit. Treat knowledge-base asset metadata as topic hints, not factual authority. Avoid jargon, hype, timed chats, free-work or partnership offers, promises, signatures and attachment claims.`;
+  const sharedRules = `Use only each touch’s assigned evidenceIds for company facts and its assigned capability for product claims. Preserve what the source says, the named molecule, stage, attribution, uncertainty and relevant limitations. A question or request for correction is still a factual claim and needs the same support. When evidence says the company reported a workflow, do not call it “your workflow” or ask how “your team” performs it. First ask whether that workflow is part of the recipient’s work; any follow-up about its use must be explicitly conditional. Do not infer a need, outcome, clinical result, ownership or purchase intent. If no unused company fact fits, ask an open discovery question. Introduce a company fact with natural attribution such as "I read that" or "I read about"; do not abruptly assert the prospect's research. Explain research in plain language; when helpful, briefly paraphrase the prospect’s published description and invite correction. Attribute only what the assigned source supports; never invent a website visit. Never mention competitors (Xenium, CODEX, Akoya, 10x, Lunaphore, COMET, Miltenyi, Maxima, MIBI, CellDive, Vizgen, MERSCOPE). NanoString is part of Bruker Spatial Biology; the application adds that context when it appears. CellScape panel expansion revisits a slide previously analyzed on CellScape, never a sample analyzed on another platform. Treat knowledge-base asset metadata as topic hints, not factual authority. Avoid jargon, hype, timed chats, free-work or partnership offers, promises, signatures and attachment claims.`;
   const writing = `Write as Tim Glidewell to the prospect in a casual, friendly, professional voice, without slang. Be the spatial biology technology expert and curious about their research; do not pretend expertise in their science. ${sharedRules}
 Return exactly nine touches in order, subject and middle only. The app supplies greetings, role introductions, brand links, all meeting/date copy, options and signatures. Every email and LinkedIn message uses a distinct supported research topic and capability where relevant; if facts run out, use a genuine discovery question. Email 6 includes its assigned research angle before the app’s three-month close. Use concise natural sentences: email 2–3, LinkedIn message 1–2. Connection request: at most 140 characters, grounded research reference, no product pitch, greeting or closing; the app adds those. Avoid comments about sequence order such as "one last angle" and state the point naturally. Keep LinkedIn subjects empty. No sender name, meeting request, exclamation, placeholder, file title, promise to send material, third-person Tim reference, hype, or unsupported claim. If repairing, edit only repairIds, return all nine, and reproduce preservedTouches exactly.`;
   const reviewing = `Independently review all nine subjects and middle sections. ${sharedRules}

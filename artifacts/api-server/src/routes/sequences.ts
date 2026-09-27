@@ -114,7 +114,7 @@ router.get(
       job.sequence
         .map(
           (t) =>
-            `${t.touchId}\n${t.subject ? `Subject: ${t.subject}\n\n` : ""}${sequenceBodyText(t.body)}${attachmentNotes(job.authority, t.touchId)}`,
+            `${t.touchId}\n${t.subject ? `Subject: ${t.subject}\n\n` : ""}${sequenceBodyText(t.body)}${attachmentNotes(job.authority, t.touchId, t)}`,
         )
         .join("\n\n---\n\n"),
     );

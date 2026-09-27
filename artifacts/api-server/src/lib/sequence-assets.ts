@@ -1,4 +1,4 @@
-import type { SequenceAsset, SequenceAuthority } from "@workspace/api-zod";
+import type { RenderedTouch, SequenceAsset, SequenceAuthority } from "@workspace/api-zod";
 import { AssessmentError } from "./live-assessment";
 import { hashPacket } from "./bsb-v2";
 import { capabilities } from "./sequence-catalog";
@@ -37,6 +37,11 @@ const concepts = [
   { name: "RNA and protein integration", pattern: /\b(multiomics?|rna and protein|rna protein|protein and rna)\b/, caps: ["cosmx-multiomics", "geomx-multiomics"] },
   { name: "regional tissue profiling", pattern: /\b(regions? of interest|roi|regional (?:profiling|analysis)|tissue compartments?|morphology|pathology|pathologist\w*|histopatholog\w*|biobanks?|archived tissue|tissue cohorts?)\b/, caps: capabilities.filter(c => c.instrument === "GeoMx").map(c => c.id) },
 ] as const;
+// A specific product resource can be useful even when the company evidence is
+// exhausted. Do not promote general marketing material on this basis.
+const capabilityResources: Record<string, { name: string; pattern: RegExp }> = {
+  "cell-assay-kits": { name: "prevalidated CellScape assay kits", pattern: /\b(vistaplex|prevalidated (?:antibody )?(?:assay )?(?:kits?|panels?)|multiplexing assay kits?)\b/i },
+};
 const contexts = ["ffpe", "fresh frozen", "colorectal", "melanoma", "kidney", "brain", "lung", "breast", "epcam", "tumor microenvironment"];
 const negative = /\b(no|not|never|without|unknown|unconfirmed|unsupported|doesn t)\b/;
 function positiveConcept(text: string, pattern: RegExp): boolean {
@@ -56,43 +61,72 @@ function conflicts(company: string, asset: string): boolean {
 export function attachSequenceAssets(authority: SequenceAuthority, library: SequenceAsset[]): SequenceAuthority {
   const used = new Set<string>();
   const assets: SequenceAsset[] = [];
-  const plan = authority.plan.map(p => {
+  const selectedByTouch = new Map<string, Pick<SequenceAuthority["plan"][number], "assetIds" | "assetMatches">>();
+  // Reserve a kit-specific resource for the kit email before broader earlier
+  // matches can consume it. Output still follows the normal nine-touch order.
+  const ordered = [...authority.plan].sort((a, b) => Number(b.capabilityId === "cell-assay-kits") - Number(a.capabilityId === "cell-assay-kits"));
+  for (const p of ordered) {
     const empty = { ...p, assetIds: [] as string[], assetMatches: [] as NonNullable<typeof p.assetMatches> };
     // Keep suggestions optional and confined to the five substantive emails.
-    if (!["email1", "email2", "email3", "email4", "email5"].includes(p.touchId) || !p.capabilityId) return empty;
+    if (!["email1", "email2", "email3", "email4", "email5"].includes(p.touchId) || !p.capabilityId) { selectedByTouch.set(p.touchId, empty); continue; }
     const evidence = authority.evidence.filter(e => p.evidenceIds.includes(e.evidenceId));
     const candidates = library.filter(a => a.instrument === p.instrument && !used.has(a.id)).flatMap(asset => {
       const rawContent = [asset.description, ...asset.keywords].join("\n");
       const content = normalized(rawContent);
       const company = normalized(evidence.map(e => e.claim).join(" "));
       if (conflicts(company, content)) return [];
-      const matches = concepts.filter(c => (c.caps as readonly string[]).includes(p.capabilityId!) && positiveConcept(rawContent, c.pattern))
+      const matches: Array<{ topic: string; ids: string[] }> = concepts.filter(c => (c.caps as readonly string[]).includes(p.capabilityId!) && positiveConcept(rawContent, c.pattern))
         .map(c => ({ topic: c.name, ids: evidence.filter(e => positiveConcept(e.claim, c.pattern)).map(e => e.evidenceId) }))
         .filter(m => m.ids.length);
+      const capabilityResource = capabilityResources[p.capabilityId!];
+      if (capabilityResource?.pattern.test(rawContent))
+        matches.push({ topic: capabilityResource.name, ids: evidence.map(e => e.evidenceId) });
       if (!matches.length) return [];
       const bonus = contexts.filter(term => content.includes(term) && company.includes(term)).length;
       const image = asset.fileKind === "image" || (!asset.fileKind && /\.(png|jpe?g|webp)$/i.test(asset.fileName));
-      return [{ asset, kind: image ? "image" as const : "attachment" as const, matches, score: matches.length * 10 + bonus }];
+      return [{ asset, kind: image ? "image" as const : "attachment" as const, matches, score: matches.length * 10 + bonus + (matches.some(m => m.topic === capabilityResource?.name) ? 20 : 0) }];
     }).sort((a, b) => b.score - a.score || a.asset.id.localeCompare(b.asset.id));
     // A single relevant document and image may be suggested for an email. The
     // same library file is never repeated elsewhere in the sequence.
     const selected = (["attachment", "image"] as const).flatMap(kind => candidates.find(c => c.kind === kind) ?? []);
     selected.forEach(match => { used.add(match.asset.id); assets.push(match.asset); });
-    return { ...p, assetIds: selected.map(m => m.asset.id), assetMatches: selected.map(match => {
+    selectedByTouch.set(p.touchId, { assetIds: selected.map(m => m.asset.id), assetMatches: selected.map(match => {
       const topics = match.matches.map(m => m.topic);
       return { assetId: match.asset.id, kind: match.kind, evidenceIds: [...new Set(match.matches.flatMap(m => m.ids))], topics,
-        reason: `${match.asset.instrument} resource matching documented ${topics.join(" and ")} and this message's assigned capability. Metadata was reviewed when saved; this is a relevance match, not independent scientific verification.` };
-    }) };
-  });
+        reason: `${match.asset.instrument} resource matching ${match.matches.some(m => m.ids.length) ? "documented" : "the assigned"} ${topics.join(" and ")} and this message's assigned capability. Metadata was reviewed when saved; this is a relevance match, not independent scientific verification.` };
+    }) });
+  }
+  const plan = authority.plan.map(p => ({ ...p, ...selectedByTouch.get(p.touchId) }));
   return { ...authority, plan, assets };
 }
 
-export function attachmentNotes(authority: SequenceAuthority, touchId: string): string {
+// Scan the current library after the actual email copy exists. The planner's
+// earlier matches are hints for the writer; these saved suggestions use the
+// completed text, the assigned capability, and the full current library.
+export function suggestAssetsForWrittenSequence(authority: SequenceAuthority, sequence: RenderedTouch[], library: SequenceAsset[]): RenderedTouch[] {
+  const available = attachSequenceAssets(authority, library);
+  return sequence.map(t => {
+    const p = available.plan.find(p => p.touchId === t.touchId);
+    const middle = normalized(t.middle);
+    const suggestions = (p?.assetMatches ?? [])
+      .filter(match => {
+        if (p?.capabilityId === "cell-assay-kits") return /\b(?:kit|panel|prevalidated|vistaplex)\b/.test(middle);
+        return !!middle && !!p?.capabilityId;
+      })
+      .flatMap(match => {
+        const asset = available.assets?.find(a => a.id === match.assetId);
+        return asset ? [{ asset, match }] : [];
+      });
+    return { ...t, assetSuggestions: suggestions };
+  });
+}
+
+export function attachmentNotes(authority: SequenceAuthority, touchId: string, written?: RenderedTouch): string {
   const plan = authority.plan.find(p => p.touchId === touchId);
-  const assets = (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
+  const assets = written?.assetSuggestions?.map(s => s.asset) ?? (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
   if (!assets.length) return "";
   return "\n\n[Suggested resources — not email copy]\n" + assets.map(a => {
-    const match = plan?.assetMatches?.find(m => m.assetId === a.id);
+    const match = written?.assetSuggestions?.find(s => s.asset.id === a.id)?.match ?? plan?.assetMatches?.find(m => m.assetId === a.id);
     const kind = match?.kind === "image" || a.fileKind === "image" || (!a.fileKind && /\.(png|jpe?g|webp)$/i.test(a.fileName)) ? "Suggested image" : "Suggested attachment";
     return `${kind}: ${a.fileName.replace(/[\r\n]/g, " ")} (reviewed revision ${a.revision})\n${match?.reason ?? "Selected reference resource."}\nReview this resource before use; copying text does not include it in the email.`;
   }).join("\n\n");

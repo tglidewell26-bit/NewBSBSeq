@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { initializeSavedTrips } from "./saved-trips";
 import { initializeAssetAnalysisRuns } from "./asset-analysis";
 import { initializeKnowledgeAssets } from "./knowledge-assets";
-import { loadSequenceAssets } from "./sequence-assets";
+import { loadSequenceAssets, suggestAssetsForWrittenSequence } from "./sequence-assets";
 import { pool } from "@workspace/db";
 import {
   sequenceRequestSchema,
@@ -386,7 +386,7 @@ export async function runSequenceJob(
       );
       return;
     }
-    const sequence = renderSequence(touches, authority);
+    let sequence = renderSequence(touches, authority);
     const c = await pool.connect();
     try {
       await c.query("BEGIN");
@@ -401,6 +401,7 @@ export async function runSequenceJob(
           "Authority changed before save. No sequence was saved.",
           409,
         );
+      sequence = suggestAssetsForWrittenSequence(authority, sequence, await loadSequenceAssets(c));
       const updated = await c.query(
         `UPDATE bsb_v2_sequence_jobs SET state='APPROVED',sequence=$2::jsonb,content_hash=$3,validation_record=$4::jsonb,updated_at=now()
         WHERE id=$1 AND state='VALIDATING' RETURNING id`,

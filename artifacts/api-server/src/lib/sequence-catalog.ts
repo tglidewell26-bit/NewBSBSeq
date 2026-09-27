@@ -1,5 +1,5 @@
 import type { Capability } from "@workspace/api-zod";
-export const CATALOG_VERSION = "bsb-capabilities-2026-09-24-v2";
+export const CATALOG_VERSION = "bsb-capabilities-2026-09-24-v3";
 // Reviewed qualitative claims only. Numeric panels and legacy proof assets are not imported.
 export const capabilities: Capability[] = [
   {
@@ -90,8 +90,8 @@ export const capabilities: Capability[] = [
   {
     id: "cell-expand-panels",
     instrument: "CellScape",
-    claim: "CellScape can add markers to previously analyzed samples.",
-    limitation: "Sample condition and compatible antibody protocols matter.",
+    claim: "CellScape can revisit a slide previously analyzed on CellScape and add compatible markers in later staining and imaging cycles.",
+    limitation: "Only describe re-interrogating the same CellScape slide, not adding markers to a sample analyzed on another platform. Sample condition and compatible antibody protocols matter.",
     sourceUrl:
       "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/",
     sourceSection: "Expandable Assays",
