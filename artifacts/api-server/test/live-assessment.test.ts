@@ -75,6 +75,32 @@ describe("live assessment evidence boundaries", () => {
     model.evidenceReviews[0].quote = evidence[0].claim;
     expect(() => validateModelAssessment(model, evidence, "v")).toThrow(AssessmentError);
   });
+
+  it("allows a conditional GeoMx liver hypothesis from a program and a documented assay, without claiming tissue access", () => {
+    const { model, evidence } = assessmentFixture();
+    const [program, assay] = evidence;
+    Object.assign(program, { evidenceId: "liver-program", assessmentType: "PROGRAM", provenanceType: "PUBLIC_SOURCE",
+      claim: "The company develops an inhibitor for a liver infection.",
+      basisFacts: ["The company develops an inhibitor for a liver infection."], sourceUrl: "https://example.org/program" });
+    Object.assign(assay, { evidenceId: "liver-assay", assessmentType: "WORKFLOW",
+      claim: "The company measured viral antigen by immunofluorescence in infected cells.",
+      basisFacts: ["The company measured viral antigen by immunofluorescence in infected cells."] });
+    model.evidenceReviews = evidence.map(e => ({ evidenceId: e.evidenceId, verdict: "ENTAILED", quote: e.basisFacts[0], reason: "Supported." }));
+    model.instruments[1] = { ...model.instruments[1], fit: "INSUFFICIENT_EVIDENCE", evidenceIds: [], ruleIds: [],
+      currentUse: { value: "UNKNOWN", evidenceIds: [] }, accountStatus: { value: "UNKNOWN", evidenceIds: [] } };
+    model.instruments[2] = { ...model.instruments[2], fit: "POTENTIAL_FIT", evidenceIds: [program.evidenceId, assay.evidenceId],
+      ruleIds: ["GEOMX-REGIONAL-HYPOTHESIS"], recommendation: "If suitable liver tissue exists, explore regional host and viral response profiling." };
+    model.selectedInstruments = ["GeoMx"];
+    model.selectionReason = "The liver program and antigen assay give GeoMx a conditional regional question.";
+    const result = validateModelAssessment(model, evidence, "v");
+    expect(result.approvable).toBe(true);
+    expect(result.instruments[2]).toMatchObject({ fit: "POTENTIAL_FIT", currentUse: "UNKNOWN", readiness: "UNKNOWN" });
+    model.instruments[2].fit = "STRONG_FIT";
+    expect(() => validateModelAssessment(model, evidence, "v")).toThrow(AssessmentError);
+    model.instruments[2].fit = "POTENTIAL_FIT";
+    assay.assessmentType = "PROGRAM";
+    expect(() => validateModelAssessment(model, evidence, "v")).toThrow(AssessmentError);
+  });
 });
 
 describe("provider configuration", () => {
