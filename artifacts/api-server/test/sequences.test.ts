@@ -348,6 +348,17 @@ describe("sequence authority and fixed copy", () => {
       expect(() => planSequence(row, settings)).toThrow();
     }
   });
+  it("briefs Email 1 with a question and concrete instrument comparison", () => {
+    const { authority } = sequenceFixture();
+    const first = authority.plan[0];
+    expect(first.purpose).toContain("direct question");
+    expect(first.purpose).toContain("compare relevant samples or tissue regions");
+    const request = sequenceModelRequest("WRITING", authority);
+    expect(request.instructions).toContain("Email 1 should name the assigned instrument");
+    expect(request.instructions).toContain("do not imply the prospect already has them");
+    const review = sequenceModelRequest("VALIDATING", authority);
+    expect(review.instructions).toContain("no concrete measurement or relevant comparison");
+  });
   it("renders fixed role introductions and meeting requests without signatures", () => {
     const { touches, authority } = sequenceFixture();
     expect(checkDraft({ touches }, authority).violations).toEqual([]);
