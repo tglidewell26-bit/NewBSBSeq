@@ -12,6 +12,7 @@ import {
   sequenceModelRequest,
 } from "../src/lib/sequences";
 
+import { emailCapabilities } from "../src/lib/sequence-catalog";
 import { settings, sequenceFixture } from "./sequence-fixture";
 describe("sequence authority and fixed copy", () => {
   it.each([
@@ -197,7 +198,21 @@ describe("sequence authority and fixed copy", () => {
     expect(substantive.every(p => p.capabilityId)).toBe(true);
     expect(authority.plan.every(p => p.evidenceIds.includes("public-research"))).toBe(true);
     expect(authority.evidence).toHaveLength(1);
-    expect(substantive.some(p => /segmentation|informatics|pipelines|imaging-readout/.test(p.capabilityId!))).toBe(false);
+    const emails = authority.plan.filter(p => p.touchId.startsWith("email"));
+    expect(new Set(emails.map(p => p.capabilityId)).size).toBe(6);
+    expect(authority.plan.find(p => p.touchId === "liMsg1")?.capabilityId).toBe(emails[0].capabilityId);
+    expect(authority.plan.find(p => p.touchId === "liMsg2")?.capabilityId).toBe(emails[3].capabilityId);
+  });
+  it.each(["GeoMx", "CosMx", "CellScape"])("provides six distinct email features for %s", instrument => {
+    const options = emailCapabilities(instrument, "Drug development");
+    expect(options).toHaveLength(6);
+    expect(new Set(options.map(c => c.id)).size).toBe(6);
+    expect(options.every(c => c.instrument === instrument)).toBe(true);
+  });
+  it("substitutes specialist features only when the company context supports them", () => {
+    expect(emailCapabilities("GeoMx", "HBV and HDV liver programs").map(c => c.id)).not.toContain("geomx-tma");
+    expect(emailCapabilities("GeoMx", "Tissue microarrays of paired biopsies").map(c => c.id)).toContain("geomx-tma");
+    expect(emailCapabilities("GeoMx", "Tissue microarrays of paired biopsies")).toHaveLength(6);
   });
   it("does not reserve Email 1 evidence for the connection request", () => {
     const { row } = sequenceFixture();
