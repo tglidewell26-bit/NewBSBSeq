@@ -1,5 +1,5 @@
 import type { Capability } from "@workspace/api-zod";
-export const CATALOG_VERSION = "bsb-capabilities-2026-09-24-v3";
+export const CATALOG_VERSION = "bsb-capabilities-2026-09-27-v4";
 // Reviewed qualitative claims only. Numeric panels and legacy proof assets are not imported.
 export const capabilities: Capability[] = [
   {
@@ -56,13 +56,13 @@ export const capabilities: Capability[] = [
     id: "geomx-roi",
     instrument: "GeoMx",
     claim:
-      "Our GeoMx platform uses morphology markers to select tissue regions and profile distinct biological compartments.",
+      "Our GeoMx platform uses morphology-guided regions of interest to compare whole-transcriptome expression or high-plex protein expression across tissue regions and samples, including pre- and post-treatment samples when available.",
     limitation:
-      "Region and compartment profiling, not a guarantee of single-cell resolution. Requires compatible tissue and morphology markers.",
+      "Regional profiling, not a guarantee of single-cell resolution. Pre- and post-treatment comparisons require suitable samples and study design. Whole-transcriptome and protein assay options depend on assay and sample compatibility; do not imply both measurements always occur on the same slide.",
     sourceUrl:
-      "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-morphology-markers/",
-    sourceSection: "What are morphology markers?",
-    reviewedAt: "2026-09-20",
+      "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
+    sourceSection: "Profile the Whole Transcriptome and 1200+ Proteins from Intact Tissue / Region of Interest",
+    reviewedAt: "2026-09-27",
   },
   {
     id: "geomx-multiomics",
