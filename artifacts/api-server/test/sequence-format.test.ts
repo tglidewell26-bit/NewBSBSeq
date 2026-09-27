@@ -62,7 +62,7 @@ describe("sequence display, copy and export formatting", () => {
       expect(new Set(links.map(p => p.text)).size).toBe(4);
       expect(links.find(p => p.text === "CellScape")?.href).toContain("/products/cellscape-precise-spatial-proteomics/");
       expect(t.body).not.toMatch(/Best regards|Los_Angeles|Times:|\]\([^)]*\) \|/);
-      if (t.touchId !== "email3") expect(t.body.endsWith("I look forward to meeting in-person.")).toBe(true);
+      if (!["email3", "email6"].includes(t.touchId)) expect(t.body.endsWith("I look forward to meeting in-person.")).toBe(true);
     }
     for (const id of ["liMsg1", "liMsg2"]) {
       expect(body(id)).toContain("available to meet");
@@ -72,23 +72,24 @@ describe("sequence display, copy and export formatting", () => {
     expect(body("liConnect")).not.toContain("available to meet");
     const opening4 = body("email4").split("\n\n")[1];
     expect(opening4).toContain("Sorry I missed you last time.");
-    expect(opening4).toContain("October 26th - 29th");
+    expect((body("email4").match(/October 26th - 29th/g) ?? []).length).toBe(1);
     expect(opening4).toContain("Spatial Regional Account Manager");
     expect(opening4).toContain("[Bruker Spatial Biology]");
     expect(opening4).not.toMatch(/AM|PM/);
-    expect(opening4).toBe("Sorry I missed you last time. As a reminder, I am Tim Glidewell, and I’m your Spatial Regional Account Manager at [Bruker Spatial Biology](https://brukerspatialbiology.com/). I’ll be back in the area **October 26th - 29th**.");
+    expect(opening4).toBe("Sorry I missed you last time. As a reminder, I am Tim Glidewell, and I’m your Spatial Regional Account Manager at [Bruker Spatial Biology](https://brukerspatialbiology.com/).");
     expect(body("email1")).toContain("I'm Tim Glidewell, your Spatial Regional Account Manager at [Bruker Spatial Biology](https://brukerspatialbiology.com/). It's nice to e-meet you. We help researchers study where genes and proteins are located in tissue.");
     expect(body("email3")).toContain("I’ll also be back **October 26th - 29th**");
     expect(body("email3")).not.toContain("Monday, October 26");
     expect(body("email3").indexOf("I’ll also be back")).toBeGreaterThan(body("email3").indexOf("I look forward to meeting in-person."));
     for (const id of ["email3", "email4", "email5", "email6"]) expect(body(id)).toContain("virtual meeting");
-    for (const id of ["email3", "email5"]) {
+    expect(body("email3")).not.toContain("I won’t keep following up");
+    for (const id of ["email5"]) {
       expect(body(id)).toContain("I won’t keep following up");
-      expect(body(id)).toContain("later in the year");
-      expect(body(id)).toContain("colleague or group");
+      expect(body(id)).toContain("another colleague");
     }
     expect(body("email6")).toContain("Since I haven’t heard back, I’ll reach out again in three months.");
-    expect(body("email6")).toContain("There’s still time to meet");
+    expect(body("email6").indexOf("three months")).toBeGreaterThan(body("email6").indexOf("available to meet"));
+    expect(body("email6")).toContain("reach out sooner");
   });
   it("does not invent a past or future trip when no second trip is configured", () => {
     const { authority, touches } = sequenceFixture();
@@ -108,3 +109,4 @@ describe("sequence display, copy and export formatting", () => {
     expect(sequenceBodyHtml('[<script>](https://example.org/?a="b")')).not.toContain("<script>");
   });
 });
+
