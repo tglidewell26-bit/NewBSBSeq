@@ -56,7 +56,7 @@ export const capabilities: Capability[] = [
     id: "geomx-roi",
     instrument: "GeoMx",
     claim:
-      "Our GeoMx platform uses morphology-guided regions of interest to compare whole-transcriptome expression or high-plex protein expression across tissue regions and samples, including pre- and post-treatment samples when available.",
+      "Our GeoMx platform uses morphology-guided regions of interest to compare whole-transcriptome RNA expression or expression of more than 1,200 proteins across tissue regions and samples, including pre- and post-treatment samples when available.",
     limitation:
       "Regional profiling, not a guarantee of single-cell resolution. Pre- and post-treatment comparisons require suitable samples and study design. Whole-transcriptome and protein assay options depend on assay and sample compatibility; do not imply both measurements always occur on the same slide.",
     sourceUrl:
