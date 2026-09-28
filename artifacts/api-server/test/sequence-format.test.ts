@@ -58,8 +58,8 @@ describe("sequence display, copy and export formatting", () => {
     const body = (id: string) => rendered.find(t => t.touchId === id)!.body;
     for (const t of rendered.filter(t => t.touchId.startsWith("email"))) {
       const links = sequenceBodyParts(t.body).filter(p => p.href);
-      expect(links.map(p => p.text)).toHaveLength(4);
-      expect(new Set(links.map(p => p.text)).size).toBe(4);
+      expect(links.map(p => p.text)).toHaveLength(5);
+      expect(new Set(links.map(p => p.text)).size).toBe(5);
       expect(links.find(p => p.text === "CellScape")?.href).toContain("/products/cellscape-precise-spatial-proteomics/");
       expect(t.body).not.toMatch(/Best regards|Los_Angeles|Times:|\]\([^)]*\) \|/);
       if (!["email3", "email6"].includes(t.touchId)) expect(t.body.endsWith("I look forward to meeting in-person.")).toBe(true);
@@ -110,3 +110,14 @@ describe("sequence display, copy and export formatting", () => {
   });
 });
 
+
+import { resourceUrl } from "@workspace/api-zod/sequence-format";
+it("validates and encodes saved HTTPS resource links for rich and plain copying", () => {
+  expect(resourceUrl("javascript:alert(1)")).toBeNull();
+  expect(resourceUrl("https://user:password@example.org/webinar")).toBeNull();
+  expect(resourceUrl("https://example.org/ bad")).toBeNull();
+  expect(resourceUrl("https://example.org/series(1)?x=1&y=2")).toBe("https://example.org/series%281%29?x=1&y=2");
+  const body = "Watch [Liver webinar](https://example.org/webinar?x=1&y=2).";
+  expect(sequenceBodyHtml(body)).toContain('href="https://example.org/webinar?x=1&amp;y=2"');
+  expect(sequenceBodyText(body)).toContain("Liver webinar (https://example.org/webinar?x=1&y=2)");
+});
