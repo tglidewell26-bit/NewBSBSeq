@@ -1,3 +1,4 @@
+import { resourceUrl } from "@workspace/api-zod/sequence-format";
 import { Router } from "express";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import { db, knowledgeAssetsTable } from "@workspace/db";
@@ -8,6 +9,7 @@ import { AssessmentError, liveConfiguration } from "../lib/live-assessment";
 const router = Router();
 const { fileData: _fileData, ...metadataColumns } = getTableColumns(knowledgeAssetsTable);
 const metadataInput = (body: Record<string, unknown>) => ({
+  sourceUrl: body.sourceUrl ? resourceUrl(body.sourceUrl) ?? String(body.sourceUrl) : null,
   displayName: String(body.displayName ?? ""), instrument: String(body.instrument ?? ""),
   researchArea: body.researchArea === null ? null : String(body.researchArea ?? ""),
   assetType: String(body.assetType ?? ""), description: String(body.description ?? ""), keywords: body.keywords,
@@ -15,7 +17,7 @@ const metadataInput = (body: Record<string, unknown>) => ({
 });
 const record = (row: any) => ({
   id: row.id, revision: row.revision, fileName: row.fileName, displayName: row.displayName, fileType: row.fileType,
-  fileSize: row.fileSize, fileKind: row.fileKind, instrument: row.instrument, researchArea: row.researchArea,
+  sourceUrl: row.sourceUrl, fileSize: row.fileSize, fileKind: row.fileKind, instrument: row.instrument, researchArea: row.researchArea,
   assetType: row.assetType, description: row.description, keywords: row.keywords, storagePath: row.storagePath,
   classificationReasoning: row.classificationReasoning, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
 });
@@ -34,13 +36,14 @@ router.post("/bsb-v2/assets", async (req, res) => {
   const input = { ...metadataInput(body), fileName: String(body.fileName ?? ""), fileDataBase64: String(body.fileDataBase64 ?? ""), fileKind: String(body.fileKind ?? "") };
   const errors = validateAsset(input);
   let file;
-  try { file = fileInfo(input.fileName, input.fileDataBase64); } catch (error) { errors.push(error instanceof Error ? error.message : "File could not be read."); }
+  if (input.fileKind === "link") file = { fileKind: "link", fileType: "text/uri-list", data: Buffer.alloc(0) };
+  else try { file = fileInfo(input.fileName, input.fileDataBase64); } catch (error) { errors.push(error instanceof Error ? error.message : "File could not be read."); }
   if (file && file.fileKind !== input.fileKind) errors.push("File kind must match the uploaded file.");
   if (errors.length) { res.status(400).json({ error: "Asset metadata is invalid", issues: errors }); return; }
   const [saved] = await db.insert(knowledgeAssetsTable).values({
-    id: assetId(), fileName: input.fileName.trim(), displayName: input.displayName.trim(), fileType: file!.fileType, fileSize: file!.data.length,
+    sourceUrl: input.sourceUrl, id: assetId(), fileName: input.fileName.trim(), displayName: input.displayName.trim(), fileType: file!.fileType, fileSize: file!.data.length,
     fileKind: input.fileKind, instrument: input.instrument, researchArea: input.assetType === "Panels and Brochures" ? null : input.researchArea,
-    assetType: input.assetType, description: input.description.trim(), keywords: input.keywords as string[], storagePath: storagePaths[input.fileKind as "document" | "image"], classificationReasoning: input.classificationReasoning.trim(), fileData: file!.data.toString("base64"),
+    assetType: input.assetType, description: input.description.trim(), keywords: input.keywords as string[], storagePath: storagePaths[input.fileKind as "document" | "image" | "link"], classificationReasoning: input.classificationReasoning.trim(), fileData: file!.data.toString("base64"),
   }).returning(metadataColumns);
   res.status(201).json(record(saved));
 });
@@ -57,6 +60,7 @@ router.post("/bsb-v2/assets/analyze", async (req, res) => {
     if (req.body?.assetId) {
       const [asset] = await db.select().from(knowledgeAssetsTable).where(eq(knowledgeAssetsTable.id, String(req.body.assetId))).limit(1);
       if (!asset) { res.status(404).json({ error: "Asset not found" }); return; }
+      if (asset.fileKind === "link") { res.status(400).json({ error: "Enter a reviewed summary and keywords for links; automatic file analysis requires a file." }); return; }
       fileName = asset.fileName; data = asset.fileData;
     }
     res.json(await analyzeAsset(fileName, data));
@@ -87,6 +91,7 @@ router.get("/bsb-v2/assets/:assetId/download", async (req, res) => {
   if (req.query.revision !== undefined && String(req.query.revision) !== String(asset.revision)) {
     res.status(409).json({ error: "This resource changed after the sequence was generated. Generate a new sequence to refresh its attachment selection." }); return;
   }
+  if (asset.fileKind === "link") { res.status(400).json({ error: "Open the saved resource URL instead of downloading a file." }); return; }
   res.setHeader("Content-Type", asset.fileType);
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(asset.fileName)}"`);
   res.send(Buffer.from(asset.fileData, "base64"));
