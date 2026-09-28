@@ -5,6 +5,7 @@ export const knowledgeAssetsTable = pgTable("bsb_v2_knowledge_assets", {
   revision: integer("revision").notNull().default(1),
   fileName: text("file_name").notNull(),
   displayName: text("display_name").notNull(),
+  sourceUrl: text("source_url"),
   fileType: text("file_type").notNull(),
   fileSize: integer("file_size").notNull(),
   fileKind: text("file_kind").notNull(),
