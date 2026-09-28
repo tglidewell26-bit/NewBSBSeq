@@ -1,3 +1,4 @@
+import { resourceUrl } from "@workspace/api-zod/sequence-format";
 import type { RenderedTouch, SequenceAsset, SequenceAuthority } from "@workspace/api-zod";
 import { AssessmentError } from "./live-assessment";
 import { hashPacket } from "./bsb-v2";
@@ -5,7 +6,7 @@ import { capabilities } from "./sequence-catalog";
 
 type Client = { query: (sql: string, values?: any[]) => Promise<any> };
 const columns = `id, revision, file_name AS "fileName", display_name AS "displayName", instrument,
-  file_kind AS "fileKind", file_type AS "fileType", research_area AS "researchArea", asset_type AS "assetType", description, keywords`;
+  file_kind AS "fileKind", file_type AS "fileType", source_url AS "sourceUrl", research_area AS "researchArea", asset_type AS "assetType", description, keywords`;
 
 export async function loadSequenceAssets(client: Client, pinned?: SequenceAsset[]): Promise<SequenceAsset[]> {
   if (pinned) {
@@ -20,6 +21,7 @@ export async function loadSequenceAssets(client: Client, pinned?: SequenceAsset[
       const comparable = { ...b };
       if (a.fileKind === undefined) delete comparable.fileKind;
       if (a.fileType === undefined) delete comparable.fileType;
+      if (a.sourceUrl === undefined) delete comparable.sourceUrl;
       return hashPacket(a) === hashPacket(comparable);
     })))
       throw new AssessmentError("STALE_ASSET", "A selected knowledge-base file was edited or deleted. Generate a new sequence using the current library.", 409);
@@ -39,6 +41,12 @@ const concepts = [
 ] as const;
 // A specific product resource can be useful even when the company evidence is
 // exhausted. Do not promote general marketing material on this basis.
+const featureConcepts = [
+  { name: "whole transcriptome", pattern: /\b(whole transcriptom\w*|transcriptome atlas)\b/ },
+  { name: "protein profiling", pattern: /\b(protein (?:profiling|targets|expression)|proteom\w*)\b/ },
+  { name: "post-translational modifications", pattern: /\b(post translational|ptm|phosphorylat\w*)\b/ },
+  { name: "spatial analysis", pattern: /\b(pathway analysis|differential expression|normalization|informatics|segmentation|cell neighborhoods?)\b/ },
+];
 const capabilityResources: Record<string, { name: string; pattern: RegExp }> = {
   "cell-assay-kits": { name: "prevalidated CellScape assay kits", pattern: /\b(vistaplex|prevalidated (?:antibody )?(?:assay )?(?:kits?|panels?)|multiplexing assay kits?)\b/i },
 };
@@ -59,7 +67,7 @@ function conflicts(company: string, asset: string): boolean {
 }
 
 export function attachSequenceAssets(authority: SequenceAuthority, library: SequenceAsset[], written?: RenderedTouch[]): SequenceAuthority {
-  const used = new Set<string>();
+  const used = new Map<string, number>();
   const assets: SequenceAsset[] = [];
   const selectedByTouch = new Map<string, Pick<SequenceAuthority["plan"][number], "assetIds" | "assetMatches">>();
   // Reserve a kit-specific resource for the kit email before broader earlier
@@ -69,10 +77,11 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
     const empty = { ...p, assetIds: [] as string[], assetMatches: [] as NonNullable<typeof p.assetMatches> };
     // Keep source suggestions optional and available to all six emails.
     if (!p.touchId.startsWith("email") || !p.capabilityId) { selectedByTouch.set(p.touchId, empty); continue; }
+    const richResources = p.instrument === "GeoMx" || p.instrument === "CosMx";
     const evidence = authority.evidence.filter(e => p.evidenceIds.includes(e.evidenceId));
     const feature = capabilities.find(c => c.id === p.capabilityId)?.claim ?? "";
     const discussion = written ? written.find(t => t.touchId === p.touchId)?.middle ?? "" : feature;
-    const candidates = library.filter(a => a.instrument === p.instrument && !used.has(a.id)).flatMap(asset => {
+    const candidates = library.filter(a => a.instrument === p.instrument && (richResources || !used.has(a.id)) && (a.fileKind !== "link" || !!resourceUrl(a.sourceUrl))).flatMap(asset => {
       const rawContent = [asset.description, ...asset.keywords].join("\n");
       const content = normalized(rawContent);
       const company = normalized(evidence.map(e => e.claim).join(" "));
@@ -91,7 +100,7 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
       }
       // Product guides and images can illustrate the proposed feature even
       // when the prospect has not already documented that workflow.
-      const productResource = /brochure|panel/i.test(asset.assetType) || asset.fileKind === "image" || /\.(png|jpe?g|webp)$/i.test(asset.fileName);
+      const productResource = /brochure|panel/i.test(asset.assetType) || (richResources && asset.fileKind === "link" && (!asset.researchArea || asset.researchArea === "Unknown")) || asset.fileKind === "image" || /\.(png|jpe?g|webp)$/i.test(asset.fileName);
       if (productResource) {
         for (const concept of concepts) {
           if ((concept.caps as readonly string[]).includes(p.capabilityId!) &&
@@ -108,18 +117,25 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
             matches.push({ topic: term, ids: [] });
         }
       }
+      if (richResources && productResource) {
+        for (const c of featureConcepts) {
+          if (positiveConcept(feature, c.pattern) && positiveConcept(discussion, c.pattern) && positiveConcept(asset.description, c.pattern))
+            matches.push({ topic: c.name, ids: [] });
+        }
+      }
       const capabilityResource = capabilityResources[p.capabilityId!];
       if (capabilityResource?.pattern.test(rawContent))
         matches.push({ topic: capabilityResource.name, ids: evidence.map(e => e.evidenceId) });
       if (!matches.length) return [];
       const bonus = contexts.filter(term => content.includes(term) && company.includes(term)).length;
       const image = asset.fileKind === "image" || (!asset.fileKind && /\.(png|jpe?g|webp)$/i.test(asset.fileName));
-      return [{ asset, kind: image ? "image" as const : "attachment" as const, matches, score: matches.length * 10 + bonus + (matches.some(m => m.topic === capabilityResource?.name) ? 20 : 0) }];
+      return [{ asset, kind: asset.fileKind === "link" ? "link" as const : image ? "image" as const : "attachment" as const, matches, score: matches.length * 10 + bonus + (matches.some(m => m.topic === capabilityResource?.name) ? 20 : 0) - (used.get(asset.id) ?? 0) * 100 }];
     }).sort((a, b) => b.score - a.score || a.asset.id.localeCompare(b.asset.id));
     // A single relevant document and image may be suggested for an email. The
-    // same library file is never repeated elsewhere in the sequence.
-    const selected = (["attachment", "image"] as const).flatMap(kind => candidates.find(c => c.kind === kind) ?? []);
-    selected.forEach(match => { used.add(match.asset.id); assets.push(match.asset); });
+    // GeoMx/CosMx prefer new resources but can reuse a relevant resource.
+    // CellScape retains its existing no-repeat policy.
+    const selected = (["attachment", "image", "link"] as const).flatMap(kind => candidates.find(c => c.kind === kind) ?? []);
+    selected.forEach(match => { used.set(match.asset.id, (used.get(match.asset.id) ?? 0) + 1); if (!assets.some(a => a.id === match.asset.id)) assets.push(match.asset); });
     selectedByTouch.set(p.touchId, { assetIds: selected.map(m => m.asset.id), assetMatches: selected.map(match => {
       const topics = match.matches.map(m => m.topic);
       return { assetId: match.asset.id, kind: match.kind, evidenceIds: [...new Set(match.matches.flatMap(m => m.ids))], topics,
@@ -138,13 +154,16 @@ export function suggestAssetsForWrittenSequence(authority: SequenceAuthority, se
   return sequence.map(t => {
     const p = available.plan.find(p => p.touchId === t.touchId);
     const middle = normalized(t.middle);
-    const suggestions = (p?.assetMatches ?? [])
+    // Keep link cards aligned with the URLs already rendered from pinned authority.
+    const pinned = authority.plan.find(p => p.touchId === t.touchId);
+    const matches = [...(p?.assetMatches ?? []).filter(m => m.kind !== "link"), ...(pinned?.assetMatches ?? []).filter(m => m.kind === "link")];
+    const suggestions = matches
       .filter(match => {
         if (p?.capabilityId === "cell-assay-kits") return /\b(?:kit|panel|prevalidated|vistaplex)\b/.test(middle);
         return !!middle && !!p?.capabilityId;
       })
       .flatMap(match => {
-        const asset = available.assets?.find(a => a.id === match.assetId);
+        const asset = available.assets?.find(a => a.id === match.assetId) ?? authority.assets?.find(a => a.id === match.assetId);
         return asset ? [{ asset, match }] : [];
       });
     return { ...t, assetSuggestions: suggestions };
@@ -157,8 +176,31 @@ export function attachmentNotes(authority: SequenceAuthority, touchId: string, w
   if (!assets.length) return "";
   return "\n\n[Suggested resources — not email copy]\n" + assets.map(a => {
     const match = written?.assetSuggestions?.find(s => s.asset.id === a.id)?.match ?? plan?.assetMatches?.find(m => m.assetId === a.id);
-    const kind = match?.kind === "image" || a.fileKind === "image" || (!a.fileKind && /\.(png|jpe?g|webp)$/i.test(a.fileName)) ? "Suggested image" : "Suggested attachment";
-    return `${kind}: ${a.fileName.replace(/[\r\n]/g, " ")} (reviewed revision ${a.revision})\n${match?.reason ?? "Selected reference resource."}\nReview this resource before use; copying text does not include it in the email.`;
+    const kind = a.fileKind === "link" ? "Suggested link" : match?.kind === "image" || a.fileKind === "image" || (!a.fileKind && /\.(png|jpe?g|webp)$/i.test(a.fileName)) ? "Suggested image" : "Suggested attachment";
+    return `${kind}: ${(a.sourceUrl ?? a.fileName).replace(/[\r\n]/g, " ")} (reviewed revision ${a.revision})\n${match?.reason ?? "Selected reference resource."}\nReview this resource before use; copying text does not include it in the email.`;
   }).join("\n\n");
 }
 
+
+// Links are selected from saved metadata or the reviewed capability catalog,
+// never generated URLs. The renderer inserts this paragraph before logistics.
+export function emailResourceLink(authority: SequenceAuthority, touchId: string): string {
+  const plan = authority.plan.find(p => p.touchId === touchId);
+  if (!touchId.startsWith("email") || !plan) return "";
+  const link = authority.assets?.find(a => plan.assetIds.includes(a.id) && a.fileKind === "link" && resourceUrl(a.sourceUrl));
+  const richResources = plan.instrument === "GeoMx" || plan.instrument === "CosMx";
+  const capability = authority.capabilities.find(c => c.id === plan.capabilityId);
+  const url = resourceUrl(link?.sourceUrl) ?? (richResources ? resourceUrl(capability?.sourceUrl) : null);
+  if (!url) return "";
+  const title = (link?.displayName ?? `${plan.instrument} ${plan.capabilityId?.replace(/^[^-]+-/, "").replace(/-/g, " ")} resource`).replace(/[\[\]\r\n<>]/g, " ").trim();
+  const label = `[${title}](${url})`;
+  const phrases: Record<string, string> = {
+    email1: `Here is a ${label} with more detail.`,
+    email2: `You may find this ${label} useful.`,
+    email3: `This ${label} is another resource to explore.`,
+    email4: `For reference: ${label}.`,
+    email5: `More information is available here: ${label}.`,
+    email6: `I also wanted to share this ${label}.`,
+  };
+  return phrases[touchId] ?? "";
+}
