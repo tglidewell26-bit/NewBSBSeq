@@ -58,7 +58,7 @@ function conflicts(company: string, asset: string): boolean {
   });
 }
 
-export function attachSequenceAssets(authority: SequenceAuthority, library: SequenceAsset[]): SequenceAuthority {
+export function attachSequenceAssets(authority: SequenceAuthority, library: SequenceAsset[], written?: RenderedTouch[]): SequenceAuthority {
   const used = new Set<string>();
   const assets: SequenceAsset[] = [];
   const selectedByTouch = new Map<string, Pick<SequenceAuthority["plan"][number], "assetIds" | "assetMatches">>();
@@ -70,6 +70,8 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
     // Keep source suggestions optional and available to all six emails.
     if (!p.touchId.startsWith("email") || !p.capabilityId) { selectedByTouch.set(p.touchId, empty); continue; }
     const evidence = authority.evidence.filter(e => p.evidenceIds.includes(e.evidenceId));
+    const feature = capabilities.find(c => c.id === p.capabilityId)?.claim ?? "";
+    const discussion = written ? written.find(t => t.touchId === p.touchId)?.middle ?? "" : feature;
     const candidates = library.filter(a => a.instrument === p.instrument && !used.has(a.id)).flatMap(asset => {
       const rawContent = [asset.description, ...asset.keywords].join("\n");
       const content = normalized(rawContent);
@@ -86,6 +88,25 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
         if (!positiveConcept(asset.description, pattern)) continue;
         const ids = evidence.filter(e => positiveConcept(e.claim, pattern)).map(e => e.evidenceId);
         if (ids.length && !matches.some(m => m.topic === term)) matches.push({ topic: term, ids });
+      }
+      // Product guides and images can illustrate the proposed feature even
+      // when the prospect has not already documented that workflow.
+      const productResource = /brochure|panel/i.test(asset.assetType) || asset.fileKind === "image" || /\.(png|jpe?g|webp)$/i.test(asset.fileName);
+      if (productResource) {
+        for (const concept of concepts) {
+          if ((concept.caps as readonly string[]).includes(p.capabilityId!) &&
+              positiveConcept(feature, concept.pattern) && positiveConcept(discussion, concept.pattern) &&
+              positiveConcept(asset.description, concept.pattern) && !matches.some(m => m.topic === concept.name))
+            matches.push({ topic: concept.name, ids: [] });
+        }
+        for (const keyword of asset.keywords) {
+          const term = normalized(keyword).trim();
+          if (term.length < 4 || broad.test(term)) continue;
+          const pattern = new RegExp(`\\b${term}\\b`);
+          if (positiveConcept(feature, pattern) && positiveConcept(discussion, pattern) &&
+              positiveConcept(asset.description, pattern) && !matches.some(m => m.topic === term))
+            matches.push({ topic: term, ids: [] });
+        }
       }
       const capabilityResource = capabilityResources[p.capabilityId!];
       if (capabilityResource?.pattern.test(rawContent))
@@ -113,7 +134,7 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
 // earlier matches are hints for the writer; these saved suggestions use the
 // completed text, the assigned capability, and the full current library.
 export function suggestAssetsForWrittenSequence(authority: SequenceAuthority, sequence: RenderedTouch[], library: SequenceAsset[]): RenderedTouch[] {
-  const available = attachSequenceAssets(authority, library);
+  const available = attachSequenceAssets(authority, library, sequence);
   return sequence.map(t => {
     const p = available.plan.find(p => p.touchId === t.touchId);
     const middle = normalized(t.middle);
