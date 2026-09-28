@@ -588,7 +588,7 @@ function TouchAssets({ authority, touchId, suggestions }: { authority: SequenceA
   const plan = authority.plan.find(p => p.touchId === touchId);
   const assets = suggestions?.map(s => s.asset) ?? (authority.assets ?? []).filter(a => plan?.assetIds.includes(a.id));
   const current = useQuery({ queryKey: ["knowledge-assets"], queryFn: () => api<Array<{ id: string; revision: number }>>("/assets"), enabled: assets.length > 0 });
-  if (!authority.assets || !["email1", "email2", "email3", "email4", "email5"].includes(touchId) || !assets.length) return null;
+  if (!touchId.startsWith("email") || !assets.length) return null;
   return <div className="mt-3 space-y-3 rounded-md border bg-muted/20 p-3">
     <p className="text-sm font-medium">Optional library suggestions</p>
     {assets.map(asset => {
