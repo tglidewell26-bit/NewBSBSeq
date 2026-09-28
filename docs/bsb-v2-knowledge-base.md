@@ -1,63 +1,45 @@
-# Knowledge base: upload, define, review, save
+# Knowledge base and outreach resources
 
-The asset library provides AI metadata suggestions, human review, and relevant resource selection for **new outreach sequences**. Saved metadata is user reviewed, not independent verification of instrument specifications or company evidence. Instrument assessment still uses the approved company-evidence rubric, and product claims still use the curated capability catalog. The original sequencer and its assets are unchanged.
+The library stores reviewed reference files and HTTPS resource links. Resource summaries inform outreach; they do not establish new company facts or replace the approved product capability catalog.
 
-## User workflow
+## Add and manage resources
 
-1. Open Workspace → Knowledge Base and choose PDFs or PNG/JPEG/WebP images. Select up to 10 files, 25 MB each, 50 MB total.
-2. Selecting files starts AI analysis automatically, one file at a time. Watch each file’s status, or pause after the current file. File-specific failures let the queue continue; configuration or provider failures pause it without retrying. Resume untouched files with **Analyze remaining files**, or enter metadata manually. Keep the page open; this is a browser queue, not a background import service.
-3. Review the display name, instrument, asset type, research area, description, five distinct keywords, and classification reasoning. Descriptions require at least three sentences. Unknown is allowed; Panels and Brochures use no research area.
-4. Save the reviewed file. Unsaved files remain in the current page only; finish saving before navigating away.
-5. Browse Instrument → Asset type → Research area, search/filter, download, copy filenames, edit, or delete. Editing preserves file bytes, filename, MIME type, and size. Stale edits return a conflict rather than overwrite newer metadata.
+- Upload PDFs or PNG/JPEG/WebP images: up to 10 files, 25 MB each and 50 MB combined. Existing automatic file analysis and manual metadata entry remain available.
+- Choose **Add link** for a webinar, publication, tech note or other online resource. Enter its HTTPS URL, title, instrument, category, research area, a summary of at least three sentences and five distinct keywords. Links use the entered metadata; the app does not fetch the site or analyze a video.
+- Use **Unknown** research area for general product/feature resources; use the actual research area for disease-specific examples. A title or instrument name alone does not establish relevance.
+- Save each item. Unsaved drafts remain in the current browser page only.
+- Existing search, filters, edit and delete work for files and links. Links have **Open resource**; files have **Download**. Editing a URL increments the resource revision just like editing other metadata.
 
-## AI operation
+## Platform rules
 
-- Reuses the existing `BSB_LIVE_ASSESSMENT`, `OPENAI_API_KEY`, `BSB_ASSESSMENT_MODEL=gpt-5.6-terra` configuration. No new secret is needed.
-- Sends the selected file to OpenAI using Responses PDF/image inputs, `store:false`, no tools, and a strict metadata schema. File text and filenames are treated as untrusted content.
-- No app dollar spending cap, daily balance, or reservation is applied. The old budget-based token preflight has been removed; each file goes directly to one generation request. Upload-size limits, provider context limits, and the 8,000-output-token limit still apply. Recorded cost estimates remain visible after analysis.
-- One generation per file bytes + filename + model + prompt version. Duplicate requests return a cached draft or an in-progress/error response, never an extra generation. This is not an automatic re-suggest/regenerate feature.
-- Files previously blocked by the old token preflight can now be analyzed. Uncertain outcomes are not automatically repeated. Manual metadata remains available; no fabricated fallback metadata.
-- Analysis history is independent of saved files. Deleting a saved file does not erase its recorded analysis usage.
-- AI suggestions never create or edit a saved asset by themselves. Only Save does that.
+GeoMx and CosMx:
 
-## Persistence and deployment
+- Every email receives a body resource hyperlink. A relevant saved link is preferred; otherwise the renderer uses the assigned capability's reviewed source URL. The default six-feature sets include at least two assay/workflow-specific destinations beyond the instrument overview link.
+- Target images in at least four emails. Relevant images may be suggested in all six. Selection prefers unused resources, then permits relevant reuse to avoid exhausting the library early.
+- Each email can suggest one document, one image and one saved link. The resource coverage summary shows image shortfalls so the library can be expanded. Unrelated resources and fabricated files are never used to fill a quota.
 
-Startup adds `revision integer NOT NULL DEFAULT 1` to existing knowledge assets and creates `bsb_v2_asset_analysis_runs`, adding its nullable `usage` column if needed. No file migration or data replacement is required. The existing base64 file storage remains compatible. Library list/edit responses select metadata only.
+CellScape:
 
-API additions: `GET /api/bsb-v2/assets/analysis/config`, `POST /api/bsb-v2/assets/analyze` (new file or saved `assetId`), and `PATCH /api/bsb-v2/assets/:assetId` (metadata plus current `revision`).
+- Retains optional suggestions, existing relevance matching and no repeated library file within a sequence.
+- No mandatory images or catalog-link fallback. A relevant saved link can be used optionally.
 
-## Verification
+Resources must match the assigned instrument and research or proposed feature. Disease-specific publications still need a company-evidence match. General product links, guides and images can illustrate a proposed capability without asserting that the company already uses that workflow. Feature-based final suggestions consider the actual written middle. Explicit negation and conflicting species/sample metadata still exclude matches.
 
-Verified in a disposable database using synthetic files and a fake provider: metadata-only AI drafts, cached results, duplicate concurrent requests, legacy preflight recovery, interrupted calls, invalid output, removal of spending caps, invalid file input, metadata editing, stale revision conflicts, duplicate keywords, and byte-for-byte downloads after editing. No live paid calls were made.
+## Copy, export and connection wording
 
-The user confirmed the published upload/AI-review/save flow works. Retrieval validation adds deterministic matching, wrong-instrument and broad-label exclusion, sample/species conflicts, negation, duplicate suppression, immutable resource snapshots, stale-resource blocking, unrelated-upload stability, and exported attachment checklists. The full suite passes (174 tests), along with shared/API/frontend type checks and both production builds. Retrieval tests use a fake provider; no paid calls were made. Browser acceptance of the automatic upload queue and no-cap display remains a deployment check because the browser cannot reach the local preview.
+- Resource titles become hyperlinks in the email body before the meeting request. Rich clipboard HTML preserves clickable anchors; plain text includes the URL. The model never invents a URL.
+- Images and files remain suggestions. Download and add them in the email client; copying an email does not attach files. Exports separate the suggested-file checklist from email copy.
+- LinkedIn connection wording is fixed and transparent: “I’m with Bruker Spatial Biology. I’d like to connect and discuss how spatial biology could help your research.” The app adds the greeting, with no research hook implying collaboration.
+- Previously saved sequences are not rewritten. Generate a new sequence after deployment.
 
-## Sequence retrieval
+## Persistence
 
-- Retrieval requires the exact approved instrument, a workflow concept in the evidence assigned to that message, and a compatible assigned capability. A research-area label, display name, or filename alone never qualifies a file.
-- Matching currently covers tissue protein imaging, antibody assays, single-cell spatial RNA, RNA/protein integration, and regional tissue profiling. Explicit negation and conflicting FFPE/fresh-frozen or human/mouse context decline the match. This deliberately favors precision; missing matches do not block generation.
-- At most one attachment per eligible email and three distinct files per sequence. Only Emails 1, 2, 3, and 5 receive candidates; LinkedIn, the second-trip opener, and the neutral close stay clear. Ties are deterministic. There is no additional AI call.
-- The job stores a snapshot of selected metadata and its revision. Selected-file edits/deletions invalidate running jobs and revision attempts. Other library changes do not change a running job's selection. Existing saved sequences are not backfilled; generate a new sequence to use retrieval.
-- Writer and reviewer receive only controlled matched-topic labels and resource IDs, not filenames, descriptions, or file bytes. Uploaded descriptions cannot introduce instructions, new company facts, or product specifications into the prompts.
-- Each message displays its suggested attachment, matching company evidence IDs, reason, and download link. Download links enforce the selected revision. Changed/deleted files display an availability warning.
-- Copy body/sequence copies message text only. The text export includes a clearly separated **Attachment checklist — not email copy** with frozen filenames and revisions. The sender downloads, reviews, and attaches files in the email tool; the app does not send emails or claim attachments were sent.
-- Historical text exports retain their original resource checklist. The current availability check and versioned download protect against silently substituting a changed resource.
+Startup adds the nullable `source_url` column to `bsb_v2_knowledge_assets`. File rows keep their existing bytes and metadata. Link rows use `file_kind=link`, `file_type=text/uri-list`, empty file data, and the validated HTTPS URL in `source_url`.
 
-After publishing: open an approved packet, generate a **new** sequence, inspect Suggested attachment and the Evidence and message plan, download the selected file, and verify the text export's separate attachment checklist. An empty match is valid when the saved library lacks an instrument/workflow match.
+The existing create and revision-checked edit endpoints accept `sourceUrl`. URL resources reject file analysis and file downloads; the UI opens the URL directly. Selected resource metadata and URLs are pinned with the sequence, and changes invalidate in-progress or revised jobs. Older snapshots without `sourceUrl` remain compatible with file rows.
 
-## No app spending cap
+No new model calls, automatic webpage fetching, spending caps or retry loops are introduced. File analysis still uses the existing model configuration, paid-call notice and cache.
 
-The budget implementation and its remaining-balance UI have been deleted. Old
-`BSB_AI_DAILY_BUDGET_USD` and `BSB_AI_MAX_JOB_USD` settings are ignored. No
-replacement $100 cap has been added. Provider billing and provider-imposed limits
-still apply. The shared workspace remains accessible without login.
+## Validation for this change
 
-Existing assets, analyzed metadata, and usage history are preserved. Old reservation
-amounts have no effect on new requests. The database retains legacy columns for
-compatibility, with zero written for new runs. No daily reset is needed.
-
-Regression tests cover ten successful analyses with both former caps set to zero
-and a $100 uncertain historical reservation, plus assessment and sequence generation
-with obsolete budget settings. Duplicate-call protection, explicit retries,
-file limits, and human metadata review remain. Tests use a fake provider and
-disposable database; no live API credits were used.
+Focused tests cover platform-specific reuse, six email resources, image coverage with matching metadata, CellScape behavior, fixed connection wording, HTTPS URL validation, rich/plain hyperlink copying, source URL revision checks and legacy snapshots. A full database/UI deployment check and live model generation remain post-sync checks.
