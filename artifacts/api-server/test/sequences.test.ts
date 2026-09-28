@@ -214,11 +214,14 @@ describe("sequence authority and fixed copy", () => {
     expect(emailCapabilities("GeoMx", "Tissue microarrays of paired biopsies").map(c => c.id)).toContain("geomx-tma");
     expect(emailCapabilities("GeoMx", "Tissue microarrays of paired biopsies")).toHaveLength(6);
   });
-  it("does not reserve Email 1 evidence for the connection request", () => {
+  it("reserves fresh research for all six emails while LinkedIn reuses context", () => {
     const { row } = sequenceFixture();
     for (const [evidenceId, claim] of [
       ["second-topic", "The company reported a second research topic."],
       ["connection-topic", "The company reported a third research topic."],
+      ["fourth-topic", "A fourth distinct program."],
+      ["fifth-topic", "A fifth distinct program."],
+      ["sixth-topic", "A sixth distinct program."],
     ]) {
       const item = {
         ...row.research_packet.qualificationEvidence.categories.workflows[1],
@@ -240,14 +243,11 @@ describe("sequence authority and fixed copy", () => {
     row.assessment.evidenceVersion = version;
     row.review.evidenceVersion = version;
     const authority = planSequence(row, settings);
-    expect(authority.plan.slice(0, 3).map((p) => p.evidenceIds[0])).toEqual([
-      "public-research",
-      "second-topic",
-      "connection-topic",
+    const emails = authority.plan.filter(p => p.touchId.startsWith("email"));
+    expect(emails.map(p => p.evidenceIds[0])).toEqual([
+      "public-research", "second-topic", "connection-topic", "fourth-topic", "fifth-topic", "sixth-topic",
     ]);
-    expect(
-      new Set(authority.plan.slice(0, 3).flatMap((p) => p.evidenceIds)).size,
-    ).toBe(3);
+    expect(authority.plan.filter(p => p.touchId.startsWith("li")).every(p => p.evidenceIds[0] === "public-research")).toBe(true);
   });
   it("keeps proposed applications conditional without forcing workflow screening", () => {
     const { authority } = sequenceFixture();
@@ -329,7 +329,7 @@ describe("sequence authority and fixed copy", () => {
         "A question or request for correction is still a factual claim and needs the same support",
       );
       expect(request.instructions).toContain(
-        "Reuse an assigned research fact from a new angle",
+        "Prioritize different supported research facts across emails",
       );
     }
   });

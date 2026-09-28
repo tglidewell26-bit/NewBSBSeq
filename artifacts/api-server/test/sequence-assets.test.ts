@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { capabilities } from "../src/lib/sequence-catalog";
 import type { SequenceAsset } from "@workspace/api-zod";
 import { sequenceFixture, settings } from "./sequence-fixture";
 import {
@@ -218,6 +219,26 @@ describe("sequence resource retrieval", () => {
     expect(checkDraft({ touches }, matched).violations.some(v => v.ruleId === "UNSUPPORTED_NUMBER")).toBe(false);
     touches[1].middle = touches[0].middle;
     expect(checkDraft({ touches }, matched).violations).toEqual(expect.arrayContaining([expect.objectContaining({ touchId: "email2", ruleId: "UNSUPPORTED_NUMBER" })]));
+  });
+
+  it("suggests GeoMx feature documents and images without requiring the company to already use spatial profiling", () => {
+    const { authority, touches } = sequenceFixture();
+    const a = {
+      ...authority,
+      evidence: authority.evidence.map(e => ({ ...e, claim: "The company develops a capsid assembly modulator for HBV." })),
+      capabilities: capabilities.filter(c => c.instrument === "GeoMx"),
+      plan: authority.plan.map(p => ({ ...p, instrument: "GeoMx" as const, capabilityId: p.touchId === "email6" ? "geomx-roi" : null })),
+    };
+    const brochure = resource({ id: "geo-guide", instrument: "GeoMx", assetType: "Panels and Brochures", description: "GeoMx uses morphology-guided regions of interest for tissue profiling.", keywords: ["regions of interest"] });
+    const image = { ...brochure, id: "geo-image", fileName: "roi.png", fileKind: "image" as const };
+    const unrelatedPaper = { ...brochure, id: "unrelated-paper", assetType: "Publications", description: "This melanoma study uses regions of interest.", keywords: ["melanoma"] };
+    const matched = attachSequenceAssets(a, [brochure, image, unrelatedPaper]);
+    expect(matched.plan.find(p => p.touchId === "email6")?.assetIds).toEqual(["geo-guide", "geo-image"]);
+    const written = renderSequence(touches, a);
+    written.find(t => t.touchId === "email6")!.middle = "GeoMx can compare morphology-guided regions of interest.";
+    expect(suggestAssetsForWrittenSequence(a, written, [brochure, image, unrelatedPaper]).find(t => t.touchId === "email6")?.assetSuggestions?.map(s => s.asset.id)).toEqual(["geo-guide", "geo-image"]);
+    written.find(t => t.touchId === "email6")!.middle = "How is the HBV program progressing?";
+    expect(suggestAssetsForWrittenSequence(a, written, [brochure, image]).find(t => t.touchId === "email6")?.assetSuggestions).toEqual([]);
   });
 
   it("passes source summaries as data without making them company or product authority", () => {
