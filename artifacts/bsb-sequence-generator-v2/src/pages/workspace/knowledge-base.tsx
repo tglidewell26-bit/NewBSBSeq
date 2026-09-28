@@ -1,6 +1,6 @@
 import { ChangeEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, FileText, Image, LibraryBig, Loader2, Pencil, Search, Sparkles, Trash2, Upload } from "lucide-react";
+import { Copy, Download, Link, FileText, Image, LibraryBig, Loader2, Pencil, Search, Sparkles, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,10 @@ import { runAnalysisQueue } from "./asset-analysis-queue";
 
 const instruments = ["GeoMx", "CosMx", "CellScape", "Unknown"];
 const areas = ["Neuroscience", "Cancer", "Infectious disease", "Genetic disorders", "Aging", "Kidney disease", "Cardiology", "Unknown"];
-const types = ["Publications", "Tech notes", "Images", "Panels and Brochures"];
-type Metadata = { displayName: string; instrument: string; researchArea: string | null; assetType: string; description: string; keywords: string[]; classificationReasoning: string };
-type Asset = Metadata & { id: string; revision: number; fileName: string; fileSize: number; fileKind: "document" | "image" };
-type Draft = Omit<Metadata, "keywords"> & { key: string; keywords: string; asset?: Asset; file?: File; data?: string; analysis?: "queued" | "analyzing" | "ready" | "failed"; analysisError?: string; estimatedCostUsd?: number };
+const types = ["Publications", "Tech notes", "Images", "Panels and Brochures", "Webinars", "Other resources"];
+type Metadata = { sourceUrl?: string | null; displayName: string; instrument: string; researchArea: string | null; assetType: string; description: string; keywords: string[]; classificationReasoning: string };
+type Asset = Metadata & { id: string; revision: number; fileName: string; fileSize: number; fileKind: "document" | "image" | "link" };
+type Draft = Omit<Metadata, "keywords"> & { key: string; isLink?: boolean; keywords: string; asset?: Asset; file?: File; data?: string; analysis?: "queued" | "analyzing" | "ready" | "failed"; analysisError?: string; estimatedCostUsd?: number };
 type Analysis = { metadata: Metadata; usage: { estimatedCostUsd: number } };
 const bytes = (size: number) => size < 1024 * 1024 ? `${Math.round(size / 1024)} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`;
 const assetKey = ["knowledge-assets"] as const;
@@ -62,16 +62,17 @@ export default function KnowledgeBase() {
   const finishDraft = (key: string) => setDrafts(items => items.filter(item => item.key !== key));
   const save = useMutation({
     mutationFn: (value: Draft) => {
-      const metadata = { displayName: value.displayName, instrument: value.instrument,
+      const metadata = { sourceUrl: value.sourceUrl || null, displayName: value.displayName, instrument: value.instrument,
         researchArea: value.assetType === "Panels and Brochures" ? null : value.researchArea,
         assetType: value.assetType, description: value.description, keywords: value.keywords.split(",").map(x => x.trim()).filter(Boolean), classificationReasoning: value.classificationReasoning };
       return value.asset ? api<Asset>(`${endpoint}/${value.asset.id}`, json("PATCH", { ...metadata, revision: value.asset.revision }))
-        : api<Asset>(endpoint, json("POST", { ...metadata, fileName: value.file!.name, fileDataBase64: value.data, fileKind: fileKind(value.file!.name) }));
+        : api<Asset>(endpoint, json("POST", { ...metadata, fileName: value.isLink ? value.displayName || "Web resource" : value.file!.name, fileDataBase64: value.data ?? "", fileKind: value.isLink ? "link" : fileKind(value.file!.name) }));
     },
     onSuccess: (_, value) => { queryClient.invalidateQueries({ queryKey: assetKey }); finishDraft(value.key); toast({ title: value.asset ? "Asset updated." : "Asset saved to the knowledge base." }); },
     onError: error => toast({ title: "Asset was not saved", description: error.message, variant: "destructive" }),
   });
   const analyzeBatch = async (items: Draft[]) => {
+    items = items.filter(item => !item.isLink && item.asset?.fileKind !== "link");
     if (queue.current.running || !items.length) return;
     queue.current = { running: true, stop: false };
     setPauseRequested(false); setAnalyzing(true);
@@ -119,19 +120,19 @@ export default function KnowledgeBase() {
   };
   const edit = (asset: Asset) => {
     save.reset();
-    setDrafts([{ ...asset, key: asset.id, asset, keywords: asset.keywords.join(", ") }]);
+    setDrafts([{ ...asset, isLink: asset.fileKind === "link", key: asset.id, asset, keywords: asset.keywords.join(", ") }]);
     document.getElementById("asset-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const assetCard = (asset: Asset) => <article key={asset.id} className="rounded-lg border bg-background p-4">
     <div className="flex items-start gap-2">
       {asset.fileKind === "image" ? <Image className="mt-1 h-4 w-4 shrink-0 text-primary" /> : <FileText className="mt-1 h-4 w-4 shrink-0 text-primary" />}
-      <div className="min-w-0"><h4 className="break-words font-medium">{asset.displayName}</h4><p className="break-all text-xs text-muted-foreground">{asset.fileName} · {bytes(asset.fileSize)}</p></div>
+      <div className="min-w-0"><h4 className="break-words font-medium">{asset.displayName}</h4><p className="break-all text-xs text-muted-foreground">{asset.fileKind === "link" ? asset.sourceUrl : `${asset.fileName} · ${bytes(asset.fileSize)}`}</p></div>
     </div>
     <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{asset.description}</p>
     <div className="mt-3 flex flex-wrap gap-1">{asset.keywords.map(keyword => <span key={keyword} className="rounded bg-muted px-2 py-1 text-xs">{keyword}</span>)}</div>
     <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">Classification reasoning</summary><p className="mt-2 whitespace-pre-wrap">{asset.classificationReasoning}</p></details>
     <div className="mt-3 flex flex-wrap gap-1">
-      <a className="inline-flex h-8 items-center rounded-md border px-2 text-xs hover:bg-muted" href={`${endpoint}/${asset.id}/download`}><Download className="mr-1 h-3.5 w-3.5" />Download</a>
+      <a className="inline-flex h-8 items-center rounded-md border px-2 text-xs hover:bg-muted" href={asset.fileKind === "link" ? asset.sourceUrl ?? undefined : `${endpoint}/${asset.id}/download`} target={asset.fileKind === "link" ? "_blank" : undefined} rel="noopener noreferrer"><Download className="mr-1 h-3.5 w-3.5" />{asset.fileKind === "link" ? "Open resource" : "Download"}</a>
       <Button variant="ghost" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(asset.fileName); toast({ title: "Filename copied." }); } catch { toast({ title: "Clipboard unavailable", description: asset.fileName }); } }}><Copy className="mr-1 h-3.5 w-3.5" />Copy name</Button>
       <Button variant="ghost" size="sm" disabled={!!draft || busy || remove.isPending} onClick={() => edit(asset)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
       <Button variant="ghost" size="sm" className="text-destructive" disabled={remove.isPending || !!draft || busy} onClick={() => { if (window.confirm(`Delete ${asset.displayName} and its original file? This cannot be undone.`)) remove.mutate(asset.id); }}><Trash2 className="mr-1 h-3.5 w-3.5" />Delete</Button>
@@ -139,36 +140,37 @@ export default function KnowledgeBase() {
   </article>;
 
   return <div className="space-y-6 pb-10">
-    <section><p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Knowledge base</p><h1 className="mt-2 text-3xl font-bold">Bruker asset library</h1><p className="mt-2 max-w-3xl text-muted-foreground">Upload reference files, review AI suggestions, and organize your library. New outreach sequences select relevant files using the approved instrument and documented company workflows.</p></section>
+    <section><p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Knowledge base</p><h1 className="mt-2 text-3xl font-bold">Bruker asset library</h1><p className="mt-2 max-w-3xl text-muted-foreground">Save reference files or resource links for outreach. GeoMx and CosMx sequences include a resource in every email and target images in at least four. CellScape keeps optional resource suggestions.</p></section>
     <div className="grid items-start gap-6 xl:grid-cols-[.85fr_1.15fr]">
-      <Card id="asset-editor" className="min-w-0"><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{draft?.asset ? "Edit saved asset" : "Knowledge base upload"}</CardTitle><CardDescription>PDF, PNG, JPG, JPEG, or WebP. Up to 25 MB each. Files are analyzed automatically. Review and save each file when the batch finishes.</CardDescription></CardHeader><CardContent>
+      <Card id="asset-editor" className="min-w-0"><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{draft?.asset ? "Edit saved asset" : "Knowledge base upload"}</CardTitle><CardDescription>Upload PDFs or images, or add a webinar, publication or other HTTPS link with a summary and keywords. Uploaded files can be analyzed automatically; links use the details you enter.</CardDescription></CardHeader><CardContent>
         <div className="mb-4 space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
           <p>No app spending cap.</p>
           <p className="text-xs text-muted-foreground">{config.data?.enabled ? "Selecting files sends them to OpenAI for paid analysis, one at a time. Existing results are reused. No automatic retries." : config.isLoading ? "Checking AI setup…" : "AI analysis is unavailable. You can enter and save metadata manually."}</p>
         </div>
-        {!!draft && !draft.asset && <div className="mb-4 space-y-2 rounded-md border p-3" aria-live="polite">
+        {!!draft && !draft.asset && !draft.isLink && <div className="mb-4 space-y-2 rounded-md border p-3" aria-live="polite">
           <p className="text-sm font-medium">{analyzing ? "Analyzing uploads…" : drafts.some(item => item.analysis === "queued") ? "Analysis queue paused" : "Batch ready for review"}</p>
           <ul className="max-h-44 space-y-1 overflow-y-auto text-xs">{drafts.map(item => <li key={item.key} className="break-words">{item.file?.name} — {item.analysis === "ready" ? "Ready for review" : item.analysis === "failed" ? "Needs attention" : item.analysis === "analyzing" ? "Analyzing…" : "Queued"}{item.analysisError && <p className="text-destructive">{item.analysisError}</p>}</li>)}</ul>
           {analyzing ? <Button size="sm" variant="outline" disabled={pauseRequested} onClick={() => { queue.current.stop = true; setPauseRequested(true); }}>{pauseRequested ? "Pausing after current file…" : "Pause after current file"}</Button>
             : drafts.some(item => item.analysis === "queued") && <Button size="sm" variant="outline" disabled={busy || !config.data?.enabled} onClick={() => void analyzeBatch(drafts.filter(item => item.analysis === "queued"))}>Analyze remaining files</Button>}
           <p className="text-xs text-muted-foreground">Keep this page open until you save your files. Nothing is saved automatically.</p>
         </div>}
+        {!draft && <Button className="mb-3" variant="outline" disabled={busy} onClick={() => setDrafts([{ key: crypto.randomUUID(), isLink: true, sourceUrl: "", displayName: "", instrument: "GeoMx", researchArea: "Unknown", assetType: "Webinars", description: "", keywords: "", classificationReasoning: "User-reviewed web resource." }])}><Link className="mr-2 h-4 w-4" />Add link</Button>}
         {!draft ? <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center hover:bg-muted/50">
           {reading ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <Upload className="mb-3 h-7 w-7 text-muted-foreground" />}<span className="font-medium">Choose files</span><span className="mt-1 text-sm text-muted-foreground">Up to 10 files / 50 MB combined</span>
           <input className="sr-only" type="file" multiple disabled={busy} accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={selectFiles} />
         </label> : <div className="space-y-4" key={draft.key}>
-          <div className="rounded-md border bg-muted/30 p-3"><p className="break-all font-medium">{draft.asset?.fileName ?? draft.file?.name}</p><p className="text-sm text-muted-foreground">{bytes(draft.asset?.fileSize ?? draft.file!.size)}{drafts.length > 1 && ` · ${drafts.length} files awaiting review`}</p></div>
-          <div className="space-y-2 rounded-md border p-3">
+          <div className="rounded-md border bg-muted/30 p-3"><p className="break-all font-medium">{draft.asset?.fileName ?? draft.file?.name}</p><p className="text-sm text-muted-foreground">{draft.isLink ? "Web resource" : bytes(draft.asset?.fileSize ?? draft.file?.size ?? 0)}{drafts.length > 1 && ` · ${drafts.length} files awaiting review`}</p></div>
+          {!draft.isLink && <div className="space-y-2 rounded-md border p-3">
             <Button variant="outline" disabled={busy || !config.data?.enabled} onClick={() => void analyzeBatch([draft])}>{analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{analyzing ? "Reading file…" : draft.analysis === "ready" ? "Reload AI suggestions" : "Analyze this file"}</Button>
             {draft.analysisError && <p role="alert" className="text-sm text-destructive">{draft.analysisError}</p>}
             {draft.estimatedCostUsd !== undefined && <p className="text-xs text-muted-foreground">Estimated analysis cost: ${draft.estimatedCostUsd.toFixed(4)}. Reloading suggestions reuses this result without another AI call.</p>}
 
-          </div>
+          </div>}
           <fieldset disabled={busy} className="space-y-4 disabled:opacity-70">
             <MetadataEditor draft={draft} change={updateDraft} />
-            <p className="text-xs text-muted-foreground">Review every field against the original file. Saving records your reviewed metadata; it does not verify scientific claims.</p>
+            <p className="text-xs text-muted-foreground">Review every field against the original resource. Saving records your reviewed metadata; it does not verify scientific claims.</p>
             {save.isError && save.variables?.key === draft.key && <p role="alert" className="text-sm text-destructive">{save.error.message}</p>}
-            <div className="flex flex-wrap gap-2"><Button onClick={() => save.mutate(draft)}>{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{draft.asset ? "Save changes" : "Save to knowledge base"}</Button><Button variant="outline" onClick={() => { finishDraft(draft.key); save.reset(); }}>{draft.asset ? "Cancel" : "Discard file"}</Button></div>
+            <div className="flex flex-wrap gap-2"><Button onClick={() => save.mutate(draft)}>{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{draft.asset ? "Save changes" : "Save to knowledge base"}</Button><Button variant="outline" onClick={() => { finishDraft(draft.key); save.reset(); }}>{draft.asset ? "Cancel" : "Discard resource"}</Button></div>
           </fieldset>
         </div>}
       </CardContent></Card>
@@ -199,6 +201,7 @@ export default function KnowledgeBase() {
 
 function MetadataEditor({ draft, change }: { draft: Draft; change: (value: Draft) => void }) {
   return <>
+    {draft.isLink && <Field label="Resource URL (HTTPS)"><Input type="url" value={draft.sourceUrl ?? ""} onChange={e => change({ ...draft, sourceUrl: e.target.value })} placeholder="https://…" /></Field>}
     <Field label="Display name"><Input maxLength={160} value={draft.displayName} onChange={e => change({ ...draft, displayName: e.target.value })} /></Field>
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label="Instrument"><Select value={draft.instrument} options={instruments} set={instrument => change({ ...draft, instrument })} /></Field>
@@ -206,7 +209,7 @@ function MetadataEditor({ draft, change }: { draft: Draft; change: (value: Draft
       {draft.assetType !== "Panels and Brochures" && <Field label="Research area"><Select value={draft.researchArea ?? "Unknown"} options={areas} set={researchArea => change({ ...draft, researchArea })} /></Field>}
     </div>
     <Field label="Description (at least three complete sentences)"><Textarea rows={6} maxLength={6000} value={draft.description} onChange={e => change({ ...draft, description: e.target.value })} /></Field>
-    <Field label="Five distinct keywords (comma-separated)"><Input value={draft.keywords} onChange={e => change({ ...draft, keywords: e.target.value })} placeholder="Five terms supported by this file" /></Field>
+    <Field label="Five distinct keywords (comma-separated)"><Input value={draft.keywords} onChange={e => change({ ...draft, keywords: e.target.value })} placeholder="Five terms supported by this resource" /></Field>
     <Field label="Classification reasoning"><Textarea rows={3} maxLength={3000} value={draft.classificationReasoning} onChange={e => change({ ...draft, classificationReasoning: e.target.value })} /></Field>
   </>;
 }
