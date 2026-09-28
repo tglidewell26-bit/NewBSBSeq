@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilities } from "../src/lib/sequence-catalog";
+import { capabilities, emailCapabilities } from "../src/lib/sequence-catalog";
 import type { SequenceAsset } from "@workspace/api-zod";
 import { sequenceFixture, settings } from "./sequence-fixture";
 import {
@@ -52,11 +52,11 @@ describe("sequence resource retrieval", () => {
     });
     expect(
       a.plan.filter((p) => p.assetIds.length).map((p) => p.touchId),
-    ).toEqual(["email1"]);
+    ).toEqual(["email1", "email3", "email4", "email5", "email6"]);
     expect(
       a.plan
         .filter(
-          (p) => p.touchId.startsWith("li") || ["email6"].includes(p.touchId),
+          (p) => p.touchId.startsWith("li"),
         )
         .every((p) => !p.assetIds.length),
     ).toBe(true);
@@ -131,13 +131,14 @@ describe("sequence resource retrieval", () => {
     ).toEqual([]);
   });
 
-  it("is deterministic and reuses research without repeating resources", () => {
+  it("prefers unused GeoMx/CosMx resources before reusing relevant ones", () => {
     const a = sequenceFixture().authority;
     const assets = ["d", "b", "a", "c"].map((id) => resource({ id }));
     const result = attachSequenceAssets(a, assets);
     expect(result).toEqual(attachSequenceAssets(a, [...assets].reverse()));
     const ids = result.plan.flatMap((p) => p.assetIds);
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(ids).size).toBe(assets.length);
+    expect(ids.slice(0, assets.length)).toEqual(["a", "b", "c", "d"]);
     const firstTouch = result.plan.find((p) => p.touchId === "email1");
     const tripTwo = result.plan.find((p) => p.touchId === "email4");
     expect(firstTouch?.assetIds.length).toBeGreaterThan(0);
@@ -151,6 +152,7 @@ describe("sequence resource retrieval", () => {
       ...pinned,
       fileKind: "document" as const,
       fileType: "application/pdf",
+      sourceUrl: null,
     };
     const result = await loadSequenceAssets(
       { query: async () => ({ rows: [current] }) },
@@ -218,6 +220,7 @@ describe("sequence resource retrieval", () => {
     touches[0].middle = "A publication in our library compares 42 samples.";
     expect(checkDraft({ touches }, matched).violations.some(v => v.ruleId === "UNSUPPORTED_NUMBER")).toBe(false);
     touches[1].middle = touches[0].middle;
+    matched.plan[1].assetIds = [];
     expect(checkDraft({ touches }, matched).violations).toEqual(expect.arrayContaining([expect.objectContaining({ touchId: "email2", ruleId: "UNSUPPORTED_NUMBER" })]));
   });
 
@@ -239,6 +242,33 @@ describe("sequence resource retrieval", () => {
     expect(suggestAssetsForWrittenSequence(a, written, [brochure, image, unrelatedPaper]).find(t => t.touchId === "email6")?.assetSuggestions?.map(s => s.asset.id)).toEqual(["geo-guide", "geo-image"]);
     written.find(t => t.touchId === "email6")!.middle = "How is the HBV program progressing?";
     expect(suggestAssetsForWrittenSequence(a, written, [brochure, image]).find(t => t.touchId === "email6")?.assetSuggestions).toEqual([]);
+  });
+
+  it.each(["GeoMx", "CosMx"])("provides six body resources and at least four images for %s when matching images exist", instrument => {
+    const { authority, touches } = sequenceFixture();
+    const caps = capabilities.filter(c => c.instrument === instrument);
+    const cap = caps.find(c => c.id === (instrument === "GeoMx" ? "geomx-roi" : "cosmx-rna"))!;
+    const a = { ...authority, capabilities: caps, plan: authority.plan.map(p => ({ ...p, instrument: instrument as "GeoMx" | "CosMx", capabilityId: cap.id })) };
+    const guide = resource({ id: "guide", instrument, assetType: "Panels and Brochures", description: cap.claim, keywords: ["whole transcriptome", "regions of interest"] });
+    const image = { ...guide, id: "image", fileKind: "image" as const, fileName: "feature.png" };
+    const webinar = { ...guide, id: "webinar", fileKind: "link" as const, researchArea: "Unknown", assetType: "Webinars", displayName: "Spatial discovery webinar", sourceUrl: "https://example.org/webinar?session=1&view=full" };
+    const planned = attachSequenceAssets(a, [guide, image, webinar]);
+    const emails = planned.plan.filter(p => p.touchId.startsWith("email"));
+    expect(emails.every(p => p.assetMatches?.some(m => m.kind === "attachment"))).toBe(true);
+    expect(emails.filter(p => p.assetMatches?.some(m => m.kind === "image"))).toHaveLength(6);
+    const rendered = renderSequence(touches, planned).filter(t => t.touchId.startsWith("email"));
+    expect(rendered.every(t => t.body.includes("[Spatial discovery webinar](https://example.org/webinar?session=1&view=full)"))).toBe(true);
+    expect(renderSequence(touches, a).filter(t => t.touchId.startsWith("email")).every(t => t.body.includes(cap.sourceUrl))).toBe(true);
+  });
+
+  it("retains optional, non-repeating CellScape resources and no catalog link fallback", () => {
+    const { authority, touches } = sequenceFixture();
+    const cap = capabilities.find(c => c.id === "cell-tissue-protein")!;
+    const a = { ...authority, capabilities: [cap], evidence: authority.evidence.map(e => ({ ...e, claim: "The company uses immunofluorescence." })), plan: authority.plan.map(p => ({ ...p, instrument: "CellScape" as const, capabilityId: cap.id })) };
+    const image = resource({ id: "cell-image", fileKind: "image", fileName: "cells.png", instrument: "CellScape", description: "Immunofluorescence for tissue protein imaging." });
+    const planned = attachSequenceAssets(a, [image]);
+    expect(planned.plan.filter(p => p.assetIds.length)).toHaveLength(1);
+    expect(renderSequence(touches, a).every(t => !t.body.includes(" resource]"))).toBe(true);
   });
 
   it("passes source summaries as data without making them company or product authority", () => {
@@ -274,3 +304,30 @@ describe("sequence resource retrieval", () => {
   });
 });
 
+
+// No database needed for metadata validation; persistence remains in the existing asset routes.
+import { vi } from "vitest";
+vi.mock("@workspace/db", () => ({ pool: { query: vi.fn() } }));
+import { validateAsset } from "../src/lib/knowledge-assets";
+it("accepts a reviewed webinar URL without file bytes and rejects invalid link URLs", () => {
+  const input = { fileName: "Liver webinar", displayName: "Liver webinar", fileKind: "link", sourceUrl: "https://example.org/webinar", fileDataBase64: "", instrument: "GeoMx", researchArea: "Unknown", assetType: "Webinars", description: "This webinar covers regional RNA. It discusses tissue analysis. It is a research resource.", keywords: ["liver", "regional RNA", "webinar", "tissue", "analysis"], classificationReasoning: "Reviewed webinar summary." };
+  expect(validateAsset(input)).toEqual([]);
+  for (const sourceUrl of ["", "javascript:alert(1)", "https://user:secret@example.org/"]) expect(validateAsset({ ...input, sourceUrl }).length).toBeGreaterThan(0);
+  expect(validateAsset({ ...input, fileKind: "document" }).length).toBeGreaterThan(0);
+});
+
+it("invalidates a pinned resource if its saved URL changes", async () => {
+  const pinned = resource({ fileKind: "link", sourceUrl: "https://example.org/original" });
+  await expect(loadSequenceAssets({ query: async () => ({ rows: [{ ...pinned, sourceUrl: "https://example.org/changed" }] }) }, [pinned])).rejects.toMatchObject({ code: "STALE_ASSET" });
+});
+
+it.each(["GeoMx", "CosMx"])("includes at least two non-overview resource URLs in the default %s sequence without saved links", instrument => {
+  const { authority, touches } = sequenceFixture();
+  const options = emailCapabilities(instrument as "GeoMx" | "CosMx", "");
+  let index = 0;
+  const a = { ...authority, capabilities: options, plan: authority.plan.map(p => ({ ...p, instrument: instrument as "GeoMx" | "CosMx", capabilityId: p.touchId.startsWith("email") ? options[index++].id : null, assetIds: [] })) };
+  const emails = renderSequence(touches, a).filter(t => t.touchId.startsWith("email"));
+  expect(emails.every(t => t.body.includes(" resource]"))).toBe(true);
+  const nonOverview = emails.filter(t => /\]\(https:\/\/[^)]+(?:whole-transcriptome-panel|same-cell-multiomics|discovery-proteome-atlas|spatial-multiomics-enabled)[^)]*\)/.test(t.body));
+  expect(nonOverview.length).toBeGreaterThanOrEqual(2);
+});
