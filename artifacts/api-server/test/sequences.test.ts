@@ -175,7 +175,11 @@ describe("sequence authority and fixed copy", () => {
       "WRITING",
       authority,
     ).instructions;
-    expect(instructions).toContain("the app adds those");
+    expect(instructions).toContain("The app supplies the greeting");
+    const connection = renderSequence(touches, authority).find(t => t.touchId === "liConnect")!;
+    expect(connection.body).toContain("I’m with Bruker Spatial Biology");
+    expect(connection.body).toContain("discuss how spatial biology could help your research");
+    expect(connection.body).not.toContain("CX-2051");
     expect(instructions).toContain("Avoid comments about sequence order");
   });
   it("plans exactly nine touches from approved, permitted evidence", () => {

@@ -505,6 +505,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                 </span>
               </div>
               {job.sequence.length !== 9 && <p className="text-sm text-muted-foreground">Saved legacy sequence: copy and download remain available. Generate a new sequence to use the nine-step trip order.</p>}
+              <ResourceCoverage authority={job.authority} sequence={job.sequence} />
               {job.sequence.map((t, index) => (
                 <article
                   key={t.touchId}
@@ -531,11 +532,11 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                         </label>
                       )}
                       <Label>
-                        Scientific middle (fixed meeting copy is added
-                        automatically)
+                        {t.touchId === "liConnect" ? "Connection request (fixed wording)" : "Scientific middle (meeting copy and resource links are added automatically)"}
                       </Label>
                       <Textarea
                         rows={6}
+                        disabled={t.touchId === "liConnect"}
                         value={edits[index].middle}
                         onChange={(e) =>
                           setEdits(
@@ -597,14 +598,27 @@ function TouchAssets({ authority, touchId, suggestions }: { authority: SequenceA
       const image = match?.kind === "image" || asset.fileKind === "image" || /\.(png|jpe?g|webp)$/i.test(asset.fileName);
       return <div key={asset.id} className="space-y-1 text-sm">
         <p className="font-medium break-words">{asset.displayName}</p>
-        <p className="text-xs text-muted-foreground break-all">{image ? "Suggested email image" : "Suggested attachment"} · {asset.fileName} · reviewed revision {asset.revision}</p>
+        <p className="text-xs text-muted-foreground break-all">{asset.fileKind === "link" ? "Linked resource" : image ? "Suggested email image" : "Suggested attachment"} · {asset.fileName} · reviewed revision {asset.revision}</p>
         {image && available && <img className="max-h-72 max-w-full rounded border bg-background object-contain" src={`/api/bsb-v2/assets/${asset.id}/preview?revision=${asset.revision}`} alt={asset.displayName} loading="lazy" />}
         <p>{match?.reason}</p>
         <p className="text-xs text-muted-foreground">Company evidence: {match?.evidenceIds.join(", ")}</p>
-        {available ? <a className="inline-block underline text-primary" href={`/api/bsb-v2/assets/${asset.id}/download?revision=${asset.revision}`}>{image ? "Download image" : "Download attachment"}</a>
+        {available ? <a className="inline-block underline text-primary" href={asset.fileKind === "link" ? asset.sourceUrl ?? undefined : `/api/bsb-v2/assets/${asset.id}/download?revision=${asset.revision}`} target={asset.fileKind === "link" ? "_blank" : undefined} rel="noopener noreferrer">{asset.fileKind === "link" ? "Open resource" : image ? "Download image" : "Download attachment"}</a>
           : <p role="status" className="text-xs text-muted-foreground">{current.isLoading ? "Checking file…" : current.isError ? "Could not check file availability. Reload before sending." : "This file was changed or deleted. Generate a new sequence to refresh its resource selection."}</p>}
       </div>;
     })}
-    <p className="text-xs text-muted-foreground">Suggestions are optional. Review the file and add it to the email yourself if it fits; copying the message does not include it.</p>
+    <p className="text-xs text-muted-foreground">Resource hyperlinks are included when copying the email. Images and attachments must be downloaded and added in your email tool.</p>
+  </div>;
+}
+
+function ResourceCoverage({ authority, sequence }: { authority: SequenceAuthority; sequence: RenderedTouch[] }) {
+  const emails = sequence.filter(t => t.touchId.startsWith("email") && authority.plan.some(p => p.touchId === t.touchId && ["GeoMx", "CosMx"].includes(p.instrument ?? "")));
+  if (!emails.length) return null;
+  const imageEmails = emails.filter(t => t.assetSuggestions?.some(s => s.match.kind === "image")).length;
+  const target = Math.min(4, emails.length);
+  const resourceEmails = emails.filter(t => t.assetSuggestions?.some(s => s.match.kind === "attachment" || s.match.kind === "link") || sequenceBodyParts(t.body).some(p => p.href && p.text !== "Bruker Spatial Biology" && p.text !== "GeoMx" && p.text !== "CosMx")).length;
+  const linkedEmails = emails.filter(t => sequenceBodyParts(t.body).some(p => p.href && !/\/(?:geomx-dsp-overview|single-cell-imaging-overview)\/?$/.test(p.href) && p.href !== "https://brukerspatialbiology.com/" && p.text !== "GeoMx" && p.text !== "CosMx")).length;
+  return <div className="rounded-md border bg-muted/20 p-3 text-sm" role="status">
+    <p>GeoMx/CosMx resources: {resourceEmails}/{emails.length} emails · Additional body links: {linkedEmails}/{Math.min(2, emails.length)} minimum · Images: {imageEmails}/{target} target</p>
+    {imageEmails < target && <p className="mt-1 text-muted-foreground">Add more images with descriptions and keywords matching these email topics, then generate a new sequence.</p>}
   </div>;
 }

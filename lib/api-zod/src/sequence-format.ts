@@ -55,3 +55,13 @@ export function sequenceBodyHtml(body: string): string {
     )
     .join("")}</div>`;
 }
+
+// Shared by link intake and rendering; no fetching or redirects are performed.
+export function resourceUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2000 || /[\s\\<>]/.test(value)) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password) return null;
+    return url.href.replace(/\(/g, "%28").replace(/\)/g, "%29");
+  } catch { return null; }
+}
