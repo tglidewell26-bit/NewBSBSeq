@@ -43,3 +43,90 @@ No new model calls, automatic webpage fetching, spending caps or retry loops are
 ## Validation for this change
 
 Focused tests cover platform-specific reuse, six email resources, image coverage with matching metadata, CellScape behavior, fixed connection wording, HTTPS URL validation, rich/plain hyperlink copying, source URL revision checks and legacy snapshots. A full database/UI deployment check and live model generation remain post-sync checks.
+
+## Feature-to-biological-value guidance (reviewed September 30, 2026)
+
+The existing capability catalog now includes `biologicalValue` and, where helpful,
+`biologySources`. These travel with the pinned capability to both existing model
+stages. They explain general biology, never establish facts about a prospect.
+The writing pattern is: feature → uncertainty it helps resolve → relevant research
+question. Keep this to a short explanation, not a specification list or lecture.
+
+### GeoMx: six complementary reasons to investigate a tissue
+
+1. Morphology-guided regions preserve compartment differences that whole-section
+   averaging can dilute. Molecular counts are regional, not individual-cell profiles.
+2. Same-section RNA and protein compare complementary layers in matched tissue
+   context and avoid differences between adjacent sections. RNA does not reliably
+   predict protein abundance; this is not a direct translation-rate measurement.
+3. Whole-transcriptome coverage supports discovering expression programs outside
+   a small preselected marker list.
+4. Broad protein profiling tests protein-level patterns directly instead of assuming
+   a transcriptional change produces a corresponding protein change.
+5. PTMs add signaling-state clues that total protein abundance may miss.
+6. Regional differential-expression and pathway analysis help prioritize hypotheses
+   while retaining where the signal occurred. Enrichment does not establish function.
+
+Resources now follow these topics: platform overview, multiomics, RNA assays,
+DPA, a pathway/multiomics webinar, and Data Center. DPA remains an assay within
+GeoMx rather than the resource offered throughout the sequence.
+
+### CosMx: cell identity, state and position
+
+Single-cell RNA separates cell populations and states that pooled measurements
+can mix. Same-cell RNA/protein associates transcriptional state with protein
+phenotype. Segmentation supports correct assignment of transcripts to cells.
+Panel choice and customization connect identity markers with project-specific
+questions. Neighborhood analysis asks whether immune populations are within a
+lesion or restricted to its border, and which populations are nearby. Informatics
+connects these observations for exploration. Subcellular localization can be
+selected for research about nuclear/cytoplasmic or other intracellular distribution:
+location can change even when a whole-cell abundance is similar.
+
+Do not describe proximity as proven communication, an exhaustion-associated
+signature as a functional exhaustion assay, or an exclusion pattern as proof of
+why recruitment failed. Fixed tissue localization is not a live measurement of
+RNA transport, translation, or signaling.
+
+### CellScape: protein phenotype in tissue context
+
+Multiplex protein imaging combines identity, state and location. Custom panels
+connect a protein of interest to its expressing cell population. Dynamic range
+helps retain dim and bright markers together. Adding markers to the same
+CellScape slide revisits emerging questions while conserving material. Assay kits
+provide a starting point for panel development; automation supports consistent
+processing. Large-area imaging can reveal patchy organization and rare populations.
+These explanations do not change CellScape's optional resource rules.
+
+Protein abundance, PTMs and localization can all inform cell responses; never
+claim that proteins cannot show how cells are reacting. Assay scope still comes
+from the existing reviewed claims and brochures, not from unrelated study methods.
+182 nm/pixel remains digital sampling, not an optical-resolution claim.
+
+### Research and product sources
+
+- [RNA/protein correlation in human cancer, primary study](https://www.nature.com/articles/s41467-021-25872-1)
+- [High-plex spatial molecular imaging, primary study](https://www.nature.com/articles/s41587-022-01483-z)
+- [RNA/protein subcellular localization dynamics, primary study](https://www.nature.com/articles/s41592-023-02101-9). This uses other methods; it supports the biological rationale, not an assertion that CosMx performs those methods.
+- [GeoMx overview](https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/)
+- [GeoMx same-section multiomics](https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/spatial-multiomics-enabled-with-geomx-dsp/)
+- [GeoMx RNA assays](https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-rna-assays/)
+- [GeoMx Data Center](https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-data-center/)
+- [RNA, protein and PTM pathway webinar](https://go.brukerspatialbiology.com/CrossPlatformInterplay_REG.html). Registration resource; do not promise an on-demand recording.
+- [CellScape knowledge base](https://brukerspatialbiology.com/support/knowledgebase/cellscape-psp-kb/)
+- [CellScape HDR poster](https://brukerspatialbiology.com/wp-content/uploads/2024/05/aacr2024_hdr.pdf)
+
+### Resource selection correction
+
+Saved links are not repeated by URL within the selection pass. Named DPA links
+are limited to the protein feature; DPA documents/images can also support the PTM
+feature. A TCR-specific resource requires TCR research context, rather than matching
+any transcriptome or analysis email. Clearly mismatched instrument URL paths are
+excluded even if their saved instrument label is wrong. General relevant images
+and documents can still be reused for GeoMx/CosMx.
+
+The reviewed Assembly sequence contained a saved resource titled “GeoMx Discovery
+Proteome Atlas Product Page” whose URL pointed to the CellScape overview. Correct
+that entry in the knowledge base. This code excludes it from new GeoMx suggestions;
+it does not rewrite saved knowledge-base rows or historical sequences. After
+merging and syncing, generate a new sequence to apply these changes.
