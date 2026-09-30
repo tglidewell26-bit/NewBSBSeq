@@ -66,8 +66,22 @@ function conflicts(company: string, asset: string): boolean {
   });
 }
 
+// A named assay is not a general platform resource just because its summary
+// mentions RNA, regions or analysis. Use its actual subject to limit matching.
+function resourceFits(asset: SequenceAsset, capabilityId: string, evidence: string): boolean {
+  const title = normalized(asset.displayName + " " + asset.fileName);
+  const url = (asset.sourceUrl ?? "").toLowerCase();
+  const namedPlatform = url.match(/\/(geomx|cosmx|cellscape)[-/]/)?.[1];
+  if (namedPlatform && namedPlatform !== asset.instrument.toLowerCase()) return false;
+  if (/\b(dpa|discovery proteome atlas)\b/.test(title) &&
+      !(asset.fileKind === "link" ? ["geomx-protein-profiling"] : ["geomx-protein-profiling", "geomx-ptm"]).includes(capabilityId)) return false;
+  if (/\b(tcr|t cell receptor)\b/.test(title) && !/\b(tcr|t cell receptor|clonotyp\w*)\b/i.test(evidence)) return false;
+  return true;
+}
+
 export function attachSequenceAssets(authority: SequenceAuthority, library: SequenceAsset[], written?: RenderedTouch[]): SequenceAuthority {
   const used = new Map<string, number>();
+  const usedLinks = new Set<string>();
   const assets: SequenceAsset[] = [];
   const selectedByTouch = new Map<string, Pick<SequenceAuthority["plan"][number], "assetIds" | "assetMatches">>();
   // Reserve a kit-specific resource for the kit email before broader earlier
@@ -82,6 +96,8 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
     const feature = capabilities.find(c => c.id === p.capabilityId)?.claim ?? "";
     const discussion = written ? written.find(t => t.touchId === p.touchId)?.middle ?? "" : feature;
     const candidates = library.filter(a => a.instrument === p.instrument && (richResources || !used.has(a.id)) && (a.fileKind !== "link" || !!resourceUrl(a.sourceUrl))).flatMap(asset => {
+      if (!resourceFits(asset, p.capabilityId!, evidence.map(e => e.claim).join(" "))) return [];
+      if (asset.fileKind === "link" && usedLinks.has(resourceUrl(asset.sourceUrl)!)) return [];
       const rawContent = [asset.description, ...asset.keywords].join("\n");
       const content = normalized(rawContent);
       const company = normalized(evidence.map(e => e.claim).join(" "));
@@ -132,10 +148,14 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
       return [{ asset, kind: asset.fileKind === "link" ? "link" as const : image ? "image" as const : "attachment" as const, matches, score: matches.length * 10 + bonus + (matches.some(m => m.topic === capabilityResource?.name) ? 20 : 0) - (used.get(asset.id) ?? 0) * 100 }];
     }).sort((a, b) => b.score - a.score || a.asset.id.localeCompare(b.asset.id));
     // A single relevant document and image may be suggested for an email. The
-    // GeoMx/CosMx prefer new resources but can reuse a relevant resource.
+    // GeoMx/CosMx may reuse relevant images/documents; body links are not repeated.
     // CellScape retains its existing no-repeat policy.
     const selected = (["attachment", "image", "link"] as const).flatMap(kind => candidates.find(c => c.kind === kind) ?? []);
-    selected.forEach(match => { used.set(match.asset.id, (used.get(match.asset.id) ?? 0) + 1); if (!assets.some(a => a.id === match.asset.id)) assets.push(match.asset); });
+    selected.forEach(match => { if (match.asset.fileKind === "link") usedLinks.add(resourceUrl(match.asset.sourceUrl)!); used.set(match.asset.id, (used.get(match.asset.id) ?? 0) + 1); if (!assets.some(a => a.id === match.asset.id)) assets.push(match.asset); });
+    if (richResources && !selected.some(m => m.kind === "link")) {
+      const fallback = resourceUrl(authority.capabilities.find(c => c.id === p.capabilityId)?.sourceUrl);
+      if (fallback) usedLinks.add(fallback);
+    }
     selectedByTouch.set(p.touchId, { assetIds: selected.map(m => m.asset.id), assetMatches: selected.map(match => {
       const topics = match.matches.map(m => m.topic);
       return { assetId: match.asset.id, kind: match.kind, evidenceIds: [...new Set(match.matches.flatMap(m => m.ids))], topics,
