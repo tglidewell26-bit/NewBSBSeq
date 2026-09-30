@@ -257,7 +257,8 @@ describe("sequence resource retrieval", () => {
     expect(emails.every(p => p.assetMatches?.some(m => m.kind === "attachment"))).toBe(true);
     expect(emails.filter(p => p.assetMatches?.some(m => m.kind === "image"))).toHaveLength(6);
     const rendered = renderSequence(touches, planned).filter(t => t.touchId.startsWith("email"));
-    expect(rendered.every(t => t.body.includes("[Spatial discovery webinar](https://example.org/webinar?session=1&view=full)"))).toBe(true);
+    expect(rendered.filter(t => t.body.includes("[Spatial discovery webinar](https://example.org/webinar?session=1&view=full)"))).toHaveLength(1);
+    expect(rendered.every(t => t.body.includes("[Spatial discovery webinar]") || t.body.includes(cap.sourceUrl))).toBe(true);
     expect(renderSequence(touches, a).filter(t => t.touchId.startsWith("email")).every(t => t.body.includes(cap.sourceUrl))).toBe(true);
   });
 
@@ -330,4 +331,34 @@ it.each(["GeoMx", "CosMx"])("includes at least two non-overview resource URLs in
   expect(emails.every(t => t.body.includes(" resource]"))).toBe(true);
   const nonOverview = emails.filter(t => /\]\(https:\/\/[^)]+(?:whole-transcriptome-panel|same-cell-multiomics|discovery-proteome-atlas|spatial-multiomics-enabled)[^)]*\)/.test(t.body));
   expect(nonOverview.length).toBeGreaterThanOrEqual(2);
+});
+
+
+it("keeps DPA links on the protein angle and rejects mislabeled platform links and unrelated TCR resources", () => {
+  const { authority, touches } = sequenceFixture();
+  const caps = emailCapabilities("GeoMx", "");
+  let index = 0;
+  const a = { ...authority, capabilities: caps, plan: authority.plan.map(p => ({ ...p, instrument: "GeoMx" as const, capabilityId: p.touchId.startsWith("email") ? caps[index++].id : null, evidenceIds: [], assetIds: [] })) };
+  const dpa = resource({ id: "dpa", instrument: "GeoMx", fileKind: "link", displayName: "GeoMx DPA Product Bulletin", researchArea: "Unknown", sourceUrl: "https://example.org/dpa", description: "Discovery Proteome Atlas protein profiling, morphology-guided regions of interest, whole transcriptome and pathway analysis.", keywords: ["regions of interest", "whole transcriptome", "protein profiling", "pathway analysis"] });
+  const wrong = { ...dpa, id: "wrong-platform", sourceUrl: "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/" };
+  const tcr = { ...dpa, id: "tcr", displayName: "TCR profiling add-on", fileKind: "document" as const, fileName: "tcr.pdf", sourceUrl: undefined };
+  const result = attachSequenceAssets(a, [dpa, wrong, tcr, { ...dpa, id: "duplicate-url" }]);
+  expect(result.plan.filter(p => p.assetIds.length).map(p => p.capabilityId)).toEqual(["geomx-protein-profiling"]);
+  expect(result.assets?.some(a => a.id === "wrong-platform" || a.id === "tcr")).toBe(false);
+  const emails = renderSequence(touches, result).filter(t => t.touchId.startsWith("email"));
+  expect(emails.filter(t => t.body.includes("https://example.org/dpa"))).toHaveLength(1);
+  expect(emails[0].body).toContain("geomx-dsp-overview");
+  expect(emails[2].body).toContain("geomx-rna-assays");
+  expect(emails[5].body).toContain("geomx-data-center");
+});
+
+it("passes biological rationale to both models while retaining company-evidence boundaries", () => {
+  const { authority, touches } = sequenceFixture();
+  for (const stage of ["WRITING", "VALIDATING"] as const) {
+    const request = sequenceModelRequest(stage, authority, touches);
+    const input = JSON.parse(request.input);
+    expect(input.assignments.filter((a: any) => a.capability).every((a: any) => a.capability.biologicalValue)).toBe(true);
+    expect(request.instructions).toContain("biologicalValue");
+    expect(request.instructions).toContain("not facts about this company");
+  }
 });
