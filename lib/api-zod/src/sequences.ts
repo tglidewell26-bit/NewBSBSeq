@@ -102,6 +102,8 @@ export type Capability = {
   instrument: (typeof instruments)[number];
   claim: string;
   limitation: string;
+  biologicalValue?: string;
+  biologySources?: string[];
   sourceUrl: string;
   sourceSection: string;
   reviewedAt: string;
