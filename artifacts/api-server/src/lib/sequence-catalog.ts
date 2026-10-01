@@ -1,5 +1,5 @@
 import type { Capability } from "@workspace/api-zod";
-export const CATALOG_VERSION = "bsb-capabilities-2026-09-30-v7";
+export const CATALOG_VERSION = "bsb-capabilities-2026-09-30-v8";
 // Reviewed outreach claims. Specs retain their assay and measurement scope.
 export const capabilities: Capability[] = [
   {
@@ -260,7 +260,7 @@ export const capabilities: Capability[] = [
     reviewedAt: "2026-09-24",
   },
   {
-    biologicalValue: "Direct protein measurements complement RNA: transcript changes may not produce corresponding protein changes. Broad regional protein profiling can compare immune, stromal and signaling-associated programs without assuming RNA is a proxy for protein abundance.",
+    biologicalValue: "Broad protein profiling examines multiple biological programs together in selected regions instead of relying on a few individual markers. Comparing coordinated immune, stromal and signaling-associated protein patterns can help prioritize regional differences for follow-up. Develop this breadth-of-protein-biology angle rather than repeating the same-section RNA/protein rationale.",
     biologySources: ["https://www.nature.com/articles/s41467-021-25872-1"],
     id: "geomx-protein-profiling",
     instrument: "GeoMx",
