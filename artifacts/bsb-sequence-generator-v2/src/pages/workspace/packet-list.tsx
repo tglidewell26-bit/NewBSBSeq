@@ -22,6 +22,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+/** Accepts plain JSON, ```json fenced blocks, or JSON with short prose around it (common in ChatGPT replies). */
+function extractJsonObject(raw: string): unknown {
+  const trimmed = raw.trim().replace(/^\uFEFF/, "");
+  try { return JSON.parse(trimmed); } catch { /* try other shapes */ }
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch { /* try other shapes */ } }
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start !== -1 && end > start) return JSON.parse(trimmed.slice(start, end + 1));
+  throw new SyntaxError("No JSON object found.");
+}
+
+const isDossier = (value: any) =>
+  !!value && typeof value === "object" && !("qualificationEvidence" in value) &&
+  ("buyer_units" in value || "schema_version" in value);
+
 export default function PacketList() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -61,7 +77,15 @@ export default function PacketList() {
 
   const preview = useMemo(() => {
     try {
-      const value = JSON.parse(raw) as ResearchPacket;
+      const value = extractJsonObject(raw) as any;
+      if (isDossier(value)) {
+        const name = value.organization?.official_name || value.input?.organization_name || "Organization name missing";
+        const units = Array.isArray(value.buyer_units) ? value.buyer_units.map((unit: any) => unit?.unit_name).filter(Boolean) : [];
+        return {
+          schemaVersion: `Account research dossier (${value.schema_version || "version not stated"})`,
+          brief: `${name}${units.length ? `\nBuyer units: ${units.join("; ")}` : "\nBuyer units: none listed"}\nIt will be converted to a research packet on submit.`,
+        };
+      }
       return { brief: typeof value?.brief === "string" ? value.brief : "Brief missing", schemaVersion: typeof value?.schemaVersion === "string" ? value.schemaVersion : "Missing or invalid" };
     } catch {
       return null;
@@ -72,11 +96,12 @@ export default function PacketList() {
     setParseError("");
     let researchPacket: ResearchPacket;
     try {
-      researchPacket = JSON.parse(raw) as ResearchPacket;
+      researchPacket = extractJsonObject(raw) as ResearchPacket;
     } catch {
-      setParseError("Enter valid JSON. The submitted body must be the researchPacket object itself.");
+      setParseError("No valid JSON object found. Paste the research packet or the ChatGPT account dossier (code fences are fine).");
       return;
     }
+    // Dossiers are sent as-is; the server converts them into a research packet.
     submit.mutate({ data: { researchPacket } });
   };
 
@@ -92,7 +117,7 @@ export default function PacketList() {
       <section>
         <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Research packet intake</p>
         <h1 className="mt-2 text-3xl font-bold">Phase 1 evidence review</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">Paste or upload the exact producer packet. Both paths submit the identical <span className="font-mono">researchPacket</span> object. No prose extraction, repairs, legacy markers, or sequence writing.</p>
+        <p className="mt-2 max-w-3xl text-muted-foreground">Paste or upload a research packet, or the account research dossier from the ChatGPT research project. Dossiers are converted into a research packet automatically; anything the converter had to adjust is listed as a review warning.</p>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_.6fr]">
@@ -102,7 +127,7 @@ export default function PacketList() {
             <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(event) => onFile(event.target.files?.[0])} />
             <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="mr-2 h-4 w-4" />Upload JSON</Button>
           </div>
-          <Textarea value={raw} onChange={(event) => setRaw(event.target.value)} className="min-h-72 font-mono text-xs" placeholder={'{"schemaVersion":"bsb-company-research-v1", ...}'} />
+          <Textarea value={raw} onChange={(event) => setRaw(event.target.value)} className="min-h-72 font-mono text-xs" placeholder={'{"schema_version":"bsb-account-dossier-v1", ...}  or  {"schemaVersion":"bsb-company-research-v1", ...}'} />
           {parseError && <p className="mt-3 flex items-center gap-2 text-sm text-destructive"><AlertTriangle className="h-4 w-4" />{parseError}</p>}
           <div className="mt-4 flex justify-end">
             <Button onClick={processRaw} disabled={!raw.trim() || submit.isPending}>

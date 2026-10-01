@@ -1,0 +1,164 @@
+{
+  "schema_version": "bsb-account-dossier-v1",
+  "research_date": "2026-10-01",
+  "input": { "organization_name": "Synthetic Longevity Labs", "website": "https://example.org", "department_or_person_hint": "" },
+  "organization": {
+    "official_name": "Synthetic Longevity Labs",
+    "website": "https://example.org",
+    "hq_location": "Example City, CA",
+    "other_research_sites": [],
+    "org_type": "drug_developer",
+    "ownership": "private",
+    "company_stage": "preclinical",
+    "employee_estimate": null,
+    "latest_funding_event": {
+      "value": "Announced a Series B financing",
+      "tag": "Stated",
+      "confidence": null,
+      "reasoning": null,
+      "evidence": "Today we announced the close of our Series B financing.",
+      "source_url": "https://example.org/news/series-b",
+      "source_date": "2026-08",
+      "stale": false
+    },
+    "recent_milestones": []
+  },
+  "must_be_right_facts": [
+    {
+      "value": "Develops iPSC-derived microglia as a cell therapy for CNS disease",
+      "tag": "Stated",
+      "confidence": null,
+      "reasoning": null,
+      "evidence": "Our lead program uses iPSC-derived microglial progenitors for CNS conditions.",
+      "source_url": "https://example.org/pipeline",
+      "source_date": "2026-09",
+      "stale": false
+    }
+  ],
+  "therapeutic_or_business_focus": {
+    "modalities": ["cell therapy"],
+    "disease_areas": [],
+    "pipeline_programs": [
+      {
+        "program": "SYN-001",
+        "modality": "iPSC-derived microglia",
+        "target": "",
+        "indication": "CNS conditions",
+        "phase": "Preclinical",
+        "evidence": {
+          "value": "",
+          "tag": "Stated",
+          "confidence": null,
+          "reasoning": null,
+          "evidence": "SYN-001: iPSC-derived microglial progenitors, preclinical.",
+          "source_url": "https://example.org/pipeline",
+          "source_date": "2026-09",
+          "stale": false
+        }
+      }
+    ],
+    "species_and_model_systems": []
+  },
+  "buyer_units": [
+    {
+      "unit_name": "Neuro Imaging Group",
+      "unit_type": "department",
+      "location": "Example City, CA",
+      "key_people": [],
+      "research_focus": [],
+      "sample_types": [
+        {
+          "value": "Mouse brain tissue sections",
+          "tag": "Inferred",
+          "confidence": "Medium",
+          "reasoning": "The posting asks for tissue sectioning experience and the lead program is tested in mouse models.",
+          "evidence": "Experience sectioning OCT-embedded tissue preferred.",
+          "source_url": "https://example.org/careers/imaging-scientist",
+          "source_date": "2026-09",
+          "stale": false
+        }
+      ],
+      "species": [],
+      "measurement_signals": {
+        "rna": [],
+        "protein": [
+          {
+            "value": "Multiplex immunofluorescence with in-house antibodies",
+            "tag": "Stated",
+            "confidence": null,
+            "reasoning": null,
+            "evidence": "Design multiplex immunofluorescence panels using our in-house antibodies.",
+            "source_url": "https://example.org/careers/imaging-scientist",
+            "source_date": "2026-09",
+            "stale": false
+          }
+        ],
+        "summary": {
+          "value": "protein_dominant",
+          "tag": "Inferred",
+          "confidence": "Medium",
+          "reasoning": "Protein methods named; no RNA methods found in postings or site.",
+          "evidence": "Design multiplex immunofluorescence panels using our in-house antibodies.",
+          "source_url": "https://example.org/careers/imaging-scientist",
+          "source_date": "2026-09",
+          "stale": false
+        }
+      },
+      "resolution_signals": { "single_cell": [], "region_or_bulk": [], "scale_and_throughput": [] },
+      "analysis_culture": {
+        "computational_team": {
+          "value": "",
+          "tag": "Unknown",
+          "confidence": null,
+          "reasoning": null,
+          "evidence": "",
+          "source_url": "",
+          "source_date": null,
+          "stale": false
+        },
+        "software_named": [
+          {
+            "value": "QuPath and Python",
+            "tag": "Stated",
+            "confidence": null,
+            "reasoning": null,
+            "evidence": "Image analysis in QuPath and Python.",
+            "source_url": "https://example.org/careers/imaging-scientist",
+            "source_date": "2026-09",
+            "stale": false
+          }
+        ],
+        "data_preferences": []
+      },
+      "infrastructure": [],
+      "spatial_platforms_detected": []
+    }
+  ],
+  "job_postings": [
+    {
+      "title": "Scientist, Tissue Imaging",
+      "buyer_unit": "Neuro Imaging Group",
+      "location": "Example City, CA",
+      "posted_date": "2026-09",
+      "techniques_named": ["multiplex immunofluorescence", "confocal microscopy"],
+      "tools_and_software_named": ["QuPath", "Python"],
+      "sample_types_named": ["OCT tissue sections"],
+      "source_url": "https://example.org/careers/imaging-scientist"
+    }
+  ],
+  "publications_and_presentations": [],
+  "contradiction_checks": [
+    {
+      "inference_tested": "The group does not use RNA methods",
+      "search_performed": "Searched site and postings for scRNA-seq, RNAscope, spatial transcriptomics",
+      "result": "no_evidence_found",
+      "notes": "No RNA methods found, but absence is not proof."
+    }
+  ],
+  "open_unknowns": [
+    "Does the group want transcript-level data, or protein only?",
+    "Do they need single-cell resolution or region-level profiling?"
+  ],
+  "search_log": [{ "query_or_source": "example.org/careers", "found_useful_evidence": true }],
+  "data_quality": { "sources_used": 3, "most_recent_source_date": "2026-09", "overall_confidence": "Medium", "notes": "" }
+}

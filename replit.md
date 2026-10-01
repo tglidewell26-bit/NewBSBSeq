@@ -27,6 +27,7 @@ Personal Phase 1 application for research-packet intake without sign-in, evidenc
 - Provider call and evidence validation: `artifacts/api-server/src/lib/live-assessment.ts`
 - Persistent call reservations: `artifacts/api-server/src/lib/assessment-runs.ts`
 - API contract: `lib/api-spec/openapi.yaml`
+- Account dossier intake and mapping: `docs/account-dossier.md`, `artifacts/api-server/src/lib/account-dossier.ts`
 
 ## Architecture decisions
 
@@ -38,6 +39,7 @@ Personal Phase 1 application for research-packet intake without sign-in, evidenc
 ## Product
 
 - Accepts the frozen `bsb-company-research-v1` producer contract by paste or JSON upload.
+- Also accepts the ChatGPT account research dossier (`bsb-account-dossier-v1`) and converts it to the frozen contract; see `docs/account-dossier.md`.
 - Preserves raw packets, normalizes evidence once, and separates structural validity from factual support.
 - Supports one GPT-5.6 Terra assessment call for CellScape, CosMx, and GeoMx when explicitly configured; synthetic demonstration mode remains labeled.
 - Supports explicit, version-bound approval or rejection of no more than two supported instruments.
