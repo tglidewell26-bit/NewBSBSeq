@@ -5,6 +5,7 @@ import { AssessCompanyBody, ReviewAssessmentBody } from "@workspace/api-zod";
 import { DeterministicFakeProvider, hashPacket, normalizeEvidence, validateFrozenRequest } from "../lib/bsb-v2";
 import { AssessmentError, liveConfiguration, validateModelAssessment } from "../lib/live-assessment";
 import { failurePayload, getAssessmentRun, runLiveAssessment } from "../lib/assessment-runs";
+import { convertDossier, isAccountDossier, validateDossierShape } from "../lib/account-dossier";
 
 const safeRecord = (row: any) => ({
   id: row.id, stage: row.stage, inputHash: row.inputHash,
@@ -28,7 +29,22 @@ router.get("/bsb-v2/packets", async (_req, res): Promise<void> => {
 });
 
 router.post("/bsb-v2/packets", async (req, res): Promise<void> => {
-  const parsed = validateFrozenRequest(req.body);
+  // Account research dossiers (from the ChatGPT research project) are converted
+  // into the frozen packet first; conversion notes are kept as review warnings.
+  let body = req.body;
+  let conversionNotes: Array<{ path: string; message: string }> = [];
+  const candidate = body?.researchPacket ?? body;
+  if (isAccountDossier(candidate)) {
+    const shapeIssues = validateDossierShape(candidate);
+    if (shapeIssues.length) {
+      res.status(400).json({ error: "Account dossier is invalid", issues: shapeIssues.map((issue) => ({ ...issue, path: `dossier.${issue.path}` })) });
+      return;
+    }
+    const converted = convertDossier(candidate);
+    body = { researchPacket: converted.researchPacket };
+    conversionNotes = converted.notes.map((note) => ({ path: `dossier.${note.path}`, message: note.message }));
+  }
+  const parsed = validateFrozenRequest(body);
   if (!parsed.success || !parsed.data) {
     res.status(400).json({ error: "Packet structure is invalid", issues: parsed.issues });
     return;
@@ -39,7 +55,10 @@ router.post("/bsb-v2/packets", async (req, res): Promise<void> => {
   if (existing[0]) { res.status(201).json(safeRecord(existing[0])); return; }
 
   const { normalized, errors } = normalizeEvidence(packet);
-  const warnings = normalized.flatMap((item) => item.supportIssues.map((message) => ({ path: item.locations.join(", "), message })));
+  const warnings = [
+    ...conversionNotes,
+    ...normalized.flatMap((item) => item.supportIssues.map((message) => ({ path: item.locations.join(", "), message }))),
+  ];
   if (errors.length) { res.status(400).json({ error: "Conflicting evidence IDs", issues: errors }); return; }
   const validation = { structurallyValid: true, supportValid: warnings.length === 0, errors: [], warnings };
   const id = crypto.randomUUID();

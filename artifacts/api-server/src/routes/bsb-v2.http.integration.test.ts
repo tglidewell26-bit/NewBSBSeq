@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -402,5 +403,22 @@ describe("BSB V2 shared workspace through the production Express app", () => {
       method: "POST",
       body: JSON.stringify({ ...twoReview, confirmSecond: true }),
     })).status).toBe(200);
+  });
+  it("accepts an account research dossier, converts it, and dedupes repeat uploads", async () => {
+    const dossier = JSON.parse(readFileSync(new URL("../../../../samples/account-dossier-synthetic.json", import.meta.url), "utf8"));
+    dossier.organization.official_name = `Synthetic Dossier Lab ${randomUUID()}`;
+    const first = await request("/api/bsb-v2/packets", { method: "POST", body: JSON.stringify({ researchPacket: dossier }) });
+    expect(first.status).toBe(201);
+    createdIds.add(first.body.id);
+    expect(first.body.researchPacket.schemaVersion).toBe("bsb-company-research-v1");
+    expect(first.body.researchPacket.brief).toContain("Neuro Imaging Group");
+    expect(first.body.normalizedEvidence.some((item: any) => item.claim.includes("[Neuro Imaging Group] Protein signal"))).toBe(true);
+    // A bare dossier (not wrapped in researchPacket) is accepted too and dedupes to the same record.
+    const again = await request("/api/bsb-v2/packets", { method: "POST", body: JSON.stringify(dossier) });
+    expect(again.status).toBe(201);
+    expect(again.body.id).toBe(first.body.id);
+    const broken = await request("/api/bsb-v2/packets", { method: "POST", body: JSON.stringify({ researchPacket: { schema_version: "bsb-account-dossier-v1", buyer_units: [] } }) });
+    expect(broken.status).toBe(400);
+    expect(broken.body.issues[0].path).toBe("dossier.organization.official_name");
   });
 });
