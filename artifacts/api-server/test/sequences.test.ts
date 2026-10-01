@@ -580,3 +580,24 @@ describe("sequence authority and fixed copy", () => {
   });
 });
 
+
+
+it("retains editorial approvals on repair while checking factual support everywhere", () => {
+  const { authority, touches } = sequenceFixture();
+  const review = { reviews: touches.map(t => ({ touchId: t.touchId, violations: [
+    { ruleId: "VOICE", rejectedSpan: t.middle, message: "Editorial objection", nextAction: "Rephrase" },
+    { ruleId: "UNSUPPORTED_PRODUCT", rejectedSpan: t.middle, message: "Unsupported claim", nextAction: "Correct claim" },
+  ] })) };
+  const repaired = checkSemantic(review, touches, authority, ["liMsg2"]);
+  expect(repaired.filter(v => v.ruleId === "VOICE").map(v => v.touchId)).toEqual(["liMsg2"]);
+  expect(repaired.filter(v => v.ruleId === "UNSUPPORTED_PRODUCT")).toHaveLength(9);
+  expect(checkSemantic(review, touches, authority)).toHaveLength(18);
+  const request = sequenceModelRequest("VALIDATING", authority, touches, ["liMsg2"]);
+  expect(JSON.parse(request.input).repairIds).toEqual(["liMsg2"]);
+  expect(request.instructions).toContain("Retain editorial approval for unchanged touches");
+  for (const stage of ["WRITING", "VALIDATING"] as const) {
+    const instructions = sequenceModelRequest(stage, authority, touches).instructions;
+    expect(instructions).not.toContain("targets images in at least four emails");
+    expect(instructions).toContain("Do not require image mentions");
+  }
+});

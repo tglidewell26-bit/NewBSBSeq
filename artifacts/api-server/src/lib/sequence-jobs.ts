@@ -365,12 +365,12 @@ export async function runSequenceJob(
       );
     await stillCurrent(id, "VALIDATING");
     const review = await provider(
-      sequenceModelRequest("VALIDATING", authority, touches),
+      sequenceModelRequest("VALIDATING", authority, touches, repairIds),
     );
     await recordUsage(id, "VALIDATING", review.usage);
     const violations = [
       ...checked.violations,
-      ...checkSemantic(review.value, touches, authority),
+      ...checkSemantic(review.value, touches, authority, repairIds),
     ];
     await stillCurrent(id);
     if (violations.length) {
