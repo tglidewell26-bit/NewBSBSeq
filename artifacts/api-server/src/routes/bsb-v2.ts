@@ -4,12 +4,15 @@ import { db, pool, bsbV2PacketsTable } from "@workspace/db";
 import { AssessCompanyBody, ReviewAssessmentBody } from "@workspace/api-zod";
 import { DeterministicFakeProvider, hashPacket, normalizeEvidence, validateFrozenRequest } from "../lib/bsb-v2";
 import { AssessmentError, liveConfiguration, validateModelAssessment } from "../lib/live-assessment";
-import { failurePayload, getAssessmentRun, runLiveAssessment } from "../lib/assessment-runs";
+import { failurePayload, getAssessmentRun, runLiveAssessment, treeBudget } from "../lib/assessment-runs";
 import { convertDossier, isAccountDossier, validateDossierShape } from "../lib/account-dossier";
+
+import { buyerUnits, validateTreeAssessment } from "../lib/instrument-tree";
 
 const safeRecord = (row: any) => ({
   id: row.id, stage: row.stage, inputHash: row.inputHash,
   researchPacket: row.researchPacket, normalizedEvidence: row.normalizedEvidence,
+  buyerUnits: buyerUnits(row.normalizedEvidence),
   validation: row.validation, assessment: row.assessment ?? undefined,
   review: row.review ?? undefined, createdAt: row.createdAt.toISOString(),
 });
@@ -19,7 +22,7 @@ const provider = new DeterministicFakeProvider();
 
 router.get("/bsb-v2/assessment-config", (_req, res) => {
   const config = liveConfiguration();
-  res.json(config);
+  res.json({ ...config, treeBudgetUsd: treeBudget(), maxTreeOutputTokens: 8000 });
 });
 
 router.get("/bsb-v2/packets", async (_req, res): Promise<void> => {
@@ -139,7 +142,7 @@ router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> 
   }
   const packetId = String(req.params.packetId);
   if (body.data.mode === "REAL_INPUT") {
-    try { res.json(await runLiveAssessment(packetId, body.data.retry === true)); }
+    try { res.json(await runLiveAssessment(packetId, body.data.retry === true, body.data.buyerUnit)); }
     catch (error) {
       const failure = error instanceof AssessmentError ? error : new AssessmentError("SERVER_FAILED", "The assessment service could not complete the request. Reload the packet to check its saved status.", 500);
       res.status(failure.status).json(failurePayload(failure));
@@ -179,7 +182,8 @@ router.post("/bsb-v2/packets/:packetId/reviews", async (req, res): Promise<void>
   const currentEvidence = row.normalizedEvidence as any[];
   if (assessment.provider === "OPENAI") {
     try {
-      validateModelAssessment({
+      if (assessment.promptVersion === "bsb-tree-1") validateTreeAssessment(assessment, currentEvidence, row.evidenceVersion);
+      else validateModelAssessment({
         evidenceReviews: assessment.evidenceReviews,
         instruments: assessment.instruments.map((item: any) => ({
           instrument: item.instrument, fit: item.fit, recommendation: item.recommendation,

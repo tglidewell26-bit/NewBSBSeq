@@ -9,7 +9,8 @@ import {
   getGetResearchPacketQueryKey,
   PacketRecord,
   NormalizedEvidence,
-  InstrumentAssessment
+  InstrumentAssessment,
+  DecisionStep
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -103,7 +104,7 @@ export default function PacketDetail() {
             <TabsTrigger value="evidence" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full bg-transparent px-2 shadow-none">
               Validated Evidence
             </TabsTrigger>
-            <TabsTrigger value="assessment" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full bg-transparent px-2 shadow-none" disabled={!packet.assessment}>
+            <TabsTrigger value="assessment" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full bg-transparent px-2 shadow-none" disabled={!packet.assessment && !packet.assessmentRun?.progress}>
               Instrument Assessment
             </TabsTrigger>
             <TabsTrigger value="sequence" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-full bg-transparent px-2 shadow-none">Outreach Sequence</TabsTrigger>
@@ -122,7 +123,7 @@ export default function PacketDetail() {
             </TabsContent>
             
             <TabsContent value="assessment" className="h-full m-0 data-[state=active]:flex flex-col overflow-hidden">
-              {packet.assessment && <AssessmentTab packet={packet} />}
+              {packet.assessment ? <AssessmentTab packet={packet} /> : packet.assessmentRun?.progress && <div className="overflow-y-auto"><DecisionPath path={packet.assessmentRun.progress.path} buyerUnit={packet.assessmentRun.progress.buyerUnit} treeHash={packet.assessmentRun.progress.treeHash} />{packet.assessmentRun.error && <p role="alert">{packet.assessmentRun.error.error}</p>}</div>}
             </TabsContent>
             
             <TabsContent value="sequence" className="h-full min-h-0 m-0 overflow-hidden">
@@ -363,6 +364,7 @@ function AssessmentTab({ packet }: { packet: PacketRecord }) {
         </div>
       </div>
 
+      {ass.decisionTrace && <DecisionPath path={ass.decisionTrace.path} buyerUnit={ass.decisionTrace.buyerUnit} treeHash={ass.decisionTrace.treeHash} outcome={`${ass.decisionTrace.outcome.text} — ${ass.decisionTrace.outcome.instrument}`} />}
       {ass.selectionReason && <p className="mb-4 text-sm"><strong>Recommended: {ass.selectedInstruments?.join(", ") || "No instrument selected"}.</strong> {ass.selectionReason}</p>}
       {ass.usage && <p className="mb-4 text-xs text-muted-foreground">Estimated API cost: ${ass.usage.estimatedCostUsd.toFixed(4)} · {ass.usage.inputTokens} input / {ass.usage.outputTokens} output tokens</p>}
       {ass.limitations.length > 0 && <ul className="mb-4 list-disc pl-5 text-sm text-muted-foreground">{ass.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul>}
@@ -373,6 +375,23 @@ function AssessmentTab({ packet }: { packet: PacketRecord }) {
         </div>
     </div>
   );
+}
+
+function DecisionPath({ path, buyerUnit, treeHash, outcome }: { path: DecisionStep[]; buyerUnit: string; treeHash: string; outcome?: string }) {
+  return <section className="mb-6 rounded border p-4">
+    <h3 className="font-semibold">Decision path — {buyerUnit}</h3>
+    <p className="mt-1 text-xs text-muted-foreground">Tree version: {treeHash.slice(0, 12)}</p>
+    <ol className="mt-4 space-y-4">
+      {path.map((step, index) => <li key={step.nodeId} className="border-l-2 pl-4">
+        <p className="font-medium">{index + 1}. {step.question}</p>
+        <p className="mt-1"><strong>{step.label}</strong> — {step.reasoning}</p>
+        {step.lookFor && <details className="mt-1 text-xs text-muted-foreground"><summary>Question notes</summary>{step.lookFor}</details>}
+        {step.citations.map(c => <blockquote key={c.evidenceId} className="mt-2 rounded bg-muted p-2 text-sm"><span className="font-mono text-xs">{c.evidenceId}</span><p>{c.quote}</p></blockquote>)}
+        {!step.evidenceIds.length && <p className="text-xs text-muted-foreground">No supporting evidence; followed the Unknown branch.</p>}
+      </li>)}
+    </ol>
+    {outcome ? <p className="mt-4 font-semibold">Outcome: {outcome}</p> : <p className="mt-4 text-sm">{path.length} completed questions saved. No final outcome yet.</p>}
+  </section>;
 }
 
 function InstrumentCard({ instrument: i }: { instrument: InstrumentAssessment }) {
@@ -447,6 +466,9 @@ function AssessmentActions({ packet }: { packet: PacketRecord }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: config } = useGetAssessmentConfig();
+  const [buyerUnit, setBuyerUnit] = useState("");
+  const units = packet.buyerUnits ?? [];
+  const chosenUnit = buyerUnit || (units.length === 1 ? units[0] : "");
   const [demoConfirmed, setDemoConfirmed] = useState(false);
   const run = packet.assessmentRun;
   const assess = useAssessCompany({ mutation: {
@@ -471,19 +493,25 @@ function AssessmentActions({ packet }: { packet: PacketRecord }) {
       {run.error.issues?.map((issue, index) => <p key={index}>{issue.path}: {issue.message}</p>)}
     </div>}
     {!config?.enabled && <p className="text-xs text-muted-foreground">Live AI setup required: {config?.missing.join(", ") || "Checking configuration…"}</p>}
+    {units.length > 1 && <label className="text-sm">Buyer unit
+      <select aria-label="Buyer unit" value={chosenUnit} onChange={e => setBuyerUnit(e.target.value)} className="ml-2 rounded border bg-background p-2">
+        <option value="">Choose a department or lab</option>
+        {units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+      </select>
+    </label>}
     <div className="flex flex-wrap items-center gap-3">
       {!run && !packet.assessment && <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <Checkbox checked={demoConfirmed} onCheckedChange={value => setDemoConfirmed(value === true)} /> Synthetic demo only
       </label>}
-      <Button disabled={assess.isPending || (!demoConfirmed && (!config?.enabled || (!!run && !retryAllowed)))}
+      <Button disabled={assess.isPending || (!demoConfirmed && (!config?.enabled || (!!run && !retryAllowed) || (units.length > 1 && !chosenUnit)))}
         onClick={() => assess.mutate({ packetId: packet.id, data: {
-          mode: demoConfirmed ? "DEMO_SYNTHETIC" : "REAL_INPUT", retry: retryAllowed,
+          mode: demoConfirmed ? "DEMO_SYNTHETIC" : "REAL_INPUT", retry: retryAllowed, buyerUnit: chosenUnit || undefined,
         } })} className="gap-2">
         {assess.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-        {demoConfirmed ? "Run Synthetic Demo" : retryAllowed ? "Retry assessment (paid)" : "Assess company"}
+        {demoConfirmed ? "Run Synthetic Demo" : retryAllowed ? "Retry assessment (paid)" : "Run decision tree"}
       </Button>
     </div>
-    {!demoConfirmed && config?.enabled && <p className="text-xs text-muted-foreground">One paid AI call. No app spending cap or automatic retries.</p>}
+    {!demoConfirmed && config?.enabled && <p className="text-xs text-muted-foreground">One paid call per question. Estimated limit: ${config.treeBudgetUsd ?? 2} per run; {config.maxTreeOutputTokens ?? 8000} total output tokens. No automatic retries.</p>}
   </div>;
   return packet.stage === "ASSESSED" ? <ReviewDialog packet={packet} /> : null;
 }

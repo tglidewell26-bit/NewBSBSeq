@@ -9,6 +9,8 @@ import * as zod from 'zod';
 
 
 export const GetAssessmentConfigResponse = zod.object({
+  "treeBudgetUsd": zod.number().optional(),
+  "maxTreeOutputTokens": zod.number().int().optional(),
   "enabled": zod.boolean(),
   "missing": zod.array(zod.string()),
   "model": zod.string()
@@ -530,6 +532,29 @@ export const SubmitResearchPacketResponse = zod.object({
   "model": zod.string().optional(),
   "promptVersion": zod.string().optional(),
   "rubricVersion": zod.string().optional(),
+  "decisionTrace": zod.object({
+  "treeHash": zod.string(),
+  "buyerUnit": zod.string(),
+  "path": zod.array(zod.object({
+  "nodeId": zod.string(),
+  "question": zod.string(),
+  "lookFor": zod.string(),
+  "label": zod.string(),
+  "next": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+})),
+  "reasoning": zod.string()
+})),
+  "graph": zod.record(zod.string(), zod.unknown()),
+  "outcome": zod.object({
+  "nodeId": zod.string(),
+  "text": zod.string(),
+  "instrument": zod.string()
+})
+}).optional(),
   "groundedEvidenceIds": zod.array(zod.string()).optional(),
   "evidenceReviews": zod.array(zod.object({
   "evidenceId": zod.string(),
@@ -549,6 +574,27 @@ export const SubmitResearchPacketResponse = zod.object({
   "id": zod.string(),
   "state": zod.enum(['RUNNING', 'COMPLETED', 'FAILED', 'OUTCOME_UNKNOWN']),
   "attempt": zod.number().int(),
+  "progress": zod.object({
+  "treeHash": zod.string(),
+  "buyerUnit": zod.string(),
+  "path": zod.array(zod.object({
+  "nodeId": zod.string(),
+  "question": zod.string(),
+  "lookFor": zod.string(),
+  "label": zod.string(),
+  "next": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+})),
+  "reasoning": zod.string()
+})),
+  "pendingNodeId": zod.string().nullish(),
+  "calls": zod.number().int().optional(),
+  "budgetUsd": zod.number().optional(),
+  "graph": zod.record(zod.string(), zod.unknown()).optional()
+}).optional(),
   "startedAt": zod.coerce.date(),
   "error": zod.object({
   "error": zod.string(),
@@ -565,6 +611,7 @@ export const SubmitResearchPacketResponse = zod.object({
   "responseId": zod.string().optional()
 }).optional()
 }).optional(),
+  "buyerUnits": zod.array(zod.string()).optional(),
   "review": zod.object({
   "id": zod.string(),
   "decision": zod.enum(['APPROVE', 'REJECT']),
@@ -867,6 +914,29 @@ export const GetResearchPacketResponse = zod.object({
   "model": zod.string().optional(),
   "promptVersion": zod.string().optional(),
   "rubricVersion": zod.string().optional(),
+  "decisionTrace": zod.object({
+  "treeHash": zod.string(),
+  "buyerUnit": zod.string(),
+  "path": zod.array(zod.object({
+  "nodeId": zod.string(),
+  "question": zod.string(),
+  "lookFor": zod.string(),
+  "label": zod.string(),
+  "next": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+})),
+  "reasoning": zod.string()
+})),
+  "graph": zod.record(zod.string(), zod.unknown()),
+  "outcome": zod.object({
+  "nodeId": zod.string(),
+  "text": zod.string(),
+  "instrument": zod.string()
+})
+}).optional(),
   "groundedEvidenceIds": zod.array(zod.string()).optional(),
   "evidenceReviews": zod.array(zod.object({
   "evidenceId": zod.string(),
@@ -886,6 +956,27 @@ export const GetResearchPacketResponse = zod.object({
   "id": zod.string(),
   "state": zod.enum(['RUNNING', 'COMPLETED', 'FAILED', 'OUTCOME_UNKNOWN']),
   "attempt": zod.number().int(),
+  "progress": zod.object({
+  "treeHash": zod.string(),
+  "buyerUnit": zod.string(),
+  "path": zod.array(zod.object({
+  "nodeId": zod.string(),
+  "question": zod.string(),
+  "lookFor": zod.string(),
+  "label": zod.string(),
+  "next": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+})),
+  "reasoning": zod.string()
+})),
+  "pendingNodeId": zod.string().nullish(),
+  "calls": zod.number().int().optional(),
+  "budgetUsd": zod.number().optional(),
+  "graph": zod.record(zod.string(), zod.unknown()).optional()
+}).optional(),
   "startedAt": zod.coerce.date(),
   "error": zod.object({
   "error": zod.string(),
@@ -902,6 +993,7 @@ export const GetResearchPacketResponse = zod.object({
   "responseId": zod.string().optional()
 }).optional()
 }).optional(),
+  "buyerUnits": zod.array(zod.string()).optional(),
   "review": zod.object({
   "id": zod.string(),
   "decision": zod.enum(['APPROVE', 'REJECT']),
@@ -916,13 +1008,23 @@ export const GetResearchPacketResponse = zod.object({
 })
 
 
+export const DeleteResearchPacketParams = zod.object({
+  "packetId": zod.coerce.string()
+})
+
+export const DeleteResearchPacketResponse = zod.object({
+  "deleted": zod.literal(true)
+})
+
+
 export const AssessCompanyParams = zod.object({
   "packetId": zod.coerce.string()
 })
 
 export const AssessCompanyBody = zod.object({
   "mode": zod.enum(['REAL_INPUT', 'DEMO_SYNTHETIC']),
-  "retry": zod.boolean().optional()
+  "retry": zod.boolean().optional(),
+  "buyerUnit": zod.string().optional()
 })
 
 export const assessCompanyResponseInstrumentsMax = 3;
@@ -957,6 +1059,29 @@ export const AssessCompanyResponse = zod.object({
   "model": zod.string().optional(),
   "promptVersion": zod.string().optional(),
   "rubricVersion": zod.string().optional(),
+  "decisionTrace": zod.object({
+  "treeHash": zod.string(),
+  "buyerUnit": zod.string(),
+  "path": zod.array(zod.object({
+  "nodeId": zod.string(),
+  "question": zod.string(),
+  "lookFor": zod.string(),
+  "label": zod.string(),
+  "next": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+})),
+  "reasoning": zod.string()
+})),
+  "graph": zod.record(zod.string(), zod.unknown()),
+  "outcome": zod.object({
+  "nodeId": zod.string(),
+  "text": zod.string(),
+  "instrument": zod.string()
+})
+}).optional(),
   "groundedEvidenceIds": zod.array(zod.string()).optional(),
   "evidenceReviews": zod.array(zod.object({
   "evidenceId": zod.string(),
@@ -1005,4 +1130,3 @@ export const ReviewAssessmentResponse = zod.object({
   "validatedRealAssessment": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
-

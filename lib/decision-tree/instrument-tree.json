@@ -1,0 +1,426 @@
+{
+  "schema": "bsb-instrument-graph-v1",
+  "start": "s1",
+  "nodes": [
+    {
+      "id": "s1",
+      "type": "question",
+      "text": "Does this buyer unit work with tissue?",
+      "lookFor": "Look for: FFPE, fresh frozen / OCT, TMAs, biopsies, resections, in vivo models. Profile each department separately.",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "s3"
+        },
+        {
+          "label": "Unknown",
+          "next": "s3"
+        },
+        {
+          "label": "No",
+          "next": "s2"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "type": "outcome",
+      "text": "No spatial fit — log it and move on",
+      "instrument": "No fit",
+      "lookFor": "Cells, blood or suspensions only."
+    },
+    {
+      "id": "s3",
+      "type": "question",
+      "text": "Does this unit already own a spatial platform?",
+      "lookFor": "Check publications' methods, posters, job posts, vendor customer stories. Used only to find the RNA ↔ protein gap.",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "s4"
+        },
+        {
+          "label": "No",
+          "next": "nmurdd82wavtk"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmurdd82wavtk"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "type": "question",
+      "text": "Which kind do they own?",
+      "lookFor": "GeoMx counts as Both (RNA + protein, regional). CosMx counts as Spatial RNA, CellScape as Spatial protein. Competitor platforms — RNA: Xenium and Visium / Visium HD (10x Genomics), MERSCOPE (Vizgen), Stereo-seq (STOmics). Protein: PhenoCycler / CODEX (Akoya), COMET (Lunaphore), Orion (RareCyte), MACSima (Miltenyi), MIBI (Ionpath), Hyperion / Imaging Mass Cytometry (Standard BioTools).",
+      "answers": [
+        {
+          "label": "Spatial RNA",
+          "next": "s5"
+        },
+        {
+          "label": "Spatial protein",
+          "next": "s6"
+        },
+        {
+          "label": "Both",
+          "next": "nmurg2zugp0lp"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmurdd82wavtk"
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "type": "outcome",
+      "text": "Protein gap: CellScape (single-cell) or GeoMx protein (regional)",
+      "instrument": "GeoMx or CellScape",
+      "lookFor": "e.g. CosMx, Xenium, Visium, MERSCOPE."
+    },
+    {
+      "id": "s6",
+      "type": "outcome",
+      "text": "RNA gap: CosMx (single-cell) or GeoMx (regional)",
+      "instrument": "CosMx or GeoMx",
+      "lookFor": "e.g. CellScape, PhenoCycler, COMET, Orion."
+    },
+    {
+      "id": "s8",
+      "type": "question",
+      "text": "What do they measure: RNA, protein, or both?",
+      "lookFor": "Never assume it. Protein: antibody drugs, mIF/IHC, in-house antibodies, flow, proteomics. RNA: scRNA-seq, RNA-seq, ISH/RNAscope, NGS, barcoding, RNA therapeutics.",
+      "answers": [
+        {
+          "label": "Protein",
+          "next": "s9"
+        },
+        {
+          "label": "RNA",
+          "next": "s12"
+        },
+        {
+          "label": "Both",
+          "next": "s12"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmurdm4j8ex0j"
+        }
+      ]
+    },
+    {
+      "id": "s9",
+      "type": "question",
+      "text": "Single-cell phenotyping or regional pathway activity?",
+      "lookFor": "Forgivable assumption: pick the likelier one and phrase it so they can correct you.",
+      "answers": [
+        {
+          "label": "Single-cell / quantitative imaging",
+          "next": "s10"
+        },
+        {
+          "label": "Pathway activity, PTMs, cohorts",
+          "next": "s14"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmure50pd0e6a"
+        }
+      ]
+    },
+    {
+      "id": "s10",
+      "type": "outcome",
+      "text": "CellScape",
+      "instrument": "CellScape",
+      "lookFor": "Own antibodies, any species, open software all strengthen this."
+    },
+    {
+      "id": "s12",
+      "type": "question",
+      "text": "Single-cell or regional?",
+      "answers": [
+        {
+          "label": "Single-cell / atlases / neighborhoods",
+          "next": "s13"
+        },
+        {
+          "label": "Regional, cohorts, NGS infrastructure",
+          "next": "s14"
+        },
+        {
+          "label": "Unknown",
+          "next": "o_rna_open"
+        }
+      ]
+    },
+    {
+      "id": "s13",
+      "type": "outcome",
+      "text": "CosMx",
+      "instrument": "CosMx"
+    },
+    {
+      "id": "s14",
+      "type": "outcome",
+      "text": "GeoMx",
+      "instrument": "GeoMx",
+      "lookFor": "GeoMx NGS readout fits sequencing shops."
+    },
+    {
+      "id": "s16",
+      "type": "question",
+      "text": "Is the company clinical stage with biomarker cohorts?",
+      "lookFor": "Tiebreaker. Clinical stage tends to make GeoMx the destination even when another instrument opens the door.",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "s14"
+        },
+        {
+          "label": "No",
+          "next": "o_discovery"
+        },
+        {
+          "label": "Unknown",
+          "next": "o_discovery"
+        }
+      ]
+    },
+    {
+      "id": "nmurd5nkcadhj",
+      "type": "question",
+      "text": "What Area of research do they focus on?",
+      "lookFor": "Cancer, Neuroscience, Drug Discovery, Infectious Disease, Diabetes, Gastro, Aging, Cardiac, Kidney, Immunology / autoimmune, Fibrosis / liver, Lung, Ophthalmology, Dermatology, Rare disease, Musculoskeletal. Mainly for personalizing outreach.",
+      "answers": [
+        {
+          "label": "One of these areas",
+          "next": "s8"
+        },
+        {
+          "label": "Other tissue biology",
+          "next": "s8"
+        },
+        {
+          "label": "Unknown",
+          "next": "s8"
+        },
+        {
+          "label": "No tissue biology program",
+          "next": "s2"
+        }
+      ]
+    },
+    {
+      "id": "nmurdd82wavtk",
+      "type": "question",
+      "text": "Are they a CRO, Academic Core, or service provider?",
+      "lookFor": "Business model, not research area. Service providers judge an instrument on revenue it can generate. For academic cores, NIH S10 shared-instrument grant cycles are a strong timing signal.",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "nmurdyk3c6q5y"
+        },
+        {
+          "label": "No",
+          "next": "nmurd5nkcadhj"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmurd5nkcadhj"
+        }
+      ]
+    },
+    {
+      "id": "nmurdm4j8ex0j",
+      "type": "question",
+      "text": "Do they generate RNA data (RNA-seq, scRNA-seq, ISH, spatial transcriptomics)?",
+      "lookFor": "Mentioning a gene or target is not enough — nearly every company does. Look for methods that produce RNA data.",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "s12"
+        },
+        {
+          "label": "No",
+          "next": "nmurdop41r6cq"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmurdop41r6cq"
+        }
+      ]
+    },
+    {
+      "id": "nmurdop41r6cq",
+      "type": "question",
+      "text": "Does their Publications or News show any IHC, IF, or Tissue Imaging?",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "s9"
+        },
+        {
+          "label": "No",
+          "next": "s16"
+        },
+        {
+          "label": "Unknown",
+          "next": "s16"
+        }
+      ]
+    },
+    {
+      "id": "nmurdyk3c6q5y",
+      "type": "question",
+      "text": "Which technologies/services do they offer?",
+      "answers": [
+        {
+          "label": "Tissue imaging",
+          "next": "nmure50pd0e6a"
+        },
+        {
+          "label": "Sequencing",
+          "next": "s14"
+        },
+        {
+          "label": "Pathology / IHC",
+          "next": "nmure50pd0e6a"
+        },
+        {
+          "label": "Neither",
+          "next": "s2"
+        },
+        {
+          "label": "Unknown",
+          "next": "o_discovery"
+        }
+      ]
+    },
+    {
+      "id": "nmure50pd0e6a",
+      "type": "outcome",
+      "text": "CellScape or GeoMx — ask: single-cell or regional?",
+      "instrument": "GeoMx or CellScape"
+    },
+    {
+      "id": "o_covered",
+      "type": "question",
+      "text": "Which Bruker Technology do they own?",
+      "lookFor": "Bruker spatial platforms this unit already owns. Offer what fills the gap: CosMx owners lack protein; CellScape owners lack RNA; GeoMx owners lack single-cell.",
+      "answers": [
+        {
+          "label": "GeoMx",
+          "next": "nmurgoce1egh5"
+        },
+        {
+          "label": "CosMx",
+          "next": "o_offer_cellscape"
+        },
+        {
+          "label": "CellScape",
+          "next": "o_offer_rna"
+        },
+        {
+          "label": "Two Bruker platforms",
+          "next": "o_bruker_covered"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmurdd82wavtk"
+        }
+      ]
+    },
+    {
+      "id": "o_discovery",
+      "type": "outcome",
+      "text": "Discovery call: ask RNA or protein, single-cell or regional",
+      "instrument": "Keep researching",
+      "lookFor": "The dossier is too thin to pick. Lead with these questions instead of a guess."
+    },
+    {
+      "id": "o_rna_open",
+      "type": "outcome",
+      "text": "CosMx or GeoMx — ask: single-cell or regional?",
+      "instrument": "CosMx or GeoMx",
+      "lookFor": "RNA work is clear; resolution is a forgivable assumption to confirm on the call."
+    },
+    {
+      "id": "nmurg2zugp0lp",
+      "type": "question",
+      "text": "Are both technologies from competitors?",
+      "lookFor": "Competitor platforms — RNA: Xenium and Visium / Visium HD (10x Genomics), MERSCOPE (Vizgen), Stereo-seq (STOmics). Protein: PhenoCycler / CODEX (Akoya), COMET (Lunaphore), Orion (RareCyte), MACSima (Miltenyi), MIBI (Ionpath), Hyperion / Imaging Mass Cytometry (Standard BioTools).",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "q_sp"
+        },
+        {
+          "label": "No — at least one is Bruker",
+          "next": "o_covered"
+        },
+        {
+          "label": "Unknown",
+          "next": "nmurdd82wavtk"
+        }
+      ]
+    },
+    {
+      "id": "nmurgoce1egh5",
+      "type": "outcome",
+      "text": "Offer CosMx or CellScape",
+      "instrument": "CosMx or CellScape"
+    },
+    {
+      "id": "q_sp",
+      "type": "question",
+      "text": "Is this unit a service provider (CRO, academic core)?",
+      "lookFor": "Owning competitor RNA and protein platforms means a research lab is covered. Service providers still buy to add capacity or new services.",
+      "answers": [
+        {
+          "label": "Yes",
+          "next": "nmurdyk3c6q5y"
+        },
+        {
+          "label": "No",
+          "next": "o_deprior"
+        },
+        {
+          "label": "Unknown",
+          "next": "o_deprior"
+        }
+      ]
+    },
+    {
+      "id": "o_deprior",
+      "type": "outcome",
+      "text": "Deprioritize — already has competitor RNA and protein platforms",
+      "instrument": "Other",
+      "lookFor": "Revisit when their instruments age or a service contract comes up for renewal."
+    },
+    {
+      "id": "o_offer_cellscape",
+      "type": "outcome",
+      "text": "Offer CellScape (GeoMx protein as second option)",
+      "instrument": "CellScape",
+      "lookFor": "Protein gap. Calico: the CosMx group stopped using GeoMx; the imaging group wanted CellScape."
+    },
+    {
+      "id": "o_offer_rna",
+      "type": "outcome",
+      "text": "Offer CosMx or GeoMx (RNA gap)",
+      "instrument": "CosMx or GeoMx",
+      "lookFor": "CellScape is protein only."
+    },
+    {
+      "id": "o_bruker_covered",
+      "type": "outcome",
+      "text": "Covered by two Bruker platforms — consumables / expansion",
+      "instrument": "Other",
+      "lookFor": "Not a new-instrument target."
+    }
+  ]
+}

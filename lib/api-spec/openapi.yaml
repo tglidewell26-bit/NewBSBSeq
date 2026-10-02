@@ -110,7 +110,7 @@ paths:
             schema: { $ref: "#/components/schemas/AssessmentInput" }
       responses:
         "200":
-          description: Deterministic mock assessment
+          description: Instrument tree assessment or synthetic demonstration
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Assessment" }
@@ -238,6 +238,7 @@ components:
         validation: { $ref: "#/components/schemas/ValidationResult" }
         assessment: { $ref: "#/components/schemas/Assessment" }
         assessmentRun: { $ref: "#/components/schemas/AssessmentRun" }
+        buyerUnits: { type: array, items: { type: string } }
         review: { $ref: "#/components/schemas/Review" }
         createdAt: { type: string, format: date-time }
     NormalizedEvidence:
@@ -307,6 +308,7 @@ components:
         model: { type: string }
         promptVersion: { type: string }
         rubricVersion: { type: string }
+        decisionTrace: { $ref: "#/components/schemas/DecisionTrace" }
         groundedEvidenceIds: { type: array, items: { type: string } }
         evidenceReviews:
           type: array
@@ -319,6 +321,7 @@ components:
       properties:
         mode: { type: string, enum: [REAL_INPUT, DEMO_SYNTHETIC] }
         retry: { type: boolean }
+        buyerUnit: { type: string }
     ReviewInput:
       type: object
       additionalProperties: false
@@ -353,6 +356,8 @@ components:
       type: object
       required: [enabled, missing, model]
       properties:
+        treeBudgetUsd: { type: number }
+        maxTreeOutputTokens: { type: integer }
         enabled: { type: boolean }
         missing: { type: array, items: { type: string } }
         model: { type: string }
@@ -380,6 +385,53 @@ components:
         id: { type: string }
         state: { type: string, enum: [RUNNING, COMPLETED, FAILED, OUTCOME_UNKNOWN] }
         attempt: { type: integer }
+        progress: { $ref: "#/components/schemas/DecisionProgress" }
         startedAt: { type: string, format: date-time }
         error: { $ref: "#/components/schemas/ValidationFailure" }
         usage: { $ref: "#/components/schemas/AssessmentUsage" }
+
+    DecisionStep:
+      type: object
+      required: [nodeId, question, lookFor, label, next, evidenceIds, citations, reasoning]
+      properties:
+        nodeId: { type: string }
+        question: { type: string }
+        lookFor: { type: string }
+        label: { type: string }
+        next: { type: string }
+        evidenceIds: { type: array, items: { type: string } }
+        citations:
+          type: array
+          items:
+            type: object
+            required: [evidenceId, quote]
+            properties:
+              evidenceId: { type: string }
+              quote: { type: string }
+        reasoning: { type: string }
+    DecisionProgress:
+      type: object
+      required: [treeHash, buyerUnit, path]
+      properties:
+        treeHash: { type: string }
+        buyerUnit: { type: string }
+        path: { type: array, items: { $ref: "#/components/schemas/DecisionStep" } }
+        pendingNodeId: { type: [string, 'null'] }
+        calls: { type: integer }
+        budgetUsd: { type: number }
+        graph: { type: object, additionalProperties: true }
+    DecisionTrace:
+      type: object
+      required: [treeHash, buyerUnit, path, outcome, graph]
+      properties:
+        treeHash: { type: string }
+        buyerUnit: { type: string }
+        path: { type: array, items: { $ref: "#/components/schemas/DecisionStep" } }
+        graph: { type: object, additionalProperties: true }
+        outcome:
+          type: object
+          required: [nodeId, text, instrument]
+          properties:
+            nodeId: { type: string }
+            text: { type: string }
+            instrument: { type: string }

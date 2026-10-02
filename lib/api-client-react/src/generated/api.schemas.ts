@@ -215,6 +215,38 @@ export const AssessmentSelectedInstrumentsItem = {
   GeoMx: 'GeoMx',
 } as const;
 
+export type DecisionStepCitationsItem = {
+  evidenceId: string;
+  quote: string;
+};
+
+export interface DecisionStep {
+  nodeId: string;
+  question: string;
+  lookFor: string;
+  label: string;
+  next: string;
+  evidenceIds: string[];
+  citations: DecisionStepCitationsItem[];
+  reasoning: string;
+}
+
+export type DecisionTraceGraph = { [key: string]: unknown };
+
+export type DecisionTraceOutcome = {
+  nodeId: string;
+  text: string;
+  instrument: string;
+};
+
+export interface DecisionTrace {
+  treeHash: string;
+  buyerUnit: string;
+  path: DecisionStep[];
+  graph: DecisionTraceGraph;
+  outcome: DecisionTraceOutcome;
+}
+
 export type EvidenceReviewVerdict = typeof EvidenceReviewVerdict[keyof typeof EvidenceReviewVerdict];
 
 
@@ -258,6 +290,7 @@ export interface Assessment {
   model?: string;
   promptVersion?: string;
   rubricVersion?: string;
+  decisionTrace?: DecisionTrace;
   groundedEvidenceIds?: string[];
   evidenceReviews?: EvidenceReview[];
   usage?: AssessmentUsage;
@@ -273,6 +306,19 @@ export const AssessmentRunState = {
   OUTCOME_UNKNOWN: 'OUTCOME_UNKNOWN',
 } as const;
 
+export type DecisionProgressGraph = { [key: string]: unknown };
+
+export interface DecisionProgress {
+  treeHash: string;
+  buyerUnit: string;
+  path: DecisionStep[];
+  /** @nullable */
+  pendingNodeId?: string | null;
+  calls?: number;
+  budgetUsd?: number;
+  graph?: DecisionProgressGraph;
+}
+
 export interface ValidationFailure {
   error: string;
   issues: FieldIssue[];
@@ -282,6 +328,7 @@ export interface AssessmentRun {
   id: string;
   state: AssessmentRunState;
   attempt: number;
+  progress?: DecisionProgress;
   startedAt: string;
   error?: ValidationFailure;
   usage?: AssessmentUsage;
@@ -316,6 +363,7 @@ export interface PacketRecord {
   validation: ValidationResult;
   assessment?: Assessment;
   assessmentRun?: AssessmentRun;
+  buyerUnits?: string[];
   review?: Review;
   createdAt: string;
 }
@@ -331,6 +379,7 @@ export const AssessmentInputMode = {
 export interface AssessmentInput {
   mode: AssessmentInputMode;
   retry?: boolean;
+  buyerUnit?: string;
 }
 
 export type ReviewInputDecision = typeof ReviewInputDecision[keyof typeof ReviewInputDecision];
@@ -361,7 +410,13 @@ export interface ReviewInput {
 }
 
 export interface AssessmentConfig {
+  treeBudgetUsd?: number;
+  maxTreeOutputTokens?: number;
   enabled: boolean;
   missing: string[];
   model: string;
 }
+
+export type DeleteResearchPacket200 = {
+  deleted: true;
+};
