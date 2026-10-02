@@ -23,6 +23,7 @@ import type {
   Assessment,
   AssessmentConfig,
   AssessmentInput,
+  DeleteResearchPacket200,
   HealthStatus,
   PacketRecord,
   PacketSummary,
@@ -424,6 +425,74 @@ export function useGetResearchPacket<TData = Awaited<ReturnType<typeof getResear
 
 
 
+
+export const getDeleteResearchPacketUrl = (packetId: string,) => {
+
+
+
+
+  return `/api/bsb-v2/packets/${packetId}`
+}
+
+export const deleteResearchPacket = async (packetId: string, options?: Parameters<typeof customFetch>[1]): Promise<DeleteResearchPacket200> => {
+
+  return customFetch<DeleteResearchPacket200>(getDeleteResearchPacketUrl(packetId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteResearchPacketMutationKey = () => ['deleteResearchPacket'] as const;
+
+export const getDeleteResearchPacketMutationOptions = <TError = ErrorType<ValidationFailure>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteResearchPacket>>, TError,DeleteResearchPacketMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteResearchPacket>>, TError,DeleteResearchPacketMutationVariables, TContext> => {
+
+const mutationKey = getDeleteResearchPacketMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteResearchPacket>>, DeleteResearchPacketMutationVariables> = (props) => {
+          const {packetId} = props ?? {};
+
+          return  deleteResearchPacket(packetId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteResearchPacketMutationResult = NonNullable<Awaited<ReturnType<typeof deleteResearchPacket>>>
+
+    export type DeleteResearchPacketMutationError = ErrorType<ValidationFailure>
+    export type DeleteResearchPacketMutationVariables = {packetId: string}
+
+    export const useDeleteResearchPacket = <TError = ErrorType<ValidationFailure>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteResearchPacket>>, TError,DeleteResearchPacketMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteResearchPacket>>,
+        TError,
+        DeleteResearchPacketMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteResearchPacketMutationOptions(options));
+    }
 
 export const getAssessCompanyUrl = (packetId: string,) => {
 

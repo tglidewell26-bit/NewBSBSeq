@@ -163,12 +163,12 @@ export function validateModelAssessment(value: unknown, evidence: LocatedEvidenc
   };
 }
 
-export async function callAssessmentModel(request: { model: string; max_output_tokens: number; [key: string]: unknown }, fetcher: typeof fetch = fetch) {
+export async function callAssessmentModel(request: { model: string; max_output_tokens: number; [key: string]: unknown }, fetcher: typeof fetch = fetch, timeoutMs = TIMEOUT_MS) {
   let response: Response;
   try {
     response = await fetcher("https://api.openai.com/v1/responses", {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify(request), signal: AbortSignal.timeout(TIMEOUT_MS),
+      body: JSON.stringify(request), signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
     throw new AssessmentError("OUTCOME_UNKNOWN", "The provider connection ended before its outcome was known. No automatic retry was made.", 502);
@@ -184,7 +184,7 @@ export async function callAssessmentModel(request: { model: string; max_output_t
   try { value = JSON.parse(text); } catch { throw new AssessmentError("INVALID_MODEL_OUTPUT", "The provider returned unreadable assessment JSON. No assessment was saved."); }
   const inputTokens = body.usage?.input_tokens;
   const outputTokens = body.usage?.output_tokens;
-  if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > MAX_OUTPUT_TOKENS) throw new AssessmentError("INVALID_USAGE", "Provider usage was invalid or missing.", 502);
+  if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > request.max_output_tokens) throw new AssessmentError("INVALID_USAGE", "Provider usage was invalid or missing.", 502);
   return { value, usage: { inputTokens, outputTokens,
     estimatedCostUsd: (inputTokens * 2.5 + outputTokens * 12) / 1e6,
     model: body.model ?? MODEL, responseId: body.id } };

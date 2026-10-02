@@ -7,12 +7,14 @@
  */
 import type { AssessmentRunState } from './assessmentRunState';
 import type { AssessmentUsage } from './assessmentUsage';
+import type { DecisionProgress } from './decisionProgress';
 import type { ValidationFailure } from './validationFailure';
 
 export interface AssessmentRun {
   id: string;
   state: AssessmentRunState;
   attempt: number;
+  progress?: DecisionProgress;
   startedAt: Date;
   error?: ValidationFailure;
   usage?: AssessmentUsage;

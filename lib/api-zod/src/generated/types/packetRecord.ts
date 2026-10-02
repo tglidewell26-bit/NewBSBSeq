@@ -22,6 +22,7 @@ export interface PacketRecord {
   validation: ValidationResult;
   assessment?: Assessment;
   assessmentRun?: AssessmentRun;
+  buyerUnits?: string[];
   review?: Review;
   createdAt: Date;
 }

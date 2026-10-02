@@ -8,6 +8,7 @@
 import type { AssessmentProvider } from './assessmentProvider';
 import type { AssessmentSelectedInstrumentsItem } from './assessmentSelectedInstrumentsItem';
 import type { AssessmentUsage } from './assessmentUsage';
+import type { DecisionTrace } from './decisionTrace';
 import type { EvidenceReview } from './evidenceReview';
 import type { InstrumentAssessment } from './instrumentAssessment';
 
@@ -29,6 +30,7 @@ export interface Assessment {
   model?: string;
   promptVersion?: string;
   rubricVersion?: string;
+  decisionTrace?: DecisionTrace;
   groundedEvidenceIds?: string[];
   evidenceReviews?: EvidenceReview[];
   usage?: AssessmentUsage;

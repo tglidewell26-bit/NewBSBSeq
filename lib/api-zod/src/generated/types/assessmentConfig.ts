@@ -7,6 +7,8 @@
  */
 
 export interface AssessmentConfig {
+  treeBudgetUsd?: number;
+  maxTreeOutputTokens?: number;
   enabled: boolean;
   missing: string[];
   model: string;

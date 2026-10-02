@@ -1,3 +1,4 @@
+import { validateTreeAssessment } from "./instrument-tree";
 import {
   draftJsonSchema,
   semanticJsonSchema,
@@ -133,7 +134,8 @@ export function assertApprovedPacket(row: any) {
       "Evidence normalization failed.",
       409,
     );
-  validateModelAssessment(
+  if (a.promptVersion === "bsb-tree-1") validateTreeAssessment(a, normalized.normalized, row.evidence_version);
+  else validateModelAssessment(
     {
       evidenceReviews: a.evidenceReviews,
       instruments: a.instruments.map((i: any) => ({

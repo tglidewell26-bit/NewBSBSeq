@@ -60,3 +60,7 @@ Personal Phase 1 application for research-packet intake without sign-in, evidenc
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+
+## Instrument decision tree
+
+New live assessments traverse `lib/decision-tree/instrument-tree.json`; see `docs/instrument-decision-tree.md`. The engine asks one question per model call, validates citations, saves the full path, and enforces a per-run estimated spending limit (`BSB_TREE_MAX_COST_USD`, default 2), token limit, deadline and existing retry controls. Multi-unit packets require a buyer-unit selection. Old assessments remain readable. Replace the JSON and rebuild to update routing.
