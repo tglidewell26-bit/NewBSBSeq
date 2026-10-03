@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { convertDossier } from "./account-dossier";
 import { normalizeEvidence } from "./bsb-v2";
-import { loadGraph, validateGraph, validateAnswer, questionRequest, walkTree, treeAssessment, validateTreeAssessment, scopedEvidence, type Graph, type TreeNode } from "./instrument-tree";
+import { buyerUnitOptions, loadGraph, validateGraph, validateAnswer, questionRequest, walkTree, treeAssessment, validateTreeAssessment, scopedEvidence, type Graph, type TreeNode } from "./instrument-tree";
 const sample = JSON.parse(readFileSync(new URL("../../../../samples/account-dossier-synthetic.json", import.meta.url), "utf8"));
 const evidence = () => normalizeEvidence(convertDossier(structuredClone(sample)).researchPacket).normalized;
 const question = (): TreeNode => ({ id: "q", type: "question", text: "Does the unit perform protein imaging?", answers: [{ label: "Yes", next: "yes" }, { label: "No", next: "no" }, { label: "Unknown", next: "unknown" }] });
@@ -76,10 +76,29 @@ describe("instrument tree", () => {
     expect(scoped.evidence.some(e => e.claim.startsWith("Job posting"))).toBe(true);
     expect(() => validateAnswer({ ...yes(), evidenceIds: ["other"], citations: [{ evidenceId: "other", quote: other.basisFacts[0] }] }, question(), scoped.evidence)).toThrow();
   });
+  it("explains buyer units, suggests the strongest starting point and hides administrative-only units", () => {
+    const all = evidence();
+    const protein = all.find(e => e.claim.includes("Protein signal"))!;
+    all.push(
+      { ...protein, evidenceId: "trans-sample", claim: "[Translational Group] Sample type: FFPE tumor tissue", locations: ["qualificationEvidence.categories.samples[99]"] },
+      { ...protein, evidenceId: "trans-rna", claim: "[Translational Group] RNA signal: RNA profiling", locations: ["qualificationEvidence.categories.workflows[99]"] },
+      { ...protein, evidenceId: "trans-imaging", claim: "[Translational Group] Infrastructure: pathology imaging", locations: ["qualificationEvidence.categories.technologies[99]"] },
+      { ...protein, evidenceId: "cmc-focus", claim: "[Chemistry, Manufacturing and Controls] Research focus: plasmid process development", locations: ["qualificationEvidence.categories.scientificNeeds[99]"] },
+    );
+    const options = buyerUnitOptions(all);
+    expect(options.map(option => option.name)).toEqual(["Neuro Imaging Group", "Translational Group"]);
+    expect(options.find(option => option.recommended)?.name).toBe("Translational Group");
+    expect(options.find(option => option.name === "Translational Group")?.description).toContain("Samples: FFPE tumor tissue");
+    expect(options.find(option => option.recommended)?.recommendationReason).toContain("tissue or tumor samples");
+  });
   it("sends only the current question and bounds request size", () => {
-    const input = JSON.parse(questionRequest(question(), evidence(), "Neuro Imaging Group").input);
+    const request = questionRequest(question(), evidence(), "Neuro Imaging Group");
+    const input = JSON.parse(request.input);
     expect(input.allowedAnswers).toEqual(["Yes", "No", "Unknown"]);
     expect(input).not.toHaveProperty("next");
+    const citation = (request.text.format.schema.properties as any).citations.items.properties;
+    expect(citation.evidenceId.enum).toContain(yes().evidenceIds[0]);
+    expect(citation.quote.enum).toContain(yes().citations[0].quote);
     expect(() => questionRequest(question(), Array(81).fill(evidence()[0]), "Unit")).toThrow();
     expect(() => questionRequest(question(), [{ ...evidence()[0], claim: "x".repeat(64000) }], "Unit")).toThrow();
   });

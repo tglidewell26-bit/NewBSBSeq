@@ -85,7 +85,6 @@ export function normalizeEvidence(packet: any) {
   const normalized: LocatedEvidence[] = [...byId.values()].map(({ item, locations }) => {
     const issues: string[] = [];
     const affirmative = ["CONFIRMED", "SUPPORTED", "EXPLICIT"].includes(item.evidenceState);
-    const publicUnverifiedMessage = "Supplied public excerpt; not independently retrieved. Live assessment can evaluate whether the excerpt supports the claim.";
     if (item.provenanceType === "CONFIRMED_ACCOUNT") {
       if (item.evidenceState !== "CONFIRMED" || item.confirmed !== true || !item.sourceLabel || item.sourceUrl !== null || item.basisSourceUrls.length || item.inference !== null) {
         issues.push("Confirmed account evidence requires CONFIRMED state, confirmed true, sourceLabel, null sourceUrl, no public basis URLs, and no inference.");
@@ -93,7 +92,6 @@ export function normalizeEvidence(packet: any) {
     } else if (item.provenanceType === "PUBLIC_SOURCE" && affirmative) {
       // Intake preserves supplied source provenance; semantic assessment is a
       // separate step and does not pretend to retrieve or verify the web page.
-      issues.push(publicUnverifiedMessage);
       const validHttp = (value: string) => {
         try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:"; } catch { return false; }
       };
@@ -103,10 +101,14 @@ export function normalizeEvidence(packet: any) {
       if (item.sourceUrl && !validHttp(item.sourceUrl) || item.basisSourceUrls.some((url) => !validHttp(url))) {
         issues.push("Public source URLs must use HTTP(S).");
       }
-      const claimNumbers = item.claim.match(/\b\d+(?:\.\d+)?%?\b/g) ?? [];
-      const basis = item.basisFacts.join(" ");
-      const unsupportedNumbers = claimNumbers.filter((number) => !basis.includes(number));
-      if (unsupportedNumbers.length) issues.push(`Claim contains unsupported numeric detail: ${unsupportedNumbers.join(", ")}.`);
+      // Job/publication titles contain dates, volume/issue numbers and abstract
+      // IDs that are source metadata rather than scientific measurements.
+      if (item.assessmentType !== "SOURCE") {
+        const claimNumbers = item.claim.match(/\b\d+(?:\.\d+)?%?\b/g) ?? [];
+        const basis = item.basisFacts.join(" ");
+        const unsupportedNumbers = claimNumbers.filter((number) => !basis.includes(number));
+        if (unsupportedNumbers.length) issues.push(`Claim contains unsupported numeric detail: ${unsupportedNumbers.join(", ")}.`);
+      }
       if (hasUnsubstantiatedInstrumentClaim(item)) {
         issues.push("Instrument-discriminating claim language is not supported by the supplied basis facts.");
       }
@@ -120,9 +122,7 @@ export function normalizeEvidence(packet: any) {
         : item.evidenceState === "INFERRED"
           ? issues.length ? "UNSUPPORTED" : "NOT_APPLICABLE"
           : item.provenanceType === "PUBLIC_SOURCE"
-            ? issues.length === 1 && issues[0] === publicUnverifiedMessage
-              ? "SUPPORT_NOT_VERIFIED"
-              : "UNSUPPORTED"
+            ? issues.length === 0 ? "SUPPORT_NOT_VERIFIED" : "UNSUPPORTED"
             : issues.length ? "UNSUPPORTED" : "SUPPORTED";
     return {
       ...item,

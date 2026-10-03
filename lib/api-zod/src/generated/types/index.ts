@@ -15,6 +15,7 @@ export * from './assessmentRun';
 export * from './assessmentRunState';
 export * from './assessmentSelectedInstrumentsItem';
 export * from './assessmentUsage';
+export * from './buyerUnitOption';
 export * from './decisionProgress';
 export * from './decisionProgressGraph';
 export * from './decisionStep';

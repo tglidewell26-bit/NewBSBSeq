@@ -239,8 +239,20 @@ components:
         assessment: { $ref: "#/components/schemas/Assessment" }
         assessmentRun: { $ref: "#/components/schemas/AssessmentRun" }
         buyerUnits: { type: array, items: { type: string } }
+        buyerUnitOptions:
+          type: array
+          items: { $ref: "#/components/schemas/BuyerUnitOption" }
         review: { $ref: "#/components/schemas/Review" }
         createdAt: { type: string, format: date-time }
+    BuyerUnitOption:
+      type: object
+      required: [name, description, evidenceCount, recommended, recommendationReason]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        evidenceCount: { type: integer, minimum: 0 }
+        recommended: { type: boolean }
+        recommendationReason: { type: string }
     NormalizedEvidence:
       allOf:
         - { $ref: "#/components/schemas/EvidenceItem" }

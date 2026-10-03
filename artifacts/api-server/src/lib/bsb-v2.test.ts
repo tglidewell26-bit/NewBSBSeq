@@ -95,7 +95,7 @@ describe("evidence normalization and support", () => {
   it("withholds public claims as support not verified even when URL and excerpt exist", () => {
     const result = normalized(publicItem())[0];
     expect(result.supportStatus).toBe("SUPPORT_NOT_VERIFIED");
-    expect(result.supportIssues.join(" ")).toContain("not independently retrieved");
+    expect(result.supportIssues).toEqual([]);
   });
 
   it("retains unsupported added numbers and claims without confirming authority", () => {
