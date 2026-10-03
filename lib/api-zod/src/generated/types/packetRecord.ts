@@ -7,6 +7,7 @@
  */
 import type { Assessment } from './assessment';
 import type { AssessmentRun } from './assessmentRun';
+import type { BuyerUnitOption } from './buyerUnitOption';
 import type { NormalizedEvidence } from './normalizedEvidence';
 import type { PacketRecordStage } from './packetRecordStage';
 import type { ResearchPacket } from './researchPacket';
@@ -23,6 +24,7 @@ export interface PacketRecord {
   assessment?: Assessment;
   assessmentRun?: AssessmentRun;
   buyerUnits?: string[];
+  buyerUnitOptions?: BuyerUnitOption[];
   review?: Review;
   createdAt: Date;
 }

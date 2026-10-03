@@ -38,6 +38,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
+const PUBLIC_SOURCE_NOTICE = "Supplied public excerpt; not independently retrieved. Live assessment can evaluate whether the excerpt supports the claim.";
+const actionableSupportIssues = (issues?: string[]) => (issues ?? []).filter(issue => issue !== PUBLIC_SOURCE_NOTICE);
+type BuyerUnitOptionView = { name: string; description: string; evidenceCount: number; recommended: boolean; recommendationReason: string };
+
 export default function PacketDetail() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -164,6 +168,8 @@ function StageBadge({ stage }: { stage: string }) {
 
 function OverviewTab({ packet }: { packet: PacketRecord }) {
   const v = packet.validation;
+  const actionableWarnings = v.warnings.filter(w => w.message !== PUBLIC_SOURCE_NOTICE);
+  const publicSources = packet.normalizedEvidence.filter(e => e.supportStatus === "SUPPORT_NOT_VERIFIED").length;
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
@@ -227,8 +233,8 @@ function OverviewTab({ packet }: { packet: PacketRecord }) {
             </div>
             
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Evidence Support Status</span>
-              {v.supportValid ? 
+              <span className="text-sm text-muted-foreground">Evidence Checks</span>
+              {actionableWarnings.length === 0 ?
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : 
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
               }
@@ -236,20 +242,25 @@ function OverviewTab({ packet }: { packet: PacketRecord }) {
 
             <Separator />
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-3">
               <div className="bg-muted/50 p-3 rounded-sm text-center">
                 <div className="text-2xl font-bold font-mono text-foreground">{packet.normalizedEvidence.length}</div>
                 <div className="text-xs text-muted-foreground uppercase mt-1">Claims</div>
               </div>
-              <div className="bg-amber-50 dark:bg-amber-950/20 p-3 rounded-sm text-center border border-amber-200 dark:border-amber-900/50">
-                <div className="text-2xl font-bold font-mono text-amber-700 dark:text-amber-500">{v.warnings.length}</div>
-                <div className="text-xs text-amber-700/70 dark:text-amber-500/70 uppercase mt-1">Warnings</div>
+              <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-sm text-center border border-blue-200 dark:border-blue-900/50">
+                <div className="text-2xl font-bold font-mono text-blue-700 dark:text-blue-400">{publicSources}</div>
+                <div className="text-xs text-blue-700/70 dark:text-blue-400/70 uppercase mt-1">Public Sources</div>
+              </div>
+              <div className={`${actionableWarnings.length ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50" : "bg-muted/50 border-border"} p-3 rounded-sm text-center border`}>
+                <div className={`text-2xl font-bold font-mono ${actionableWarnings.length ? "text-amber-700 dark:text-amber-500" : "text-foreground"}`}>{actionableWarnings.length}</div>
+                <div className="text-xs text-muted-foreground uppercase mt-1">Issues</div>
               </div>
             </div>
+            {publicSources > 0 && <p className="text-xs text-muted-foreground">Public-source citations are expected research inputs and can be used by the decision tree. They are shown separately from actual validation issues.</p>}
           </div>
         </div>
 
-        {v.warnings.length > 0 && (
+        {actionableWarnings.length > 0 && (
           <div className="bg-card border border-amber-200 dark:border-amber-900/50 rounded-md shadow-sm p-0 overflow-hidden flex flex-col max-h-[300px]">
             <div className="bg-amber-50 dark:bg-amber-950/30 p-3 border-b border-amber-200 dark:border-amber-900/50 shrink-0">
               <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-500 flex items-center gap-2">
@@ -258,7 +269,7 @@ function OverviewTab({ packet }: { packet: PacketRecord }) {
             </div>
             <ScrollArea className="flex-1 p-3">
               <ul className="space-y-3">
-                {v.warnings.map((w, i) => (
+                {actionableWarnings.map((w, i) => (
                   <li key={i} className="text-sm">
                     <span className="font-mono text-xs text-muted-foreground block mb-0.5">{w.path}</span>
                     <span className="text-foreground">{w.message}</span>
@@ -279,6 +290,7 @@ function EvidenceTab({ packet }: { packet: PacketRecord }) {
   const filtered = packet.normalizedEvidence.filter(e => {
     if (filter === "all") return true;
     if (filter === "supported") return e.supportStatus === "SUPPORTED";
+    if (filter === "public") return e.supportStatus === "SUPPORT_NOT_VERIFIED";
     if (filter === "unsupported") return e.supportStatus === "UNSUPPORTED";
     return true;
   });
@@ -288,6 +300,7 @@ function EvidenceTab({ packet }: { packet: PacketRecord }) {
       <div className="flex items-center gap-2 mb-4 shrink-0">
         <Button variant={filter === "all" ? "default" : "outline"} size="sm" onClick={() => setFilter("all")} className="rounded-full">All ({packet.normalizedEvidence.length})</Button>
         <Button variant={filter === "supported" ? "default" : "outline"} size="sm" onClick={() => setFilter("supported")} className="rounded-full">Supported ({packet.normalizedEvidence.filter(e => e.supportStatus === "SUPPORTED").length})</Button>
+        <Button variant={filter === "public" ? "default" : "outline"} size="sm" onClick={() => setFilter("public")} className="rounded-full">Public Sources ({packet.normalizedEvidence.filter(e => e.supportStatus === "SUPPORT_NOT_VERIFIED").length})</Button>
         <Button variant={filter === "unsupported" ? "default" : "outline"} size="sm" onClick={() => setFilter("unsupported")} className="rounded-full">Unsupported ({packet.normalizedEvidence.filter(e => e.supportStatus === "UNSUPPORTED").length})</Button>
       </div>
 
@@ -303,7 +316,7 @@ function EvidenceTab({ packet }: { packet: PacketRecord }) {
                   ) : e.supportStatus === "UNSUPPORTED" ? (
                     <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50"><XCircle className="w-3 h-3 mr-1"/> Unsupported</Badge>
                   ) : e.supportStatus === "SUPPORT_NOT_VERIFIED" ? (
-                    <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50"><AlertTriangle className="w-3 h-3 mr-1"/> Support not verified</Badge>
+                    <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-50"><FileJson className="w-3 h-3 mr-1"/> Public source</Badge>
                   ) : (
                     <Badge variant="outline" className="text-slate-600 border-slate-200 bg-slate-50">N/A</Badge>
                   )}
@@ -329,11 +342,11 @@ function EvidenceTab({ packet }: { packet: PacketRecord }) {
                   ))}
                 </ul>
                 
-                {e.supportIssues && e.supportIssues.length > 0 && (
+                {actionableSupportIssues(e.supportIssues).length > 0 && (
                   <div className="mt-3 bg-rose-50 dark:bg-rose-950/20 p-2 rounded border border-rose-100 dark:border-rose-900/50">
                     <p className="text-xs font-semibold text-rose-800 dark:text-rose-400 mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Support Issues</p>
                     <ul className="list-disc pl-4 space-y-1">
-                      {e.supportIssues.map((iss, i) => (
+                      {actionableSupportIssues(e.supportIssues).map((iss, i) => (
                         <li key={i} className="text-xs text-rose-700 dark:text-rose-300">{iss}</li>
                       ))}
                     </ul>
@@ -467,8 +480,13 @@ function AssessmentActions({ packet }: { packet: PacketRecord }) {
   const qc = useQueryClient();
   const { data: config } = useGetAssessmentConfig();
   const [buyerUnit, setBuyerUnit] = useState("");
-  const units = packet.buyerUnits ?? [];
-  const chosenUnit = buyerUnit || (units.length === 1 ? units[0] : "");
+  const suppliedUnitOptions = (packet as PacketRecord & { buyerUnitOptions?: BuyerUnitOptionView[] }).buyerUnitOptions;
+  const unitOptions: BuyerUnitOptionView[] = suppliedUnitOptions?.length ? suppliedUnitOptions : (packet.buyerUnits ?? []).map(name => ({
+    name, description: "The dossier identifies this as a separate research group.", evidenceCount: 0, recommended: false, recommendationReason: "",
+  }));
+  const units = unitOptions.map(option => option.name);
+  const suggestedUnit = unitOptions.find(option => option.recommended)?.name ?? "";
+  const chosenUnit = buyerUnit || (units.length === 1 ? units[0] : suggestedUnit);
   const [demoConfirmed, setDemoConfirmed] = useState(false);
   const run = packet.assessmentRun;
   const assess = useAssessCompany({ mutation: {
@@ -493,12 +511,27 @@ function AssessmentActions({ packet }: { packet: PacketRecord }) {
       {run.error.issues?.map((issue, index) => <p key={index}>{issue.path}: {issue.message}</p>)}
     </div>}
     {!config?.enabled && <p className="text-xs text-muted-foreground">Live AI setup required: {config?.missing.join(", ") || "Checking configuration…"}</p>}
-    {units.length > 1 && <label className="text-sm">Buyer unit
-      <select aria-label="Buyer unit" value={chosenUnit} onChange={e => setBuyerUnit(e.target.value)} className="ml-2 rounded border bg-background p-2">
-        <option value="">Choose a department or lab</option>
-        {units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-      </select>
-    </label>}
+    {units.length > 1 && <div className="space-y-2">
+      <div>
+        <Label className="text-sm font-semibold">Choose the department or lab</Label>
+        <p className="text-xs text-muted-foreground">Each group is assessed separately so one department’s methods are not assigned to another. The suggested starting point is selected automatically.</p>
+      </div>
+      <div role="radiogroup" aria-label="Buyer unit" className="grid gap-2">
+        {unitOptions.map(option => {
+          const selected = chosenUnit === option.name;
+          return <button key={option.name} type="button" role="radio" aria-checked={selected} onClick={() => setBuyerUnit(option.name)}
+            className={`rounded-md border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background hover:bg-muted/40"}`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">{option.name}</span>
+              {option.recommended && <Badge className="text-[10px]">Suggested starting point</Badge>}
+              {selected && <Check className="ml-auto h-4 w-4 text-primary" aria-hidden="true" />}
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{option.description}</p>
+            {option.recommendationReason && <p className="mt-1 text-xs font-medium text-foreground">Why suggested: {option.recommendationReason}</p>}
+          </button>;
+        })}
+      </div>
+    </div>}
     <div className="flex flex-wrap items-center gap-3">
       {!run && !packet.assessment && <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <Checkbox checked={demoConfirmed} onCheckedChange={value => setDemoConfirmed(value === true)} /> Synthetic demo only

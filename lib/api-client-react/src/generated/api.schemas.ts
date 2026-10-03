@@ -334,6 +334,15 @@ export interface AssessmentRun {
   usage?: AssessmentUsage;
 }
 
+export interface BuyerUnitOption {
+  name: string;
+  description: string;
+  /** @minimum 0 */
+  evidenceCount: number;
+  recommended: boolean;
+  recommendationReason: string;
+}
+
 export type ReviewDecision = typeof ReviewDecision[keyof typeof ReviewDecision];
 
 
@@ -364,6 +373,7 @@ export interface PacketRecord {
   assessment?: Assessment;
   assessmentRun?: AssessmentRun;
   buyerUnits?: string[];
+  buyerUnitOptions?: BuyerUnitOption[];
   review?: Review;
   createdAt: string;
 }

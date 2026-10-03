@@ -97,7 +97,7 @@ describe("account dossier conversion", () => {
     delete dossier.buyer_units[0].sample_types[0].reasoning;
     delete dossier.buyer_units[0].measurement_signals.protein[0].tag;
     const { normalized } = normalizeEvidence(convertDossier(dossier).researchPacket);
-    const inferred = normalized.find((item) => item.claim.includes("Sample type"))!;
+    const inferred = normalized.find((item) => item.assessmentType === "SAMPLE_TYPE")!;
     expect(inferred.inference).toBeNull();
     expect(inferred.supportStatus).toBe("UNSUPPORTED");
     expect(normalized.find((item) => item.claim.includes("Protein signal"))!.evidenceState).toBe("UNKNOWN");

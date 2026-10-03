@@ -313,6 +313,8 @@ export const submitResearchPacketResponseAssessmentInstrumentsMax = 3;
 
 export const submitResearchPacketResponseAssessmentSelectedInstrumentsMax = 2;
 
+export const submitResearchPacketResponseBuyerUnitOptionsItemEvidenceCountMin = 0;
+
 export const submitResearchPacketResponseReviewApprovedInstrumentsMax = 2;
 
 
@@ -612,6 +614,13 @@ export const SubmitResearchPacketResponse = zod.object({
 }).optional()
 }).optional(),
   "buyerUnits": zod.array(zod.string()).optional(),
+  "buyerUnitOptions": zod.array(zod.object({
+  "name": zod.string(),
+  "description": zod.string(),
+  "evidenceCount": zod.number().int().min(submitResearchPacketResponseBuyerUnitOptionsItemEvidenceCountMin),
+  "recommended": zod.boolean(),
+  "recommendationReason": zod.string()
+})).optional(),
   "review": zod.object({
   "id": zod.string(),
   "decision": zod.enum(['APPROVE', 'REJECT']),
@@ -624,7 +633,6 @@ export const SubmitResearchPacketResponse = zod.object({
 }).optional(),
   "createdAt": zod.coerce.date()
 })
-
 
 export const GetResearchPacketParams = zod.object({
   "packetId": zod.coerce.string()
@@ -694,6 +702,8 @@ export const getResearchPacketResponseNormalizedEvidenceItemOneBasisSourceUrlsIt
 export const getResearchPacketResponseAssessmentInstrumentsMax = 3;
 
 export const getResearchPacketResponseAssessmentSelectedInstrumentsMax = 2;
+
+export const getResearchPacketResponseBuyerUnitOptionsItemEvidenceCountMin = 0;
 
 export const getResearchPacketResponseReviewApprovedInstrumentsMax = 2;
 
@@ -994,6 +1004,13 @@ export const GetResearchPacketResponse = zod.object({
 }).optional()
 }).optional(),
   "buyerUnits": zod.array(zod.string()).optional(),
+  "buyerUnitOptions": zod.array(zod.object({
+  "name": zod.string(),
+  "description": zod.string(),
+  "evidenceCount": zod.number().int().min(getResearchPacketResponseBuyerUnitOptionsItemEvidenceCountMin),
+  "recommended": zod.boolean(),
+  "recommendationReason": zod.string()
+})).optional(),
   "review": zod.object({
   "id": zod.string(),
   "decision": zod.enum(['APPROVE', 'REJECT']),
@@ -1130,3 +1147,4 @@ export const ReviewAssessmentResponse = zod.object({
   "validatedRealAssessment": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
+

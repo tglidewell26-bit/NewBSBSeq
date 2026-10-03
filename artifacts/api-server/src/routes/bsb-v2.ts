@@ -7,12 +7,13 @@ import { AssessmentError, liveConfiguration, validateModelAssessment } from "../
 import { failurePayload, getAssessmentRun, runLiveAssessment, treeBudget } from "../lib/assessment-runs";
 import { convertDossier, isAccountDossier, validateDossierShape } from "../lib/account-dossier";
 
-import { buyerUnits, validateTreeAssessment } from "../lib/instrument-tree";
+import { buyerUnitOptions, buyerUnits, validateTreeAssessment } from "../lib/instrument-tree";
 
 const safeRecord = (row: any) => ({
   id: row.id, stage: row.stage, inputHash: row.inputHash,
   researchPacket: row.researchPacket, normalizedEvidence: row.normalizedEvidence,
   buyerUnits: buyerUnits(row.normalizedEvidence),
+  buyerUnitOptions: buyerUnitOptions(row.normalizedEvidence),
   validation: row.validation, assessment: row.assessment ?? undefined,
   review: row.review ?? undefined, createdAt: row.createdAt.toISOString(),
 });
