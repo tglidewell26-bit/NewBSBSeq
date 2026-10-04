@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { assertApprovedPacket } from "./sequences";
 import { convertDossier } from "./account-dossier";
 import { normalizeEvidence } from "./bsb-v2";
-import { buyerUnitOptions, loadGraph, validateGraph, validateAnswer, questionRequest, walkTree, treeAssessment, validateTreeAssessment, scopedEvidence, type Graph, type TreeNode } from "./instrument-tree";
+import { hashPacket } from "./bsb-v2";
+import { buyerUnitOptions, loadGraph, validateGraph, validateAnswer, questionRequest, walkTree, treeAssessment, validateTreeAssessment, scopedEvidence, editedPrefix, withHumanEvidence, parseTreeEdit, type Graph, type TreeNode } from "./instrument-tree";
 const sample = JSON.parse(readFileSync(new URL("../../../../samples/account-dossier-synthetic.json", import.meta.url), "utf8"));
 const evidence = () => normalizeEvidence(convertDossier(structuredClone(sample)).researchPacket).normalized;
 const question = (): TreeNode => ({ id: "q", type: "question", text: "Does the unit perform protein imaging?", answers: [{ label: "Yes", next: "yes" }, { label: "No", next: "no" }, { label: "Unknown", next: "unknown" }] });
@@ -13,6 +15,62 @@ const yes = () => {
   return { label: "Yes", evidenceIds: [e.evidenceId], citations: [{ evidenceId: e.evidenceId, quote: e.basisFacts[0] }], reasoning: "The synthetic posting explicitly names multiplex IF." };
 };
 describe("instrument tree", () => {
+  it.each(["Yes", "No", "Unknown"])("allows correcting %s without a model call for that node", async label => {
+    const trace = await walkTree(graph(), evidence(), "Neuro Imaging Group", async () => unknown());
+    const prefix = editedPrefix(trace, parseTreeEdit({ assessmentId: "a", nodeId: "q", label, reason: "User verified this in a synthetic meeting." }));
+    const all = withHumanEvidence(evidence(), prefix, trace.buyerUnit);
+    const provider = vi.fn();
+    const revised = await walkTree(trace.graph, all, trace.buyerUnit, provider, undefined, prefix);
+    expect(provider).not.toHaveBeenCalled();
+    expect(trace.path[0].label).toBe("Unknown");
+    expect(revised.path[0].label).toBe(label);
+    expect(revised.path[0].humanOverride?.originalAnswer.label).toBe("Unknown");
+    const a = treeAssessment(revised, all, "v");
+    expect(validateTreeAssessment(a, evidence(), "v").selectedInstruments).toEqual(a.selectedInstruments);
+    expect(all.filter(e => e.sourceLabel?.startsWith("User correction"))).toHaveLength(label === "Unknown" ? 0 : 1);
+  });
+  it("reruns only the suffix, preserves earlier steps, and discards obsolete downstream answers", async () => {
+    const g = graph();
+    g.nodes[0].answers!.forEach(a => { a.next = "q2"; });
+    g.nodes.push({ ...question(), id: "q2" });
+    const original = await walkTree(g, evidence(), "Neuro Imaging Group", async () => unknown());
+    const prefix = editedPrefix(original, { assessmentId: "a", nodeId: "q", label: "Yes", reason: "Synthetic confirmation" });
+    const provider = vi.fn(async () => yes());
+    const revised = await walkTree(g, withHumanEvidence(evidence(), prefix, original.buyerUnit), original.buyerUnit, provider, undefined, prefix);
+    expect(provider.mock.calls).toHaveLength(1);
+    expect(revised.path.map(s => s.label)).toEqual(["Yes", "Yes"]);
+    const laterPrefix = editedPrefix(revised, { assessmentId: "b", nodeId: "q2", label: "No", reason: "Synthetic correction" });
+    expect(laterPrefix[0]).toEqual(revised.path[0]);
+    expect(laterPrefix[1].humanOverride?.originalAnswer.label).toBe("Yes");
+    const earlierAgain = editedPrefix(revised, { assessmentId: "b", nodeId: "q", label: "Unknown", reason: "Evidence withdrawn" });
+    expect(withHumanEvidence(withHumanEvidence(evidence(), laterPrefix, original.buyerUnit), earlierAgain, original.buyerUnit).some(e => e.evidenceId.startsWith("human:"))).toBe(false);
+  });
+  it("rejects invalid edits, whitespace reasons, off-path nodes, and tampered human evidence", async () => {
+    for (const reason of ["", "   ", "x".repeat(4001)]) expect(() => parseTreeEdit({ assessmentId: "a", nodeId: "q", label: "Yes", reason })).toThrow();
+    const trace = await walkTree(graph(), evidence(), "Neuro Imaging Group", async () => unknown());
+    expect(() => editedPrefix(trace, { assessmentId: "a", nodeId: "yes", label: "Yes", reason: "test" })).toThrow();
+    expect(() => editedPrefix(trace, { assessmentId: "a", nodeId: "q", label: "Maybe", reason: "test" })).toThrow();
+    const prefix = editedPrefix(trace, { assessmentId: "a", nodeId: "q", label: "Yes", reason: "test" });
+    const all = withHumanEvidence(evidence(), prefix, trace.buyerUnit);
+    const revised = await walkTree(trace.graph, all, trace.buyerUnit, vi.fn(), undefined, prefix);
+    const a = treeAssessment(revised, all, "v");
+    a.decisionTrace.path[0].humanOverride!.reason = "modified";
+    expect(() => validateTreeAssessment(a, evidence(), "v")).toThrow();
+  });
+  it("retains human-source attribution through approval and outreach validation", async () => {
+    const packet = convertDossier(structuredClone(sample)).researchPacket;
+    const version = hashPacket(packet);
+    const original = await walkTree(graph(), evidence(), "Neuro Imaging Group", async () => unknown());
+    const prefix = editedPrefix(original, { assessmentId: "a", nodeId: "q", label: "Yes", reason: "Synthetic account confirmed its protein imaging workflow." });
+    const all = withHumanEvidence(evidence(), prefix, original.buyerUnit);
+    const revised = await walkTree(original.graph, all, original.buyerUnit, vi.fn(), undefined, prefix);
+    const a = treeAssessment(revised, all, version);
+    const row = { stage: "APPROVED", research_packet: packet, evidence_version: version, assessment: a,
+      review: { decision: "APPROVE", evidenceVersion: version, approvedInstruments: ["CellScape"] } };
+    const authorized = assertApprovedPacket(row);
+    expect(authorized.find(e => e.evidenceId.startsWith("human:"))?.sourceLabel).toContain("User correction");
+    expect(() => assertApprovedPacket({ ...row, stage: "ASSESSED", review: null })).toThrow();
+  });
   it("validates the exported graph and follows Unknown to discovery", async () => {
     const provider = vi.fn(async () => unknown());
     const result = await walkTree(loadGraph(), [], "Whole organization", provider);

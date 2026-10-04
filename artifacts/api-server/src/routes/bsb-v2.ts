@@ -7,7 +7,7 @@ import { AssessmentError, liveConfiguration, validateModelAssessment } from "../
 import { failurePayload, getAssessmentRun, runLiveAssessment, treeBudget } from "../lib/assessment-runs";
 import { convertDossier, isAccountDossier, validateDossierShape } from "../lib/account-dossier";
 
-import { buyerUnitOptions, buyerUnits, validateTreeAssessment } from "../lib/instrument-tree";
+import { buyerUnitOptions, buyerUnits, validateTreeAssessment, parseTreeEdit } from "../lib/instrument-tree";
 
 const safeRecord = (row: any) => ({
   id: row.id, stage: row.stage, inputHash: row.inputHash,
@@ -133,6 +133,21 @@ router.delete("/bsb-v2/packets/:packetId", async (req, res): Promise<void> => {
   } finally {
     client.release();
   }
+});
+
+router.post("/bsb-v2/packets/:packetId/decision-override", async (req, res): Promise<void> => {
+  try {
+    const edit = parseTreeEdit(req.body);
+    res.json(await runLiveAssessment(String(req.params.packetId), false, undefined, edit));
+  } catch (error) {
+    const failure = error instanceof AssessmentError ? error : new AssessmentError("SERVER_FAILED", "Could not complete the correction. Reload the packet to check saved progress.", 500);
+    res.status(failure.status).json(failurePayload(failure));
+  }
+});
+
+router.get("/bsb-v2/packets/:packetId/assessment-history", async (req, res): Promise<void> => {
+  const result = await pool.query("SELECT id, state, started_at, revision, usage FROM bsb_v2_assessment_runs WHERE packet_id=$1 AND revision IS NOT NULL ORDER BY attempt DESC", [String(req.params.packetId)]);
+  res.json(result.rows);
 });
 
 router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> => {

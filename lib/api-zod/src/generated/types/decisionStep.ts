@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DecisionStepCitationsItem } from './decisionStepCitationsItem';
+import type { DecisionStepHumanOverride } from './decisionStepHumanOverride';
 
 export interface DecisionStep {
   nodeId: string;
@@ -16,4 +17,5 @@ export interface DecisionStep {
   evidenceIds: string[];
   citations: DecisionStepCitationsItem[];
   reasoning: string;
+  humanOverride?: DecisionStepHumanOverride;
 }

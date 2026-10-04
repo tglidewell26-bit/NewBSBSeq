@@ -4,8 +4,8 @@ import { pool } from "@workspace/db";
 import { normalizeEvidence, hashPacket, validateFrozenRequest } from "./bsb-v2";
 import { AssessmentError, callAssessmentModel, liveConfiguration, MODEL } from "./live-assessment";
 
-import { loadGraph, scopedEvidence, questionRequest, walkTree, treeAssessment,
-  TREE_PROMPT_VERSION, TREE_TIMEOUT_MS, TREE_OUTPUT_LIMIT, treeHash, type Step } from "./instrument-tree";
+import { loadGraph, scopedEvidence, questionRequest, walkTree, treeAssessment, validateTreeAssessment, editedPrefix, withHumanEvidence, parseTreeEdit,
+  TREE_PROMPT_VERSION, TREE_TIMEOUT_MS, TREE_OUTPUT_LIMIT, treeHash, type Step, type TreeEdit } from "./instrument-tree";
 
 export function treeBudget(env = process.env) {
   const usd = Number(env.BSB_TREE_MAX_COST_USD ?? "2");
@@ -23,6 +23,7 @@ export async function initializeAssessmentRuns() {
   ); CREATE UNIQUE INDEX IF NOT EXISTS bsb_v2_run_attempt_idx
      ON bsb_v2_assessment_runs(packet_id, attempt);`);
   await pool.query("ALTER TABLE bsb_v2_assessment_runs ADD COLUMN IF NOT EXISTS progress jsonb");
+  await pool.query("ALTER TABLE bsb_v2_assessment_runs ADD COLUMN IF NOT EXISTS revision jsonb");
   await initializeSequenceJobs();
 }
 
@@ -42,11 +43,13 @@ export async function getAssessmentRun(packetId: string) {
     usage: run.usage ?? undefined, progress: run.progress ?? undefined };
 }
 
-export async function runLiveAssessment(packetId: string, retry = false, buyerUnit?: string) {
+export async function runLiveAssessment(packetId: string, retry = false, buyerUnit?: string, editInput?: TreeEdit) {
+  const edit = editInput ? parseTreeEdit(editInput) : undefined;
   const config = liveConfiguration();
   if (!config.enabled) throw new AssessmentError("NOT_CONFIGURED", "Live assessment is disabled until the API key and model are configured.", 503,
     config.missing.map(name => ({ path: "configuration", message: name })));
-  const graph = loadGraph();
+  let graph = loadGraph();
+  let prefix: Step[] = [];
   const budget = treeBudget();
   const client = await pool.connect();
   let runId = "";
@@ -58,30 +61,44 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
     // The packet row lock prevents duplicate submissions across replicas.
     row = (await client.query("SELECT * FROM bsb_v2_packets WHERE id=$1 FOR UPDATE", [packetId])).rows[0];
     if (!row) throw new AssessmentError("NOT_FOUND", "Packet not found.", 404);
-    if (row.assessment?.provider === "OPENAI") {
+    if (row.assessment?.provider === "OPENAI" && !edit) {
       if (buyerUnit && row.assessment.decisionTrace && row.assessment.decisionTrace.buyerUnit !== buyerUnit) {
         throw new AssessmentError("BUYER_UNIT_ALREADY_ASSESSED", "This packet already has a decision for another buyer unit. Submit a unit-specific dossier for a separate assessment.", 409);
       }
       await client.query("COMMIT"); return row.assessment;
     }
-    if (row.review || row.assessment?.demoMode) throw new AssessmentError("ALREADY_REVIEWED", "This packet has a saved demonstration or review. Use a real research packet for live assessment.", 409);
+    if ((!edit && row.review) || row.assessment?.demoMode) throw new AssessmentError("ALREADY_REVIEWED", "This packet has a saved demonstration or review. Use a real research packet for live assessment.", 409);
     const parsed = validateFrozenRequest({ researchPacket: row.research_packet });
     if (!parsed.success || hashPacket(row.research_packet) !== row.evidence_version) throw new AssessmentError("INVALID_PACKET", "The saved packet failed structure or evidence-version checks.", 400, parsed.issues);
     const result = normalizeEvidence(row.research_packet);
     if (result.errors.length) throw new AssessmentError("INVALID_PACKET", "The packet contains conflicting evidence IDs.", 400, result.errors);
     normalized = result.normalized;
+    if (edit) {
+      if (row.assessment?.provider !== "OPENAI" || !row.assessment.decisionTrace || row.assessment.id !== edit.assessmentId) {
+        throw new AssessmentError("STALE_ASSESSMENT", "The assessment changed. Reload it before editing a branch.", 409);
+      }
+      validateTreeAssessment(row.assessment, normalized, row.evidence_version);
+      graph = row.assessment.decisionTrace.graph;
+      buyerUnit = row.assessment.decisionTrace.buyerUnit;
+      prefix = editedPrefix(row.assessment.decisionTrace, edit);
+      normalized = withHumanEvidence(normalized, prefix, buyerUnit!);
+      const active = await client.query("SELECT 1 FROM bsb_v2_sequence_jobs WHERE packet_id=$1 AND state IN ('QUEUED','WRITING','VALIDATING') LIMIT 1", [packetId]);
+      if (active.rows.length) throw new AssessmentError("SEQUENCE_RUNNING", "Wait for outreach generation to finish before changing the assessment.", 409);
+    }
     scope = scopedEvidence(normalized, buyerUnit);
     // Preflight every reachable question before reserving a paid run.
     for (const node of graph.nodes.filter(n => n.type === "question")) questionRequest(node, scope.evidence, scope.unit);
     const previous = (await client.query("SELECT * FROM bsb_v2_assessment_runs WHERE packet_id=$1 ORDER BY attempt DESC LIMIT 1", [packetId])).rows[0];
     if (previous?.state === "RUNNING" || previous?.state === "OUTCOME_UNKNOWN") throw new AssessmentError("OUTCOME_UNKNOWN", "An assessment is already running or its outcome is uncertain. Reload its status; no additional paid call was started.", 409);
-    if (previous && !retry) throw new AssessmentError("RETRY_CONFIRMATION_REQUIRED", "The previous attempt failed. Use the explicit retry action to authorize one more bounded tree run.", 409);
-    if (previous?.attempt >= 2) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. Review the reported failure before further work.", 409);
+    if (previous && !retry && !edit) throw new AssessmentError("RETRY_CONFIRMATION_REQUIRED", "The previous attempt failed. Use the explicit retry action to authorize one more bounded tree run.", 409);
+    if (previous?.attempt >= 2 && !edit) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. Review the reported failure before further work.", 409);
     runId = randomUUID();
     await client.query(`INSERT INTO bsb_v2_assessment_runs
       (id,packet_id,evidence_version,attempt,state,reserved_micro_usd,model,prompt_version)
       VALUES ($1,$2,$3,$4,'RUNNING',$5,$6,$7)`,
       [runId, packetId, row.evidence_version, (previous?.attempt ?? 0) + 1, Math.ceil(budget * 1e6), MODEL, TREE_PROMPT_VERSION]);
+    if (edit) await client.query("UPDATE bsb_v2_assessment_runs SET revision=$1::jsonb WHERE id=$2",
+      [JSON.stringify({ edit, originalAssessment: row.assessment, originalReview: row.review ?? null }), runId]);
     await client.query("UPDATE bsb_v2_packets SET stage='ASSESSING', updated_at=now() WHERE id=$1", [packetId]);
     await client.query("COMMIT");
   } catch (error) {
@@ -92,7 +109,7 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
   try {
     const usage = { inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, model: MODEL };
     const started = Date.now();
-    let path: Step[] = [];
+    let path: Step[] = prefix;
     let calls = 0;
     const persist = async (pendingNodeId: string | null) => {
       await pool.query("UPDATE bsb_v2_assessment_runs SET usage=$1::jsonb, progress=$2::jsonb WHERE id=$3 AND state='RUNNING'",
@@ -115,15 +132,17 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
       usage.estimatedCostUsd += response.usage.estimatedCostUsd;
       await persist(node.id);
       return response.value;
-    }, async completed => { path = completed; await persist(null); });
-    const assessment = { ...treeAssessment(trace, normalized!, row.evidence_version), usage };
+    }, async completed => { path = completed; await persist(null); }, prefix);
+    const assessment = { ...treeAssessment(trace, normalized!, row.evidence_version), usage,
+      ...(edit ? { parentAssessmentId: edit.assessmentId } : {}) };
     const save = await pool.connect();
     try {
       await save.query("BEGIN");
       const updated = await save.query(`UPDATE bsb_v2_packets SET assessment=$1::jsonb, review=NULL,
         normalized_evidence=$2::jsonb, stage='ASSESSED', updated_at=now()
-        WHERE id=$3 AND evidence_version=$4 AND stage='ASSESSING' AND review IS NULL RETURNING id`,
-        [JSON.stringify(assessment), JSON.stringify(normalized!), packetId, row.evidence_version]);
+        WHERE id=$3 AND evidence_version=$4 AND stage='ASSESSING'
+        AND ($5::text IS NULL AND review IS NULL OR assessment->>'id'=$5) RETURNING id`,
+        [JSON.stringify(assessment), JSON.stringify(normalized!), packetId, row.evidence_version, edit?.assessmentId ?? null]);
       if (!updated.rowCount) throw new AssessmentError("STALE_ASSESSMENT", "The packet changed while assessment was running. No assessment was saved.", 409);
       await save.query("UPDATE bsb_v2_assessment_runs SET state='COMPLETED', usage=$1::jsonb, finished_at=now() WHERE id=$2",
         [JSON.stringify(usage), runId]);
@@ -140,9 +159,9 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
       await fail.query("BEGIN");
       await fail.query("UPDATE bsb_v2_assessment_runs SET state=$1, error=$2::jsonb, finished_at=now() WHERE id=$3 AND state='RUNNING'",
         [failure.code === "OUTCOME_UNKNOWN" ? "OUTCOME_UNKNOWN" : "FAILED", JSON.stringify(failurePayload(failure)), runId]);
-      await fail.query(`UPDATE bsb_v2_packets SET stage=CASE WHEN assessment IS NOT NULL THEN 'ASSESSED'
+      await fail.query(`UPDATE bsb_v2_packets SET stage=CASE WHEN assessment IS NOT NULL THEN $2
         WHEN validation->>'supportValid'='true' THEN 'VALIDATED' ELSE 'NEEDS_REVIEW' END,
-        updated_at=now() WHERE id=$1 AND stage='ASSESSING'`, [packetId]);
+        updated_at=now() WHERE id=$1 AND stage='ASSESSING'`, [packetId, row.stage]);
       await fail.query("COMMIT");
     } catch { await fail.query("ROLLBACK"); }
     finally { fail.release(); }

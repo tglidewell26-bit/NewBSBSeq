@@ -220,6 +220,25 @@ export type DecisionStepCitationsItem = {
   quote: string;
 };
 
+export type DecisionStepHumanOverrideOriginalAnswerCitationsItem = {
+  evidenceId: string;
+  quote: string;
+};
+
+export type DecisionStepHumanOverrideOriginalAnswer = {
+  label: string;
+  reasoning: string;
+  evidenceIds: string[];
+  citations: DecisionStepHumanOverrideOriginalAnswerCitationsItem[];
+};
+
+export type DecisionStepHumanOverride = {
+  id: string;
+  reason: string;
+  createdAt: string;
+  originalAnswer: DecisionStepHumanOverrideOriginalAnswer;
+};
+
 export interface DecisionStep {
   nodeId: string;
   question: string;
@@ -229,6 +248,7 @@ export interface DecisionStep {
   evidenceIds: string[];
   citations: DecisionStepCitationsItem[];
   reasoning: string;
+  humanOverride?: DecisionStepHumanOverride;
 }
 
 export type DecisionTraceGraph = { [key: string]: unknown };
@@ -425,6 +445,20 @@ export interface AssessmentConfig {
   enabled: boolean;
   missing: string[];
   model: string;
+}
+
+export interface TreeEdit {
+  /** @minLength 1 */
+  assessmentId: string;
+  /** @minLength 1 */
+  nodeId: string;
+  /** @minLength 1 */
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  reason: string;
 }
 
 export type DeleteResearchPacket200 = {

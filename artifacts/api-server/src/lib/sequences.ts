@@ -1,4 +1,4 @@
-import { validateTreeAssessment } from "./instrument-tree";
+import { validateTreeAssessment, withHumanEvidence } from "./instrument-tree";
 import {
   draftJsonSchema,
   semanticJsonSchema,
@@ -134,7 +134,10 @@ export function assertApprovedPacket(row: any) {
       "Evidence normalization failed.",
       409,
     );
-  if (a.promptVersion === "bsb-tree-1") validateTreeAssessment(a, normalized.normalized, row.evidence_version);
+  if (a.promptVersion === "bsb-tree-1") {
+    validateTreeAssessment(a, normalized.normalized, row.evidence_version);
+    normalized.normalized = withHumanEvidence(normalized.normalized, a.decisionTrace.path, a.decisionTrace.buyerUnit);
+  }
   else validateModelAssessment(
     {
       evidenceReviews: a.evidenceReviews,
@@ -652,4 +655,3 @@ Return each touch once with exact quoted spans for any factual or voice issue, o
     );
   return request;
 }
-
