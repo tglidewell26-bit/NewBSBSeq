@@ -61,6 +61,15 @@ describe("bounded decision-tree runs (synthetic database and model)", () => {
     expect(run.progress.path[0].humanOverride).toBeDefined();
     expect(run.progress.pendingNodeId).toBe("s3");
   });
+  it("allows an explicit full refresh after a stale saved assessment", async () => {
+    const old = await runLiveAssessment("synthetic");
+    const count = mocks.model.mock.calls.length;
+    const refreshed = await runLiveAssessment("synthetic", false, undefined, undefined, true);
+    expect(mocks.model.mock.calls.length).toBeGreaterThan(count);
+    expect(refreshed.id).not.toBe(old.id);
+    expect(refreshed.parentAssessmentId).toBe(old.id);
+    expect(run.state).toBe("COMPLETED");
+  });
   it("saves every step, aggregate usage, snapshot and outcome; repeated submit makes no new calls", async () => {
     const a = await runLiveAssessment("synthetic");
     expect(a.decisionTrace.outcome.instrument).toBe("Keep researching");

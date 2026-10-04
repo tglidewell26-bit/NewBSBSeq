@@ -175,4 +175,11 @@ describe("instrument tree", () => {
     a.selectedInstruments = ["GeoMx"];
     expect(() => validateTreeAssessment(a, evidence(), "v")).toThrow();
   });
+  it("identifies whether a saved assessment has a tree or evidence version mismatch", async () => {
+    const trace = await walkTree(graph(), evidence(), "Neuro Imaging Group", async () => unknown());
+    const a = treeAssessment(trace, evidence(), "v");
+    expect(() => validateTreeAssessment(a, evidence(), "new-version")).toThrow("research packet changed");
+    a.decisionTrace.treeHash = "tampered";
+    expect(() => validateTreeAssessment(a, evidence(), "v")).toThrow("tree snapshot");
+  });
 });

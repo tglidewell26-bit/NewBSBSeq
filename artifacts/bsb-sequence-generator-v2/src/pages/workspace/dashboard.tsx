@@ -542,6 +542,7 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
   const [note, setNote] = useState("");
   const [approvedInstruments, setApprovedInstruments] = useState<string[]>(packet.assessment?.selectedInstruments ?? []);
   const [confirmSecond, setConfirmSecond] = useState(false);
+  const [staleError, setStaleError] = useState("");
   
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -555,10 +556,17 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
         setOpen(false);
       },
       onError: (err) => {
+        if (/decision tree|research packet|saved decision|version/i.test(err.message)) setStaleError(err.message);
         toast({ title: "Review failed", description: err.message, variant: "destructive" });
       }
     }
   });
+  const refresh = useAssessCompany({ mutation: {
+    retry: false,
+    onSuccess: () => { setStaleError(""); toast({ title: "Decision tree refreshed", description: "Review the new path before approving it." }); },
+    onError: (err) => toast({ title: "Refresh failed", description: err.message, variant: "destructive" }),
+    onSettled: () => qc.invalidateQueries({ queryKey: getGetResearchPacketQueryKey(packet.id) }),
+  } });
 
   const availableInstruments = packet.assessment?.instruments
     .filter((i) => ["STRONG_FIT", "POTENTIAL_FIT"].includes(i.fit) && i.evidenceIds.length > 0 && (packet.assessment?.mock || packet.assessment?.selectedInstruments?.includes(i.instrument)))
@@ -592,6 +600,10 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
 
   return (
     <div className="flex items-center gap-3">
+      {staleError && <Button variant="outline" className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50" disabled={refresh.isPending}
+        onClick={() => refresh.mutate({ packetId: packet.id, data: { mode: "REAL_INPUT", rerun: true, retry: false, buyerUnit: packet.assessment?.decisionTrace?.buyerUnit } })}>
+        {refresh.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Refresh decision tree
+      </Button>}
       <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => { setDecision("REJECT"); setOpen(true); }}>
         <XCircle className="w-4 h-4" /> Reject
       </Button>

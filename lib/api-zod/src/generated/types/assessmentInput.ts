@@ -10,5 +10,6 @@ import type { AssessmentInputMode } from './assessmentInputMode';
 export interface AssessmentInput {
   mode: AssessmentInputMode;
   retry?: boolean;
+  rerun?: boolean;
   buyerUnit?: string;
 }

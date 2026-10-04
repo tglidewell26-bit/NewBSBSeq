@@ -43,7 +43,7 @@ export async function getAssessmentRun(packetId: string) {
     usage: run.usage ?? undefined, progress: run.progress ?? undefined };
 }
 
-export async function runLiveAssessment(packetId: string, retry = false, buyerUnit?: string, editInput?: TreeEdit) {
+export async function runLiveAssessment(packetId: string, retry = false, buyerUnit?: string, editInput?: TreeEdit, rerun = false) {
   const edit = editInput ? parseTreeEdit(editInput) : undefined;
   const config = liveConfiguration();
   if (!config.enabled) throw new AssessmentError("NOT_CONFIGURED", "Live assessment is disabled until the API key and model are configured.", 503,
@@ -61,13 +61,15 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
     // The packet row lock prevents duplicate submissions across replicas.
     row = (await client.query("SELECT * FROM bsb_v2_packets WHERE id=$1 FOR UPDATE", [packetId])).rows[0];
     if (!row) throw new AssessmentError("NOT_FOUND", "Packet not found.", 404);
-    if (row.assessment?.provider === "OPENAI" && !edit) {
+    if (row.assessment?.provider === "OPENAI" && !edit && !rerun) {
       if (buyerUnit && row.assessment.decisionTrace && row.assessment.decisionTrace.buyerUnit !== buyerUnit) {
         throw new AssessmentError("BUYER_UNIT_ALREADY_ASSESSED", "This packet already has a decision for another buyer unit. Submit a unit-specific dossier for a separate assessment.", 409);
       }
       await client.query("COMMIT"); return row.assessment;
     }
     if ((!edit && row.review) || row.assessment?.demoMode) throw new AssessmentError("ALREADY_REVIEWED", "This packet has a saved demonstration or review. Use a real research packet for live assessment.", 409);
+    if (rerun && (!row.assessment || row.assessment.provider !== "OPENAI")) throw new AssessmentError("STALE_ASSESSMENT", "There is no saved live tree assessment to refresh.", 409);
+    if (rerun && row.assessment?.decisionTrace) buyerUnit = row.assessment.decisionTrace.buyerUnit;
     const parsed = validateFrozenRequest({ researchPacket: row.research_packet });
     if (!parsed.success || hashPacket(row.research_packet) !== row.evidence_version) throw new AssessmentError("INVALID_PACKET", "The saved packet failed structure or evidence-version checks.", 400, parsed.issues);
     const result = normalizeEvidence(row.research_packet);
@@ -90,15 +92,15 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
     for (const node of graph.nodes.filter(n => n.type === "question")) questionRequest(node, scope.evidence, scope.unit);
     const previous = (await client.query("SELECT * FROM bsb_v2_assessment_runs WHERE packet_id=$1 ORDER BY attempt DESC LIMIT 1", [packetId])).rows[0];
     if (previous?.state === "RUNNING" || previous?.state === "OUTCOME_UNKNOWN") throw new AssessmentError("OUTCOME_UNKNOWN", "An assessment is already running or its outcome is uncertain. Reload its status; no additional paid call was started.", 409);
-    if (previous && !retry && !edit) throw new AssessmentError("RETRY_CONFIRMATION_REQUIRED", "The previous attempt failed. Use the explicit retry action to authorize one more bounded tree run.", 409);
-    if (previous?.attempt >= 2 && !edit) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. Review the reported failure before further work.", 409);
+    if (previous && !retry && !edit && !rerun) throw new AssessmentError("RETRY_CONFIRMATION_REQUIRED", "The previous attempt failed. Use the explicit retry action to authorize one more bounded tree run.", 409);
+    if (previous?.attempt >= 2 && !edit && !rerun) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. Review the reported failure before further work.", 409);
     runId = randomUUID();
     await client.query(`INSERT INTO bsb_v2_assessment_runs
       (id,packet_id,evidence_version,attempt,state,reserved_micro_usd,model,prompt_version)
       VALUES ($1,$2,$3,$4,'RUNNING',$5,$6,$7)`,
       [runId, packetId, row.evidence_version, (previous?.attempt ?? 0) + 1, Math.ceil(budget * 1e6), MODEL, TREE_PROMPT_VERSION]);
-    if (edit) await client.query("UPDATE bsb_v2_assessment_runs SET revision=$1::jsonb WHERE id=$2",
-      [JSON.stringify({ edit, originalAssessment: row.assessment, originalReview: row.review ?? null }), runId]);
+    if (edit || rerun) await client.query("UPDATE bsb_v2_assessment_runs SET revision=$1::jsonb WHERE id=$2",
+      [JSON.stringify({ ...(edit ? { edit } : { rerun: true }), originalAssessment: row.assessment, originalReview: row.review ?? null }), runId]);
     await client.query("UPDATE bsb_v2_packets SET stage='ASSESSING', updated_at=now() WHERE id=$1", [packetId]);
     await client.query("COMMIT");
   } catch (error) {
@@ -134,7 +136,7 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
       return response.value;
     }, async completed => { path = completed; await persist(null); }, prefix);
     const assessment = { ...treeAssessment(trace, normalized!, row.evidence_version), usage,
-      ...(edit ? { parentAssessmentId: edit.assessmentId } : {}) };
+      ...(edit ? { parentAssessmentId: edit.assessmentId } : rerun ? { parentAssessmentId: row.assessment.id } : {}) };
     const save = await pool.connect();
     try {
       await save.query("BEGIN");
