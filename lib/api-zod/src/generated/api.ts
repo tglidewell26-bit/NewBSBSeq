@@ -8,6 +8,110 @@
 import * as zod from 'zod';
 
 
+export const OverrideDecisionBranchParams = zod.object({
+  "packetId": zod.coerce.string()
+})
+
+
+
+
+export const overrideDecisionBranchBodyReasonMax = 4000;
+
+
+
+export const OverrideDecisionBranchBody = zod.object({
+  "assessmentId": zod.string().min(1),
+  "nodeId": zod.string().min(1),
+  "label": zod.string().min(1),
+  "reason": zod.string().min(1).max(overrideDecisionBranchBodyReasonMax)
+})
+
+export const overrideDecisionBranchResponseInstrumentsMax = 3;
+
+export const overrideDecisionBranchResponseSelectedInstrumentsMax = 2;
+
+
+
+export const OverrideDecisionBranchResponse = zod.object({
+  "id": zod.string(),
+  "provider": zod.enum(['DETERMINISTIC_FAKE', 'OPENAI']),
+  "mock": zod.boolean(),
+  "evidenceVersion": zod.string(),
+  "instruments": zod.array(zod.object({
+  "instrument": zod.enum(['CellScape', 'CosMx', 'GeoMx']),
+  "fit": zod.enum(['STRONG_FIT', 'POTENTIAL_FIT', 'NOT_QUALIFIED', 'INSUFFICIENT_EVIDENCE']),
+  "recommendation": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "ruleIds": zod.array(zod.string()),
+  "alternatives": zod.array(zod.string()),
+  "currentUse": zod.string(),
+  "accountStatus": zod.string(),
+  "readiness": zod.string()
+})).max(overrideDecisionBranchResponseInstrumentsMax),
+  "limitations": zod.array(zod.string()),
+  "semanticReviewNeeded": zod.boolean(),
+  "approvable": zod.boolean(),
+  "demoMode": zod.boolean(),
+  "validatedRealAssessment": zod.boolean(),
+  "selectedInstruments": zod.array(zod.enum(['CellScape', 'CosMx', 'GeoMx'])).max(overrideDecisionBranchResponseSelectedInstrumentsMax).optional(),
+  "selectionReason": zod.string().optional(),
+  "model": zod.string().optional(),
+  "promptVersion": zod.string().optional(),
+  "rubricVersion": zod.string().optional(),
+  "decisionTrace": zod.object({
+  "treeHash": zod.string(),
+  "buyerUnit": zod.string(),
+  "path": zod.array(zod.object({
+  "nodeId": zod.string(),
+  "question": zod.string(),
+  "lookFor": zod.string(),
+  "label": zod.string(),
+  "next": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+})),
+  "reasoning": zod.string(),
+  "humanOverride": zod.object({
+  "id": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.string(),
+  "originalAnswer": zod.object({
+  "label": zod.string(),
+  "reasoning": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+}))
+})
+}).optional()
+})),
+  "graph": zod.record(zod.string(), zod.unknown()),
+  "outcome": zod.object({
+  "nodeId": zod.string(),
+  "text": zod.string(),
+  "instrument": zod.string()
+})
+}).optional(),
+  "groundedEvidenceIds": zod.array(zod.string()).optional(),
+  "evidenceReviews": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "verdict": zod.enum(['ENTAILED', 'NOT_SUPPORTED', 'CONFLICT', 'UNKNOWN']),
+  "quote": zod.string(),
+  "reason": zod.string()
+})).optional(),
+  "usage": zod.object({
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "estimatedCostUsd": zod.number(),
+  "model": zod.string(),
+  "responseId": zod.string().optional()
+}).optional()
+})
+
+
 export const GetAssessmentConfigResponse = zod.object({
   "treeBudgetUsd": zod.number().optional(),
   "maxTreeOutputTokens": zod.number().int().optional(),
@@ -548,7 +652,21 @@ export const SubmitResearchPacketResponse = zod.object({
   "evidenceId": zod.string(),
   "quote": zod.string()
 })),
-  "reasoning": zod.string()
+  "reasoning": zod.string(),
+  "humanOverride": zod.object({
+  "id": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.string(),
+  "originalAnswer": zod.object({
+  "label": zod.string(),
+  "reasoning": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+}))
+})
+}).optional()
 })),
   "graph": zod.record(zod.string(), zod.unknown()),
   "outcome": zod.object({
@@ -590,7 +708,21 @@ export const SubmitResearchPacketResponse = zod.object({
   "evidenceId": zod.string(),
   "quote": zod.string()
 })),
-  "reasoning": zod.string()
+  "reasoning": zod.string(),
+  "humanOverride": zod.object({
+  "id": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.string(),
+  "originalAnswer": zod.object({
+  "label": zod.string(),
+  "reasoning": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+}))
+})
+}).optional()
 })),
   "pendingNodeId": zod.string().nullish(),
   "calls": zod.number().int().optional(),
@@ -633,6 +765,7 @@ export const SubmitResearchPacketResponse = zod.object({
 }).optional(),
   "createdAt": zod.coerce.date()
 })
+
 
 export const GetResearchPacketParams = zod.object({
   "packetId": zod.coerce.string()
@@ -938,7 +1071,21 @@ export const GetResearchPacketResponse = zod.object({
   "evidenceId": zod.string(),
   "quote": zod.string()
 })),
-  "reasoning": zod.string()
+  "reasoning": zod.string(),
+  "humanOverride": zod.object({
+  "id": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.string(),
+  "originalAnswer": zod.object({
+  "label": zod.string(),
+  "reasoning": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+}))
+})
+}).optional()
 })),
   "graph": zod.record(zod.string(), zod.unknown()),
   "outcome": zod.object({
@@ -980,7 +1127,21 @@ export const GetResearchPacketResponse = zod.object({
   "evidenceId": zod.string(),
   "quote": zod.string()
 })),
-  "reasoning": zod.string()
+  "reasoning": zod.string(),
+  "humanOverride": zod.object({
+  "id": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.string(),
+  "originalAnswer": zod.object({
+  "label": zod.string(),
+  "reasoning": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+}))
+})
+}).optional()
 })),
   "pendingNodeId": zod.string().nullish(),
   "calls": zod.number().int().optional(),
@@ -1090,7 +1251,21 @@ export const AssessCompanyResponse = zod.object({
   "evidenceId": zod.string(),
   "quote": zod.string()
 })),
-  "reasoning": zod.string()
+  "reasoning": zod.string(),
+  "humanOverride": zod.object({
+  "id": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.string(),
+  "originalAnswer": zod.object({
+  "label": zod.string(),
+  "reasoning": zod.string(),
+  "evidenceIds": zod.array(zod.string()),
+  "citations": zod.array(zod.object({
+  "evidenceId": zod.string(),
+  "quote": zod.string()
+}))
+})
+}).optional()
 })),
   "graph": zod.record(zod.string(), zod.unknown()),
   "outcome": zod.object({
@@ -1147,4 +1322,3 @@ export const ReviewAssessmentResponse = zod.object({
   "validatedRealAssessment": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
-

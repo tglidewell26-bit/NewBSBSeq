@@ -6,6 +6,29 @@ info:
 servers:
   - url: /api
 paths:
+  /bsb-v2/packets/{packetId}/decision-override:
+    post:
+      operationId: overrideDecisionBranch
+      parameters:
+        - in: path
+          name: packetId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TreeEdit" }
+      responses:
+        "200":
+          description: Revised assessment; previous assessment and review are archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "400":
+          description: Invalid answer or missing reason
+        "409":
+          description: Stale assessment or work in progress
   /bsb-v2/assessment-config:
     get:
       operationId: getAssessmentConfig
@@ -421,6 +444,37 @@ components:
               evidenceId: { type: string }
               quote: { type: string }
         reasoning: { type: string }
+        humanOverride:
+          type: object
+          required: [id, reason, createdAt, originalAnswer]
+          properties:
+            id: { type: string }
+            reason: { type: string }
+            createdAt: { type: string }
+            originalAnswer:
+              type: object
+              required: [label, reasoning, evidenceIds, citations]
+              properties:
+                label: { type: string }
+                reasoning: { type: string }
+                evidenceIds: { type: array, items: { type: string } }
+                citations:
+                  type: array
+                  items:
+                    type: object
+                    required: [evidenceId, quote]
+                    properties:
+                      evidenceId: { type: string }
+                      quote: { type: string }
+    TreeEdit:
+      type: object
+      additionalProperties: false
+      required: [assessmentId, nodeId, label, reason]
+      properties:
+        assessmentId: { type: string, minLength: 1 }
+        nodeId: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1 }
+        reason: { type: string, minLength: 1, maxLength: 4000 }
     DecisionProgress:
       type: object
       required: [treeHash, buyerUnit, path]

@@ -1,4 +1,5 @@
 import SequencePanel from "./sequence-panel";
+import DecisionPath from "./decision-path";
 import { useState, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { 
@@ -9,8 +10,7 @@ import {
   getGetResearchPacketQueryKey,
   PacketRecord,
   NormalizedEvidence,
-  InstrumentAssessment,
-  DecisionStep
+  InstrumentAssessment
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -377,7 +377,9 @@ function AssessmentTab({ packet }: { packet: PacketRecord }) {
         </div>
       </div>
 
-      {ass.decisionTrace && <DecisionPath path={ass.decisionTrace.path} buyerUnit={ass.decisionTrace.buyerUnit} treeHash={ass.decisionTrace.treeHash} outcome={`${ass.decisionTrace.outcome.text} — ${ass.decisionTrace.outcome.instrument}`} />}
+      {packet.assessmentRun?.progress && packet.stage === "ASSESSING" && <DecisionPath path={packet.assessmentRun.progress.path} buyerUnit={packet.assessmentRun.progress.buyerUnit} treeHash={packet.assessmentRun.progress.treeHash} graph={packet.assessmentRun.progress.graph} />}
+      {packet.assessmentRun?.error && <p role="alert" className="mb-4 text-sm text-destructive">{packet.assessmentRun.error.error} Your previous assessment remains saved.</p>}
+      {ass.decisionTrace && <DecisionPath packet={packet} graph={ass.decisionTrace.graph} path={ass.decisionTrace.path} buyerUnit={ass.decisionTrace.buyerUnit} treeHash={ass.decisionTrace.treeHash} outcome={`${ass.decisionTrace.outcome.text} — ${ass.decisionTrace.outcome.instrument}`} />}
       {ass.selectionReason && <p className="mb-4 text-sm"><strong>Recommended: {ass.selectedInstruments?.join(", ") || "No instrument selected"}.</strong> {ass.selectionReason}</p>}
       {ass.usage && <p className="mb-4 text-xs text-muted-foreground">Estimated API cost: ${ass.usage.estimatedCostUsd.toFixed(4)} · {ass.usage.inputTokens} input / {ass.usage.outputTokens} output tokens</p>}
       {ass.limitations.length > 0 && <ul className="mb-4 list-disc pl-5 text-sm text-muted-foreground">{ass.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul>}
@@ -388,23 +390,6 @@ function AssessmentTab({ packet }: { packet: PacketRecord }) {
         </div>
     </div>
   );
-}
-
-function DecisionPath({ path, buyerUnit, treeHash, outcome }: { path: DecisionStep[]; buyerUnit: string; treeHash: string; outcome?: string }) {
-  return <section className="mb-6 rounded border p-4">
-    <h3 className="font-semibold">Decision path — {buyerUnit}</h3>
-    <p className="mt-1 text-xs text-muted-foreground">Tree version: {treeHash.slice(0, 12)}</p>
-    <ol className="mt-4 space-y-4">
-      {path.map((step, index) => <li key={step.nodeId} className="border-l-2 pl-4">
-        <p className="font-medium">{index + 1}. {step.question}</p>
-        <p className="mt-1"><strong>{step.label}</strong> — {step.reasoning}</p>
-        {step.lookFor && <details className="mt-1 text-xs text-muted-foreground"><summary>Question notes</summary>{step.lookFor}</details>}
-        {step.citations.map(c => <blockquote key={c.evidenceId} className="mt-2 rounded bg-muted p-2 text-sm"><span className="font-mono text-xs">{c.evidenceId}</span><p>{c.quote}</p></blockquote>)}
-        {!step.evidenceIds.length && <p className="text-xs text-muted-foreground">No supporting evidence; followed the Unknown branch.</p>}
-      </li>)}
-    </ol>
-    {outcome ? <p className="mt-4 font-semibold">Outcome: {outcome}</p> : <p className="mt-4 text-sm">{path.length} completed questions saved. No final outcome yet.</p>}
-  </section>;
 }
 
 function InstrumentCard({ instrument: i }: { instrument: InstrumentAssessment }) {
@@ -443,6 +428,8 @@ function InstrumentCard({ instrument: i }: { instrument: InstrumentAssessment })
             <p className="text-sm text-foreground">{i.readiness}</p>
           </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">Account status, readiness, and current instrument use are not assessed by this routing tree. Unknown here does not weaken the selected scientific fit. Edit the decision questions above to correct the route; these commercial fields do not change automatically.</p>
 
         <Separator />
 

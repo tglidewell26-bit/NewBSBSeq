@@ -31,6 +31,36 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("bounded decision-tree runs (synthetic database and model)", () => {
+  it("revises a completed run, archives review, and makes zero calls when the edit reaches an outcome", async () => {
+    const old = await runLiveAssessment("synthetic");
+    row.review = { decision: "APPROVE" };
+    const count = mocks.model.mock.calls.length;
+    const revised = await runLiveAssessment("synthetic", false, undefined, { assessmentId: old.id, nodeId: "s1", label: "No", reason: "Synthetic customer confirmed no tissue work." });
+    expect(mocks.model).toHaveBeenCalledTimes(count);
+    expect(revised.decisionTrace.outcome.instrument).toBe("No fit");
+    expect(revised.id).not.toBe(old.id);
+    expect(revised.parentAssessmentId).toBe(old.id);
+    expect(revised.usage.estimatedCostUsd).toBe(0);
+    expect(mocks.query.mock.calls.some(([sql, values]) => sql.includes("SET revision=") && JSON.parse(values[0]).originalAssessment.id === old.id)).toBe(true);
+    expect(mocks.query.mock.calls.some(([sql]) => sql.startsWith("UPDATE bsb_v2_packets SET assessment") && sql.includes("review=NULL"))).toBe(true);
+    await expect(runLiveAssessment("synthetic", false, undefined, { assessmentId: old.id, nodeId: "s1", label: "Yes", reason: "Stale tab" })).rejects.toMatchObject({ code: "STALE_ASSESSMENT" });
+    expect(mocks.model).toHaveBeenCalledTimes(count);
+  });
+  it("blocks edits while another run is active", async () => {
+    const old = await runLiveAssessment("synthetic");
+    run.state = "RUNNING";
+    const count = mocks.model.mock.calls.length;
+    await expect(runLiveAssessment("synthetic", false, undefined, { assessmentId: old.id, nodeId: "s1", label: "No", reason: "Synthetic" })).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
+    expect(mocks.model).toHaveBeenCalledTimes(count);
+  });
+  it("preserves the previous assessment if the revised suffix fails", async () => {
+    const old = await runLiveAssessment("synthetic");
+    mocks.model.mockRejectedValueOnce(new AssessmentError("INVALID_MODEL_OUTPUT", "Synthetic failure"));
+    await expect(runLiveAssessment("synthetic", false, undefined, { assessmentId: old.id, nodeId: "s1", label: "Yes", reason: "Synthetic confirmation" })).rejects.toMatchObject({ code: "INVALID_MODEL_OUTPUT" });
+    expect(row.assessment.id).toBe(old.id);
+    expect(run.progress.path[0].humanOverride).toBeDefined();
+    expect(run.progress.pendingNodeId).toBe("s3");
+  });
   it("saves every step, aggregate usage, snapshot and outcome; repeated submit makes no new calls", async () => {
     const a = await runLiveAssessment("synthetic");
     expect(a.decisionTrace.outcome.instrument).toBe("Keep researching");

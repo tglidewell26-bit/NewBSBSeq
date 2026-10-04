@@ -11,7 +11,9 @@ export const TREE_CALL_LIMIT = 32;
 export type TreeNode = { id: string; type: "question" | "outcome"; text: string; lookFor?: string; instrument?: string; answers?: { label: string; next: string }[] };
 export type Graph = { schema: "bsb-instrument-graph-v1"; start: string; nodes: TreeNode[] };
 export type Answer = { label: string; evidenceIds: string[]; citations: { evidenceId: string; quote: string }[]; reasoning: string };
-export type Step = Answer & { nodeId: string; question: string; lookFor: string; next: string };
+export type HumanOverride = { id: string; reason: string; createdAt: string; originalAnswer: Answer };
+export type Step = Answer & { nodeId: string; question: string; lookFor: string; next: string; humanOverride?: HumanOverride };
+export type TreeEdit = { assessmentId: string; nodeId: string; label: string; reason: string };
 export type Trace = { treeHash: string; graph: Graph; buyerUnit: string; path: Step[]; outcome: { nodeId: string; text: string; instrument: string } };
 export type BuyerUnitOption = { name: string; description: string; evidenceCount: number; recommended: boolean; recommendationReason: string };
 const fail = (message: string): never => { throw new AssessmentError("INVALID_TREE", message); };
@@ -181,11 +183,57 @@ export function questionRequest(node: TreeNode, evidence: LocatedEvidence[], uni
   return request;
 }
 
+export function parseTreeEdit(value: unknown): TreeEdit {
+  if (!record(value) || Object.keys(value).some(k => !["assessmentId", "nodeId", "label", "reason"].includes(k)) ||
+    ![value.assessmentId, value.nodeId, value.label, value.reason].every(nonempty) || value.reason.trim().length > 4000) {
+    throw new AssessmentError("INVALID_OVERRIDE", "Choose an allowed answer and enter a reason (1–4,000 non-whitespace characters).", 400);
+  }
+  return { assessmentId: value.assessmentId, nodeId: value.nodeId, label: value.label, reason: value.reason.trim() };
+}
+
+// Human statements are separate, labeled supplemental evidence, never edits to
+// the original dossier. Only overrides on the active path are carried forward.
+export function withHumanEvidence(evidence: LocatedEvidence[], path: Step[], unit: string): LocatedEvidence[] {
+  const baseEvidence = evidence.filter(e => !e.locations.some(l => l.startsWith("decisionOverride:")));
+  const manual = path.filter(s => s.humanOverride && !/\bunknown\b/i.test(s.label)).map(s => ({
+    evidenceId: `human:${s.humanOverride!.id}`, evidenceState: "CONFIRMED", assessmentType: "COMPANY_FACT",
+    claim: `[${unit}] Human answer to “${s.question}”: ${s.label}. Reason: ${s.humanOverride!.reason}`,
+    provenanceType: "CONFIRMED_ACCOUNT", confirmed: true, sourceLabel: `User correction recorded ${s.humanOverride!.createdAt}`,
+    sourceUrl: null, basisFacts: [], basisSourceUrls: [], inference: null,
+    locations: [`decisionOverride:${s.nodeId}`], supportStatus: "SUPPORTED" as const, supportIssues: [],
+  }));
+  if (manual.some(m => baseEvidence.some(e => e.evidenceId === m.evidenceId))) fail("Human evidence ID collision.");
+  return [...baseEvidence, ...manual];
+}
+
+export function editedPrefix(trace: Trace, edit: TreeEdit): Step[] {
+  const index = trace.path.findIndex(s => s.nodeId === edit.nodeId);
+  const node = trace.graph.nodes.find(n => n.id === edit.nodeId);
+  const branch = node?.answers?.find(a => a.label === edit.label);
+  if (index < 0 || !node || node.type !== "question" || !branch) throw new AssessmentError("INVALID_OVERRIDE", "That question or answer is not on the saved decision path.", 400);
+  const old = trace.path[index];
+  const humanOverride: HumanOverride = { id: randomUUID(), reason: edit.reason, createdAt: new Date().toISOString(),
+    originalAnswer: { label: old.label, reasoning: old.reasoning, evidenceIds: old.evidenceIds, citations: old.citations } };
+  const step: Step = { nodeId: node.id, question: node.text, lookFor: node.lookFor || "", next: branch.next,
+    label: edit.label, reasoning: edit.reason, evidenceIds: [], citations: [], humanOverride };
+  const manual = withHumanEvidence([], [step], trace.buyerUnit)[0];
+  if (manual) { step.evidenceIds = [manual.evidenceId]; step.citations = [{ evidenceId: manual.evidenceId, quote: manual.claim }]; }
+  return [...trace.path.slice(0, index), step];
+}
+
 export async function walkTree(graph: Graph, evidence: LocatedEvidence[], unit: string,
-  answer: (node: TreeNode) => Promise<unknown>, checkpoint: (path: Step[]) => Promise<void> = async () => {}) {
+  answer: (node: TreeNode) => Promise<unknown>, checkpoint: (path: Step[]) => Promise<void> = async () => {}, prefix: Step[] = []) {
   validateGraph(graph);
   const path: Step[] = [], visited = new Set<string>();
   let id = graph.start;
+  for (const step of prefix) {
+    const node = graph.nodes.find(n => n.id === id);
+    if (!node || node.type !== "question" || visited.has(id) || step.nodeId !== id || step.question !== node.text || step.lookFor !== (node.lookFor || "")) fail("Invalid resume prefix.");
+    const result = validateAnswer({ label: step.label, reasoning: step.reasoning, evidenceIds: step.evidenceIds, citations: step.citations }, node!, evidence);
+    if (step.next !== node!.answers!.find(a => a.label === result.label)!.next) fail("Invalid resume branch.");
+    path.push(step); visited.add(id); id = step.next;
+  }
+  if (prefix.length) await checkpoint([...path]);
   while (true) {
     if (visited.has(id)) fail(`Repeated step ${id}.`);
     visited.add(id);
@@ -203,6 +251,7 @@ export async function walkTree(graph: Graph, evidence: LocatedEvidence[], unit: 
 }
 
 export function treeAssessment(trace: Trace, evidence: LocatedEvidence[], evidenceVersion: string) {
+  evidence = withHumanEvidence(evidence, trace.path, trace.buyerUnit);
   const grounded = [...new Set(trace.path.flatMap(s => s.evidenceIds))];
   const selected = instruments.filter(i => trace.outcome.instrument.split(/\s+or\s+/).includes(i));
   const unknowns = trace.path.filter(s => /\bunknown\b/i.test(s.label));
@@ -219,7 +268,9 @@ export function treeAssessment(trace: Trace, evidence: LocatedEvidence[], eviden
       evidenceIds: selected.includes(instrument) ? grounded : [], ruleIds: selected.includes(instrument) ? trace.path.map(s => `tree:${s.nodeId}`) : [],
       alternatives: selected.filter(i => i !== instrument), currentUse: "UNKNOWN", currentUseEvidenceIds: [], accountStatus: "UNKNOWN", accountStatusEvidenceIds: [], readiness: "UNKNOWN", readinessEvidenceIds: [],
     })),
-    limitations: ["Decision-tree routing, not independent scoring or proof of a buying project. Review supplied evidence before approval.", ...unknowns.map(s => `Unknown at ${s.nodeId}: ${s.question}`)],
+    limitations: ["Decision-tree routing, not independent scoring or proof of a buying project. Review supplied evidence before approval.",
+      ...(trace.path.some(s => s.humanOverride) ? ["Includes user corrections, recorded separately from the original dossier; not independently verified."] : []),
+      ...unknowns.map(s => `Unknown at ${s.nodeId}: ${s.question}`)],
     semanticReviewNeeded: true, approvable: selected.length > 0 && grounded.length > 0,
   };
 }
@@ -231,6 +282,16 @@ export function validateTreeAssessment(assessment: any, evidence: LocatedEvidenc
     const trace = assessment.decisionTrace as Trace;
     const graph = validateGraph(trace.graph);
     if (treeHash(graph) !== trace.treeHash || assessment.evidenceVersion !== evidenceVersion || !Array.isArray(trace.path)) fail("Saved decision version does not match.");
+    for (const step of trace.path) {
+      if (!step.humanOverride) continue;
+      const h = step.humanOverride;
+      if (!nonempty(h.id) || !nonempty(h.reason) || h.reason.length > 4000 || !Number.isFinite(Date.parse(h.createdAt)) ||
+        !record(h.originalAnswer) || !nonempty(h.originalAnswer.label) || step.reasoning !== h.reason) fail("Invalid saved human correction.");
+      const expected = withHumanEvidence([], [step], trace.buyerUnit)[0];
+      if (JSON.stringify(step.evidenceIds) !== JSON.stringify(expected ? [expected.evidenceId] : []) ||
+        JSON.stringify(step.citations) !== JSON.stringify(expected ? [{ evidenceId: expected.evidenceId, quote: expected.claim }] : [])) fail("Human correction evidence was changed.");
+    }
+    evidence = withHumanEvidence(evidence, trace.path, trace.buyerUnit);
     const scope = scopedEvidence(evidence, trace.buyerUnit);
     let id = graph.start;
     const visited = new Set<string>();
