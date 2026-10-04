@@ -158,7 +158,7 @@ router.post("/bsb-v2/packets/:packetId/assess", async (req, res): Promise<void> 
   }
   const packetId = String(req.params.packetId);
   if (body.data.mode === "REAL_INPUT") {
-    try { res.json(await runLiveAssessment(packetId, body.data.retry === true, body.data.buyerUnit)); }
+    try { res.json(await runLiveAssessment(packetId, body.data.retry === true, body.data.buyerUnit, undefined, body.data.rerun === true)); }
     catch (error) {
       const failure = error instanceof AssessmentError ? error : new AssessmentError("SERVER_FAILED", "The assessment service could not complete the request. Reload the packet to check its saved status.", 500);
       res.status(failure.status).json(failurePayload(failure));

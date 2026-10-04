@@ -281,7 +281,9 @@ export function validateTreeAssessment(assessment: any, evidence: LocatedEvidenc
   try {
     const trace = assessment.decisionTrace as Trace;
     const graph = validateGraph(trace.graph);
-    if (treeHash(graph) !== trace.treeHash || assessment.evidenceVersion !== evidenceVersion || !Array.isArray(trace.path)) fail("Saved decision version does not match.");
+    if (treeHash(graph) !== trace.treeHash) fail("The saved decision tree snapshot is corrupted or was created by an incompatible tree-hash version. Re-run the decision tree before approval.");
+    if (assessment.evidenceVersion !== evidenceVersion) fail("The research packet changed after this assessment. Re-run the decision tree before approval.");
+    if (!Array.isArray(trace.path)) fail("The saved decision path is missing. Re-run the decision tree before approval.");
     for (const step of trace.path) {
       if (!step.humanOverride) continue;
       const h = step.humanOverride;

@@ -1202,6 +1202,7 @@ export const AssessCompanyParams = zod.object({
 export const AssessCompanyBody = zod.object({
   "mode": zod.enum(['REAL_INPUT', 'DEMO_SYNTHETIC']),
   "retry": zod.boolean().optional(),
+  "rerun": zod.boolean().optional(),
   "buyerUnit": zod.string().optional()
 })
 

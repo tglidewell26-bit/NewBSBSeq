@@ -356,6 +356,7 @@ components:
       properties:
         mode: { type: string, enum: [REAL_INPUT, DEMO_SYNTHETIC] }
         retry: { type: boolean }
+        rerun: { type: boolean }
         buyerUnit: { type: string }
     ReviewInput:
       type: object
