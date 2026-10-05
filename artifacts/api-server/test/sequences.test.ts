@@ -10,11 +10,38 @@ import {
   checkSemantic,
   renderSequence,
   sequenceModelRequest,
+  allowedSourceAttributions,
 } from "../src/lib/sequences";
 
 import { emailCapabilities } from "../src/lib/sequence-catalog";
 import { settings, sequenceFixture } from "./sequence-fixture";
 describe("sequence authority and fixed copy", () => {
+  it("provides only the approved source wording when metadata supports it", () => {
+    expect(allowedSourceAttributions({ evidenceId: "j", claim: "Job posting: Senior Scientist (Therapeutics; posted 2026-09-01) — RNA-seq", sourceUrl: "https://example.com/jobs/1" }))
+      .toEqual(["I saw your recent job posting for a Senior Scientist, which made me think..."]);
+    expect(allowedSourceAttributions({ evidenceId: "p", claim: "Publication/presentation: Spatial Tumor States (AACR; 2026) — Methods/platforms named: RNA-seq", sourceUrl: "https://doi.org/example" }))
+      .toEqual([
+        "I read in your publication “Spatial Tumor States” that...",
+        "I read about your recent poster/presentation at AACR...",
+      ]);
+    expect(allowedSourceAttributions({ evidenceId: "n", claim: "Program update", sourceUrl: "https://example.com/news/program" }))
+      .toEqual(["I read on your news page that..."]);
+    expect(allowedSourceAttributions({ evidenceId: "s", claim: "Program update", sourceUrl: "https://linkedin.com/posts/example" }))
+      .toEqual(["I read your recent post on LinkedIn..."]);
+    expect(allowedSourceAttributions({ evidenceId: "u", claim: "Unattributed account fact", sourceUrl: null }))
+      .toEqual([]);
+  });
+
+  it("rejects invented source labels but permits the approved flexible wording", () => {
+    const { authority, touches } = sequenceFixture();
+    touches[0].middle = "The Therapeutics posting suggests your group is expanding its RNA work.";
+    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "SOURCE_ATTRIBUTION")).toBe(true);
+    touches[0].middle = "I saw your recent job posting for a Senior Scientist, which made me think your RNA work may be expanding.";
+    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "SOURCE_ATTRIBUTION")).toBe(false);
+    touches[0].middle = "I read on your website that your group studies tumor biology.";
+    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "SOURCE_ATTRIBUTION")).toBe(false);
+  });
+
   it.each([
     "Tim’s perspective on fit would be valuable.",
     "Tim's guidance would help determine the next step.",
@@ -326,6 +353,7 @@ describe("sequence authority and fixed copy", () => {
     ).toBe(true);
     for (const stage of ["WRITING", "VALIDATING"] as const) {
       const request = sequenceModelRequest(stage, authority, touches);
+      const input = JSON.parse(request.input);
       expect(request.instructions).toContain(
         "briefly paraphrase the prospect’s published description",
       );
@@ -335,6 +363,8 @@ describe("sequence authority and fixed copy", () => {
       expect(request.instructions).toContain(
         "Prioritize different supported research facts across emails",
       );
+      expect(request.instructions).toContain("Never say \"the Therapeutics posting\"");
+      expect(input.assignments[0].sourceAttribution).toBeDefined();
     }
   });
   it("blocks unapproved, mock, and stale assessments", () => {
