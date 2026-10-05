@@ -20,7 +20,19 @@ const fail = (message: string): never => { throw new AssessmentError("INVALID_TR
 const record = (v: unknown): v is Record<string, any> => !!v && typeof v === "object" && !Array.isArray(v);
 const nonempty = (v: unknown): v is string => typeof v === "string" && !!v.trim();
 export const unknownAnswer = (node: TreeNode) => node.answers!.find(a => /\bunknown\b/i.test(a.label))!;
-export const treeHash = (graph: Graph) => createHash("sha256").update(JSON.stringify(graph)).digest("hex");
+// JSONB may reorder object keys. Array order remains meaningful for paths/answers.
+const stableJson = (value: unknown): string => JSON.stringify(value, (_key, item) =>
+  record(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
+const legacyTreeHash = (graph: Graph) => createHash("sha256").update(JSON.stringify(graph)).digest("hex");
+export const treeHash = (graph: Graph) => createHash("sha256").update(stableJson(graph)).digest("hex");
+
+function matchesSavedTree(graph: Graph, savedHash: string): boolean {
+  if (treeHash(graph) === savedHash || legacyTreeHash(graph) === savedHash) return true;
+  // Recover legacy JSONB records only when the original exported tree verifies
+  // both the old fingerprint and the complete saved content. Never ignore a hash.
+  const original = loadGraph();
+  return legacyTreeHash(original) === savedHash && treeHash(original) === treeHash(graph);
+}
 
 export function validateGraph(value: unknown): Graph {
   if (!record(value) || value.schema !== "bsb-instrument-graph-v1" || !nonempty(value.start) || !Array.isArray(value.nodes) || !value.nodes.length || value.nodes.length > 200) fail("Invalid decision-tree schema, start or node count.");
@@ -281,7 +293,7 @@ export function validateTreeAssessment(assessment: any, evidence: LocatedEvidenc
   try {
     const trace = assessment.decisionTrace as Trace;
     const graph = validateGraph(trace.graph);
-    if (treeHash(graph) !== trace.treeHash) fail("The saved decision tree snapshot is corrupted or was created by an incompatible tree-hash version. Re-run the decision tree before approval.");
+    if (!matchesSavedTree(graph, trace.treeHash)) fail("The saved decision tree snapshot is corrupted or was created by an incompatible tree-hash version. Re-run the decision tree before approval.");
     if (assessment.evidenceVersion !== evidenceVersion) fail("The research packet changed after this assessment. Re-run the decision tree before approval.");
     if (!Array.isArray(trace.path)) fail("The saved decision path is missing. Re-run the decision tree before approval.");
     for (const step of trace.path) {
@@ -290,8 +302,8 @@ export function validateTreeAssessment(assessment: any, evidence: LocatedEvidenc
       if (!nonempty(h.id) || !nonempty(h.reason) || h.reason.length > 4000 || !Number.isFinite(Date.parse(h.createdAt)) ||
         !record(h.originalAnswer) || !nonempty(h.originalAnswer.label) || step.reasoning !== h.reason) fail("Invalid saved human correction.");
       const expected = withHumanEvidence([], [step], trace.buyerUnit)[0];
-      if (JSON.stringify(step.evidenceIds) !== JSON.stringify(expected ? [expected.evidenceId] : []) ||
-        JSON.stringify(step.citations) !== JSON.stringify(expected ? [{ evidenceId: expected.evidenceId, quote: expected.claim }] : [])) fail("Human correction evidence was changed.");
+      if (stableJson(step.evidenceIds) !== stableJson(expected ? [expected.evidenceId] : []) ||
+        stableJson(step.citations) !== stableJson(expected ? [{ evidenceId: expected.evidenceId, quote: expected.claim }] : [])) fail("Human correction evidence was changed.");
     }
     evidence = withHumanEvidence(evidence, trace.path, trace.buyerUnit);
     const scope = scopedEvidence(evidence, trace.buyerUnit);
@@ -310,7 +322,7 @@ export function validateTreeAssessment(assessment: any, evidence: LocatedEvidenc
     if (!outcome || outcome.type !== "outcome" || trace.outcome.nodeId !== id || trace.outcome.text !== outcome.text || trace.outcome.instrument !== outcome.instrument) fail("Saved outcome does not follow the path.");
     const expected = treeAssessment(trace, evidence, evidenceVersion);
     for (const key of ["instruments", "selectedInstruments", "selectionReason", "groundedEvidenceIds", "evidenceReviews", "approvable"] as const) {
-      if (JSON.stringify(assessment[key]) !== JSON.stringify(expected[key])) fail(`Saved ${key} does not match its decision path.`);
+      if (stableJson(assessment[key]) !== stableJson(expected[key])) fail(`Saved ${key} does not match its decision path.`);
     }
     return expected;
   } catch (error) {
