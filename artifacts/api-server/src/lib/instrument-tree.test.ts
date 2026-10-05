@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { assertApprovedPacket } from "./sequences";
 import { convertDossier } from "./account-dossier";
 import { normalizeEvidence } from "./bsb-v2";
 import { hashPacket } from "./bsb-v2";
-import { buyerUnitOptions, loadGraph, validateGraph, validateAnswer, questionRequest, walkTree, treeAssessment, validateTreeAssessment, scopedEvidence, editedPrefix, withHumanEvidence, parseTreeEdit, type Graph, type TreeNode } from "./instrument-tree";
+import { buyerUnitOptions, treeHash, loadGraph, validateGraph, validateAnswer, questionRequest, walkTree, treeAssessment, validateTreeAssessment, scopedEvidence, editedPrefix, withHumanEvidence, parseTreeEdit, type Graph, type TreeNode } from "./instrument-tree";
 const sample = JSON.parse(readFileSync(new URL("../../../../samples/account-dossier-synthetic.json", import.meta.url), "utf8"));
 const evidence = () => normalizeEvidence(convertDossier(structuredClone(sample)).researchPacket).normalized;
 const question = (): TreeNode => ({ id: "q", type: "question", text: "Does the unit perform protein imaging?", answers: [{ label: "Yes", next: "yes" }, { label: "No", next: "no" }, { label: "Unknown", next: "unknown" }] });
@@ -188,5 +189,39 @@ describe("instrument tree", () => {
     const a = treeAssessment(trace, evidence(), "v");
     a.decisionTrace.path = undefined as any;
     expect(() => validateTreeAssessment(a, evidence(), "v")).toThrow("saved decision path is missing");
+  });
+});
+
+// Simulate JSONB key reordering throughout the stored assessment, not just graph.
+const reordered = <T,>(value: T): T => JSON.parse(JSON.stringify(value, (_key, item) =>
+  item && typeof item === "object" && !Array.isArray(item)
+    ? Object.fromEntries(Object.keys(item).sort().reverse().map(k => [k, item[k]])) : item));
+describe("saved JSONB assessment compatibility", () => {
+  it("approves a reloaded assessment and human citations after key reordering", async () => {
+    const trace = await walkTree(graph(), evidence(), "Neuro Imaging Group", async () => unknown());
+    const prefix = editedPrefix(trace, { assessmentId: "a", nodeId: "q", label: "Yes", reason: "Synthetic confirmation" });
+    const revised = await walkTree(trace.graph, withHumanEvidence(evidence(), prefix, trace.buyerUnit), trace.buyerUnit, vi.fn(), undefined, prefix);
+    const saved = reordered(treeAssessment(revised, evidence(), "v"));
+    expect(validateTreeAssessment(saved, evidence(), "v").approvable).toBe(true);
+    saved.instruments[0].recommendation = "Altered content";
+    expect(() => validateTreeAssessment(saved, evidence(), "v")).toThrow();
+  });
+  it("recovers the legacy exported tree without a model rerun, but rejects changed content", async () => {
+    const original = loadGraph();
+    const trace = await walkTree(original, evidence(), "Neuro Imaging Group", async node => ({ ...unknown(), label: node.answers!.find(a => /unknown/i.test(a.label))!.label }));
+    trace.treeHash = createHash("sha256").update(JSON.stringify(original)).digest("hex");
+    const saved = reordered(treeAssessment(trace, evidence(), "v"));
+    expect(() => validateTreeAssessment(saved, evidence(), "v")).not.toThrow();
+    saved.decisionTrace.graph.nodes[0].text += " changed";
+    expect(() => validateTreeAssessment(saved, evidence(), "v")).toThrow("tree snapshot");
+  });
+  it("ignores object order but detects changed branch and array order", () => {
+    const g = graph();
+    expect(treeHash(reordered(g))).toBe(treeHash(g));
+    const changed = structuredClone(g);
+    changed.nodes[0].answers!.reverse();
+    expect(treeHash(changed)).not.toBe(treeHash(g));
+    changed.nodes[0].answers![0].next = "yes";
+    expect(treeHash(changed)).not.toBe(treeHash(g));
   });
 });
