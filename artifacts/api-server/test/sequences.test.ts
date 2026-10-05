@@ -330,7 +330,7 @@ describe("sequence authority and fixed copy", () => {
         "briefly paraphrase the prospect’s published description",
       );
       expect(request.instructions).toContain(
-        "A question or request for correction is still a factual claim and needs the same support",
+        "Factual presuppositions in questions require the same support as statements",
       );
       expect(request.instructions).toContain(
         "Prioritize different supported research facts across emails",

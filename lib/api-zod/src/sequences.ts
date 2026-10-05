@@ -181,6 +181,7 @@ export type SequenceJob = {
   contentHash: string | null;
   revisionOf: string | null;
   retryOf: string | null;
+  draftTouches?: DraftTouch[];
   canRegenerate: boolean;
   createdAt: string;
 };

@@ -337,6 +337,7 @@ describe("durable sequence HTTP workflow", () => {
       )
     ).rows[0];
     expect(JSON.stringify(row)).not.toContain("GeoMx cures");
+    expect(job.draftTouches[0].middle).toContain("GeoMx cures");
   });
   it("rejects oversized repair feedback before consuming a retry or reserving budget", async () => {
     const id = await packet();
@@ -421,7 +422,7 @@ describe("durable sequence HTTP workflow", () => {
       expect((await terminal(restarted.body.id)).state).toBe("APPROVED");
     },
   );
-  it("keeps a second unsafe regeneration unsaved and stops at its cap", async () => {
+  it("keeps failed repairs unapproved and permits another explicit targeted repair", async () => {
     const id = await packet();
     reviewer = async () => providerResponse(unsafeReview());
     const first = await terminal(
@@ -435,8 +436,19 @@ describe("durable sequence HTTP workflow", () => {
       ).body.id,
     );
     expect(next.state).toBe("VALIDATION_FAILED");
-    expect(next.canRegenerate).toBe(false);
+    expect(next.canRegenerate).toBe(true);
     expect(next.sequence).toBeNull();
+    expect(next.draftTouches).toHaveLength(9);
+    expect((await request(`/sequences/${next.id}/export`)).status).toBe(409);
+    const before = calls.length;
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(calls).toHaveLength(before); // Never automatically spend on another repair.
+    const repair = await request(`/sequences/${next.id}/regenerate`, { idempotencyKey: randomUUID() });
+    expect(repair.status).toBe(202);
+    const third = await terminal(repair.body.id);
+    expect(third.state).toBe("VALIDATION_FAILED");
+    expect(third.draftTouches).toHaveLength(9);
+    expect((await request(`/sequences/${next.id}/regenerate`, { idempotencyKey: randomUUID() })).status).toBe(409);
   });
   it("validates edited revisions without overwriting approved history", async () => {
     const id = await packet();
