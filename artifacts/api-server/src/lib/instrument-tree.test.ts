@@ -105,6 +105,7 @@ describe("instrument tree", () => {
     expect(checkpoint).toHaveBeenCalledTimes(1);
     const assessment = treeAssessment(trace, evidence(), "v");
     expect(assessment.selectedInstruments).toEqual(["CellScape"]);
+    expect(assessment.instruments.find(item => item.instrument === "CellScape")?.fit).toBe("POTENTIAL_FIT");
     expect(validateTreeAssessment(assessment, evidence(), "v").approvable).toBe(true);
     assessment.decisionTrace.path[0].next = "no";
     expect(() => validateTreeAssessment(assessment, evidence(), "v")).toThrow();
@@ -181,5 +182,11 @@ describe("instrument tree", () => {
     expect(() => validateTreeAssessment(a, evidence(), "new-version")).toThrow("research packet changed");
     a.decisionTrace.treeHash = "tampered";
     expect(() => validateTreeAssessment(a, evidence(), "v")).toThrow("tree snapshot");
+  });
+  it("identifies a missing saved path before approval", async () => {
+    const trace = await walkTree(graph(), evidence(), "Neuro Imaging Group", async () => yes());
+    const a = treeAssessment(trace, evidence(), "v");
+    a.decisionTrace.path = undefined as any;
+    expect(() => validateTreeAssessment(a, evidence(), "v")).toThrow("saved decision path is missing");
   });
 });

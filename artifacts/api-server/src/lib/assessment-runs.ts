@@ -93,7 +93,7 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
     const previous = (await client.query("SELECT * FROM bsb_v2_assessment_runs WHERE packet_id=$1 ORDER BY attempt DESC LIMIT 1", [packetId])).rows[0];
     if (previous?.state === "RUNNING" || previous?.state === "OUTCOME_UNKNOWN") throw new AssessmentError("OUTCOME_UNKNOWN", "An assessment is already running or its outcome is uncertain. Reload its status; no additional paid call was started.", 409);
     if (previous && !retry && !edit && !rerun) throw new AssessmentError("RETRY_CONFIRMATION_REQUIRED", "The previous attempt failed. Use the explicit retry action to authorize one more bounded tree run.", 409);
-    if (previous?.attempt >= 2 && !edit && !rerun) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. Review the reported failure before further work.", 409);
+    if (previous?.attempt >= 2 && !edit) throw new AssessmentError("ATTEMPT_LIMIT", "The two-attempt limit has been reached. No additional paid decision-tree run was started.", 409);
     runId = randomUUID();
     await client.query(`INSERT INTO bsb_v2_assessment_runs
       (id,packet_id,evidence_version,attempt,state,reserved_micro_usd,model,prompt_version)
@@ -144,7 +144,7 @@ export async function runLiveAssessment(packetId: string, retry = false, buyerUn
         normalized_evidence=$2::jsonb, stage='ASSESSED', updated_at=now()
         WHERE id=$3 AND evidence_version=$4 AND stage='ASSESSING'
         AND ($5::text IS NULL AND review IS NULL OR assessment->>'id'=$5) RETURNING id`,
-        [JSON.stringify(assessment), JSON.stringify(normalized!), packetId, row.evidence_version, edit?.assessmentId ?? null]);
+        [JSON.stringify(assessment), JSON.stringify(normalized!), packetId, row.evidence_version, edit?.assessmentId ?? (rerun ? row.assessment.id : null)]);
       if (!updated.rowCount) throw new AssessmentError("STALE_ASSESSMENT", "The packet changed while assessment was running. No assessment was saved.", 409);
       await save.query("UPDATE bsb_v2_assessment_runs SET state='COMPLETED', usage=$1::jsonb, finished_at=now() WHERE id=$2",
         [JSON.stringify(usage), runId]);

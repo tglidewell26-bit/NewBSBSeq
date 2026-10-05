@@ -21,6 +21,7 @@ beforeEach(() => {
     if (sql.startsWith("SELECT * FROM bsb_v2_packets")) return { rows: [row] };
     if (sql.startsWith("SELECT * FROM bsb_v2_assessment_runs")) return { rows: run ? [run] : [] };
     if (sql.startsWith("INSERT INTO bsb_v2_assessment_runs")) run = { id: params[0], attempt: params[3], state: "RUNNING", reserved_micro_usd: params[4] };
+    if (sql.startsWith("UPDATE bsb_v2_assessment_runs SET revision")) run.revision = JSON.parse(params[0]);
     if (sql.startsWith("UPDATE bsb_v2_assessment_runs SET usage")) { run.usage = JSON.parse(params[0]); run.progress = JSON.parse(params[1]); }
     if (sql.startsWith("UPDATE bsb_v2_packets SET assessment")) row.assessment = JSON.parse(params[0]);
     if (sql.startsWith("UPDATE bsb_v2_assessment_runs SET state='COMPLETED'")) run.state = "COMPLETED";
@@ -68,7 +69,38 @@ describe("bounded decision-tree runs (synthetic database and model)", () => {
     expect(mocks.model.mock.calls.length).toBeGreaterThan(count);
     expect(refreshed.id).not.toBe(old.id);
     expect(refreshed.parentAssessmentId).toBe(old.id);
+    expect(run.revision).toEqual({ rerun: true, originalAssessment: old, originalReview: null });
+    expect(run.attempt).toBe(2);
+    expect(mocks.query.mock.calls.some(([sql, values]) => sql.startsWith("UPDATE bsb_v2_packets SET assessment") && values[4] === old.id)).toBe(true);
     expect(run.state).toBe("COMPLETED");
+  });
+  it("refreshes using the current tree and packet rather than a stale snapshot", async () => {
+    const old = await runLiveAssessment("synthetic");
+    old.decisionTrace.treeHash = "stale-tree";
+    old.evidenceVersion = "old-evidence";
+    old.decisionTrace.path = undefined as any;
+    row.assessment = structuredClone(old);
+    const refreshed = await runLiveAssessment("synthetic", false, undefined, undefined, true);
+    expect(refreshed.decisionTrace.treeHash).not.toBe("stale-tree");
+    expect(refreshed.decisionTrace.path.length).toBeGreaterThan(0);
+    expect(refreshed.evidenceVersion).toBe(row.evidence_version);
+    expect(run.revision.originalAssessment).toEqual(old);
+  });
+  it("preserves the previous assessment and revision when refresh fails", async () => {
+    const old = await runLiveAssessment("synthetic");
+    mocks.model.mockRejectedValueOnce(new AssessmentError("INVALID_MODEL_OUTPUT", "Synthetic refresh failure"));
+    await expect(runLiveAssessment("synthetic", false, undefined, undefined, true)).rejects.toMatchObject({ code: "INVALID_MODEL_OUTPUT" });
+    expect(row.assessment).toEqual(old);
+    expect(run.revision.originalAssessment).toEqual(old);
+    expect(run.state).toBe("FAILED");
+  });
+  it("does not let a refresh bypass the two-attempt limit", async () => {
+    const old = await runLiveAssessment("synthetic");
+    run.attempt = 2;
+    const count = mocks.model.mock.calls.length;
+    await expect(runLiveAssessment("synthetic", false, undefined, undefined, true)).rejects.toMatchObject({ code: "ATTEMPT_LIMIT" });
+    expect(mocks.model).toHaveBeenCalledTimes(count);
+    expect(row.assessment).toEqual(old);
   });
   it("saves every step, aggregate usage, snapshot and outcome; repeated submit makes no new calls", async () => {
     const a = await runLiveAssessment("synthetic");

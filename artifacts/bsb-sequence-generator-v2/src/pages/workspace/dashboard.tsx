@@ -1,5 +1,6 @@
 import SequencePanel from "./sequence-panel";
 import DecisionPath from "./decision-path";
+import { staleApprovalReason } from "./stale-approval";
 import { useState, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { 
@@ -8,6 +9,7 @@ import {
   useGetAssessmentConfig,
   useReviewAssessment,
   getGetResearchPacketQueryKey,
+  getListResearchPacketsQueryKey,
   PacketRecord,
   NormalizedEvidence,
   InstrumentAssessment
@@ -556,17 +558,44 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
         setOpen(false);
       },
       onError: (err) => {
-        if (/decision tree|research packet|saved decision|version/i.test(err.message)) setStaleError(err.message);
+        if (decision === "APPROVE") setStaleError(staleApprovalReason(err));
         toast({ title: "Review failed", description: err.message, variant: "destructive" });
       }
     }
   });
   const refresh = useAssessCompany({ mutation: {
     retry: false,
-    onSuccess: () => { setStaleError(""); toast({ title: "Decision tree refreshed", description: "Review the new path before approving it." }); },
+    onSuccess: (assessment) => {
+      qc.setQueryData(getGetResearchPacketQueryKey(packet.id), (old: PacketRecord | undefined) =>
+        old ? { ...old, assessment, review: null, stage: "ASSESSED" } : old);
+      setStaleError("");
+      toast({ title: "Decision tree refreshed", description: "The previous assessment was preserved as a revision. Review the new path before approving it." });
+    },
     onError: (err) => toast({ title: "Refresh failed", description: err.message, variant: "destructive" }),
-    onSettled: () => qc.invalidateQueries({ queryKey: getGetResearchPacketQueryKey(packet.id) }),
+    onSettled: () => Promise.all([
+      qc.invalidateQueries({ queryKey: getGetResearchPacketQueryKey(packet.id) }),
+      qc.invalidateQueries({ queryKey: getListResearchPacketsQueryKey() }),
+    ]),
   } });
+
+  useEffect(() => {
+    setStaleError("");
+    setApprovedInstruments(packet.assessment?.selectedInstruments ?? []);
+    setConfirmSecond(false);
+  }, [packet.assessment?.id]);
+
+  const openReview = (nextDecision: "APPROVE" | "REJECT") => {
+    setDecision(nextDecision);
+    setApprovedInstruments(packet.assessment?.selectedInstruments ?? []);
+    setConfirmSecond(false);
+    setNote("");
+    setOpen(true);
+  };
+
+  const handleRefresh = () => {
+    setOpen(false);
+    refresh.mutate({ packetId: packet.id, data: { mode: "REAL_INPUT", rerun: true, retry: false, buyerUnit: packet.assessment?.decisionTrace?.buyerUnit } });
+  };
 
   const availableInstruments = packet.assessment?.instruments
     .filter((i) => ["STRONG_FIT", "POTENTIAL_FIT"].includes(i.fit) && i.evidenceIds.length > 0 && (packet.assessment?.mock || packet.assessment?.selectedInstruments?.includes(i.instrument)))
@@ -600,29 +629,33 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
 
   return (
     <div className="flex items-center gap-3">
-      {staleError && <Button variant="outline" className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50" disabled={refresh.isPending}
-        onClick={() => refresh.mutate({ packetId: packet.id, data: { mode: "REAL_INPUT", rerun: true, retry: false, buyerUnit: packet.assessment?.decisionTrace?.buyerUnit } })}>
-        {refresh.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Refresh decision tree
-      </Button>}
-      <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => { setDecision("REJECT"); setOpen(true); }}>
+      {refresh.isPending && <span role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Refreshing decision tree…</span>}
+      <Button variant="outline" className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50" disabled={refresh.isPending} onClick={() => openReview("REJECT")}>
         <XCircle className="w-4 h-4" /> Reject
       </Button>
       {packet.assessment?.approvable && (
-        <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setDecision("APPROVE"); setOpen(true); }}>
+        <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={refresh.isPending} onClick={() => openReview("APPROVE")}>
           <CheckCircle2 className="w-4 h-4" /> {packet.assessment?.mock ? "Approve Demonstration" : "Approve Assessment"}
         </Button>
       )}
 
       {open && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-md shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div role="dialog" aria-modal="true" aria-labelledby="review-dialog-title" className="bg-card border border-border rounded-md shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col">
             <div className={`p-4 border-b ${decision === 'APPROVE' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-              <h2 className={`text-lg font-semibold flex items-center gap-2 ${decision === 'APPROVE' ? 'text-emerald-800' : 'text-rose-800'}`}>
+              <h2 id="review-dialog-title" className={`text-lg font-semibold flex items-center gap-2 ${decision === 'APPROVE' ? 'text-emerald-800' : 'text-rose-800'}`}>
                 {decision === 'APPROVE' ? <><CheckCircle2 className="w-5 h-5"/> Approve Assessment</> : <><XCircle className="w-5 h-5"/> Reject Assessment</>}
               </h2>
             </div>
             
             <div className="p-6 flex flex-col gap-6">
+              {decision === "APPROVE" && staleError && (
+                <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-semibold">This decision must be refreshed before approval.</p>
+                  <p className="mt-1">{staleError}</p>
+                  <p className="mt-2">Refresh runs the current packet through the current tree and preserves the previous assessment as a revision. Existing spending limits still apply.</p>
+                </div>
+              )}
               {decision === "APPROVE" && (
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">Select Approved Instruments (Max 2)</Label>
@@ -666,16 +699,20 @@ function ReviewDialog({ packet }: { packet: PacketRecord }) {
               </div>
             </div>
             
-            <div className="p-4 border-t border-border bg-muted/20 flex justify-end gap-3">
+            <div className="p-4 border-t border-border bg-muted/20 flex flex-wrap justify-end gap-3">
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button 
+              {decision === "APPROVE" && staleError ? (
+                <Button className="gap-2 bg-amber-600 hover:bg-amber-700 text-white" disabled={review.isPending || refresh.isPending} onClick={handleRefresh}>
+                  <Search className="w-4 h-4" /> Refresh decision tree
+                </Button>
+              ) : <Button
                 onClick={handleSubmit} 
-                disabled={review.isPending}
+                disabled={review.isPending || refresh.isPending}
                 className={decision === 'APPROVE' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-rose-600 hover:bg-rose-700 text-white'}
               >
                 {review.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Confirm {decision === 'APPROVE' ? 'Approval' : 'Rejection'}
-              </Button>
+              </Button>}
             </div>
           </div>
         </div>
