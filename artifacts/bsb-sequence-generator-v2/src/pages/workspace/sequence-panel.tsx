@@ -305,8 +305,8 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
             </Button>
             <p className="text-xs text-muted-foreground">
               {edits
-                ? "One review call · reserves $0.35"
-                : "Two OpenAI calls · reserves $0.70"}
+                ? "One paid review call"
+                : "Two paid OpenAI calls"}
               . No automatic paid retries.
             </p>
           </>
@@ -381,12 +381,12 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
                   });
                 }}
               >
-                Regenerate failed touches once (paid)
+                Repair flagged messages (paid)
               </Button>
             )}
             {job.canRegenerate && (
               <p className="text-xs text-muted-foreground">
-                Uses the same assignments and preserves validated touches. Two
+                Only flagged messages are rewritten; other messages are preserved. Two
                 paid calls. No app spending cap.
               </p>
             )}
@@ -407,6 +407,31 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
               <p>{v.nextAction}</p>
             </div>
           ))}
+          {job.state === "VALIDATION_FAILED" && !!job.draftTouches?.length && (
+            <details open className="rounded border p-4 space-y-3">
+              <summary className="cursor-pointer font-medium">Draft for review — not approved for sending</summary>
+              {job.draftTouches.length < 9 && <p className="text-sm">This older job retained only the messages that passed. Rejected passages are shown above.</p>}
+              {job.draftTouches.map(touch => {
+                const issues = job.violations.filter(v => v.touchId === touch.touchId);
+                const spans = issues.map(v => v.rejectedSpan).filter(Boolean);
+                const parts: { text: string; flagged: boolean }[] = [];
+                let rest = touch.middle;
+                while (rest) {
+                  const matches = spans.map(span => ({ span, at: rest.indexOf(span) })).filter(m => m.at >= 0).sort((a, b) => a.at - b.at);
+                  const match = matches[0];
+                  if (!match) { parts.push({ text: rest, flagged: false }); break; }
+                  if (match.at) parts.push({ text: rest.slice(0, match.at), flagged: false });
+                  parts.push({ text: match.span, flagged: true });
+                  rest = rest.slice(match.at + match.span.length);
+                }
+                return <article key={touch.touchId} className="border-t pt-3 text-sm">
+                  <strong>{touch.touchId} · {issues.length ? "Needs correction" : "Preserved"}</strong>
+                  <p>{touch.subject}</p>
+                  <p className="whitespace-pre-wrap">{parts.map((part, i) => part.flagged ? <mark key={i}>{part.text}</mark> : <span key={i}>{part.text}</span>)}</p>
+                </article>;
+              })}
+            </details>
+          )}
           <details className="rounded border p-4">
             <summary className="cursor-pointer font-medium">
               Evidence and message plan
@@ -417,7 +442,7 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
             {job.authority.plan.map((p) => (
               <div key={p.touchId} className="border-t mt-3 pt-3 text-sm">
                 <strong>{p.touchId}</strong>
-                <p>{p.purpose}</p>
+                <p>{p.purpose.replace("a direct question about how the prospect studies that biology", "a direct question asking whether a proposed measurement is relevant unless their current workflow is explicitly established")}</p>
                 {job.authority.evidence
                   .filter((e) => p.evidenceIds.includes(e.evidenceId))
                   .map((e) => (

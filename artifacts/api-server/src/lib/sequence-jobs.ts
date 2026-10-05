@@ -44,7 +44,8 @@ export async function initializeSequenceJobs() {
     reserved_micro_usd integer NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now());
     CREATE INDEX IF NOT EXISTS bsb_v2_sequence_packet_idx ON bsb_v2_sequence_jobs(packet_id, created_at);
-    CREATE UNIQUE INDEX IF NOT EXISTS bsb_v2_sequence_active_idx ON bsb_v2_sequence_jobs(packet_id) WHERE state IN ('QUEUED','WRITING','VALIDATING');`);
+    CREATE UNIQUE INDEX IF NOT EXISTS bsb_v2_sequence_active_idx ON bsb_v2_sequence_jobs(packet_id) WHERE state IN ('QUEUED','WRITING','VALIDATING');
+    ALTER TABLE bsb_v2_sequence_jobs ADD COLUMN IF NOT EXISTS draft_touches jsonb NOT NULL DEFAULT '[]';`);
 }
 export const sequenceConfig = () => {
   const c = liveConfiguration();
@@ -65,12 +66,12 @@ function publicJob(r: any): SequenceJob {
     error: r.error,
     usage: r.usage,
     sequence: r.state === "APPROVED" ? r.sequence : null,
+    draftTouches: r.state === "VALIDATION_FAILED" ? (r.draft_touches?.length ? r.draft_touches : r.safe_touches ?? []) : [],
     contentHash: r.state === "APPROVED" ? r.content_hash : null,
     revisionOf: r.revision_of,
     retryOf: r.retry_of,
     canRegenerate:
       r.state === "VALIDATION_FAILED" &&
-      !r.retry_of &&
       !r.has_regeneration &&
       !r.revision_of &&
       r.violations.length > 0 &&
@@ -191,7 +192,7 @@ export async function createSequenceJob(
       )
         throw new AssessmentError(
           "REGENERATION_LIMIT",
-          "One explicit regeneration is allowed after a readable validation failure.",
+          "This failed draft cannot be repaired, or already has a repair. Open the latest failed repair to try again.",
           409,
         );
       authority = parent.authority;
@@ -376,12 +377,13 @@ export async function runSequenceJob(
     if (violations.length) {
       const unsafe = new Set(violations.map((v) => v.touchId));
       await pool.query(
-        `UPDATE bsb_v2_sequence_jobs SET state='VALIDATION_FAILED', violations=$2::jsonb,safe_touches=$3::jsonb,error='Validation rejected the draft. No approved sequence was saved.',updated_at=now()
+        `UPDATE bsb_v2_sequence_jobs SET state='VALIDATION_FAILED', violations=$2::jsonb,safe_touches=$3::jsonb,draft_touches=$4::jsonb,error='Draft needs correction. Review the flagged passages and repair only the affected messages.',updated_at=now()
         WHERE id=$1 AND state='VALIDATING'`,
         [
           id,
           JSON.stringify(violations),
           JSON.stringify(touches.filter((t) => !unsafe.has(t.touchId))),
+          JSON.stringify(touches),
         ],
       );
       return;
