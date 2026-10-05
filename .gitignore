@@ -47,6 +47,10 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+# Playwright browser test output
+/artifacts/bsb-sequence-generator-v2/playwright-report/
+/artifacts/bsb-sequence-generator-v2/test-results/
+
 # Replit
 .cache/
 .local/
