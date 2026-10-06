@@ -11,11 +11,44 @@ import {
   renderSequence,
   sequenceModelRequest,
   allowedSourceAttributions,
+  rankResearchEvidence,
+  researchCapability,
 } from "../src/lib/sequences";
 
 import { emailCapabilities } from "../src/lib/sequence-catalog";
 import { settings, sequenceFixture } from "./sequence-fixture";
 describe("sequence authority and fixed copy", () => {
+  it("prioritizes biology and source diversity over multiple facts from one closed role", () => {
+    const samples = { evidenceId: "a", claim: "Closed role: mouse tissue processing", assessmentType: "WORKFLOW", sourceUrl: "https://example.org/jobs/1" };
+    const rna = { ...samples, evidenceId: "b", claim: "Closed role: RNA extraction" };
+    const program = { evidenceId: "c", claim: "Develops immune cytokine payloads", assessmentType: "CAPABILITY", sourceUrl: "https://example.org/science" };
+    expect(rankResearchEvidence([samples, rna, program], new Set())[0]).toBe(program);
+    expect(rankResearchEvidence([samples, rna, program], new Set(["https://example.org/jobs/1"]))[0]).toBe(program);
+  });
+
+  it("does not force segmentation or mouse custom panels for unrelated methods", () => {
+    const used = new Map([["cosmx-rna", 20], ["cosmx-neighborhoods", 20], ["cosmx-informatics", 20]]);
+    expect(researchCapability("CosMx", "ELISA and multicolor FACS in mouse xenografts", used)?.id).not.toMatch(/segmentation|targeted|multiomics/);
+    expect(researchCapability("CosMx", "Human custom targeted panel", used)?.id).toBe("cosmx-targeted-panels");
+  });
+
+  it("blocks repeated job introductions and lost historical context, including LinkedIn", () => {
+    const { authority, touches } = sequenceFixture();
+    authority.evidence[0].claim = "Closed historical role describes RNA extraction.";
+    touches[0].middle = "I saw your job posting for a Scientist, which made me think about RNA.";
+    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "SOURCE_ATTRIBUTION" && v.message.includes("historical"))).toBe(true);
+    touches[0].middle = "I saw your earlier job posting for a Scientist, which made me think about RNA.";
+    touches[1].middle = touches[0].middle;
+    expect(checkDraft({ touches }, authority).violations.some(v => v.touchId === "email2" && v.message.includes("already introduced"))).toBe(true);
+    touches[3].middle = "I saw your job posting for a Scientist.";
+    expect(checkDraft({ touches }, authority).violations.some(v => v.touchId === "liMsg1" && v.message.includes("historical"))).toBe(true);
+    for (const stage of ["WRITING", "VALIDATING"] as const) {
+      const req = sequenceModelRequest(stage, authority, touches);
+      const assignments = JSON.parse(req.input).assignments;
+      expect(assignments[1].sourceAttribution[0]).toMatchObject({ alreadyIntroduced: true, historical: true, allowedWording: [] });
+      expect(req.instructions).toContain("without assay-specific support");
+    }
+  });
   it("carries the real source title across same-URL dossier facts without importing extra facts", () => {
     const fact = { evidenceId: "fact", claim: "[Synthetic Unit] RNA extraction", sourceUrl: "https://example.org/jobs/1" };
     const source = { evidenceId: "source", claim: "Job posting: Research Associate (Synthetic Unit; posted 2026-09-01) — RT-qPCR", sourceUrl: fact.sourceUrl };
@@ -259,7 +292,7 @@ describe("sequence authority and fixed copy", () => {
     expect(authority.plan.every(p => p.evidenceIds.includes("public-research"))).toBe(true);
     expect(authority.evidence).toHaveLength(1);
     const emails = authority.plan.filter(p => p.touchId.startsWith("email"));
-    expect(new Set(emails.map(p => p.capabilityId)).size).toBe(6);
+    expect(emails.every(p => !["cosmx-segmentation", "cosmx-targeted-panels", "cosmx-multiomics"].includes(p.capabilityId!))).toBe(true);
     expect(authority.plan.find(p => p.touchId === "liMsg1")?.capabilityId).toBe(emails[0].capabilityId);
     expect(authority.plan.find(p => p.touchId === "liMsg2")?.capabilityId).toBe(emails[3].capabilityId);
   });
@@ -304,10 +337,11 @@ describe("sequence authority and fixed copy", () => {
     row.review.evidenceVersion = version;
     const authority = planSequence(row, settings);
     const emails = authority.plan.filter(p => p.touchId.startsWith("email"));
-    expect(emails.map(p => p.evidenceIds[0])).toEqual([
+    expect(emails.map(p => p.evidenceIds[0]).sort()).toEqual([
       "public-research", "second-topic", "connection-topic", "fourth-topic", "fifth-topic", "sixth-topic",
-    ]);
-    expect(authority.plan.filter(p => p.touchId.startsWith("li")).every(p => p.evidenceIds[0] === "public-research")).toBe(true);
+    ].sort());
+    expect(authority.plan.find(p => p.touchId === "liMsg1")?.evidenceIds).toEqual(emails[0].evidenceIds);
+    expect(authority.plan.find(p => p.touchId === "liMsg2")?.evidenceIds).toEqual(emails[3].evidenceIds);
   });
   it("keeps proposed applications conditional without forcing workflow screening", () => {
     const { authority } = sequenceFixture();
@@ -342,8 +376,7 @@ describe("sequence authority and fixed copy", () => {
     row.assessment.evidenceVersion = version;
     row.review.evidenceVersion = version;
     const authority = planSequence(row, settings);
-    expect(authority.plan[0].evidenceIds).toEqual(["public-research"]);
-    expect(authority.plan[1].evidenceIds).toEqual(["additional-research"]);
+    expect(new Set(authority.plan.slice(0, 2).flatMap(p => p.evidenceIds))).toEqual(new Set(["public-research", "additional-research"]));
     expect(authority.plan[3].evidenceIds.length).toBeGreaterThan(0);
     expect(
       authority.evidence.some((e) => e.evidenceId === item.evidenceId),

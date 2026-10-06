@@ -7,6 +7,7 @@ import {
   attachmentNotes,
   loadSequenceAssets,
   suggestAssetsForWrittenSequence,
+  emailResourceLink,
 } from "../src/lib/sequence-assets";
 import {
   planSequence,
@@ -37,6 +38,16 @@ export const resource = (
   ...overrides,
 });
 describe("sequence resource retrieval", () => {
+  it("renders titles beginning with The without adding a conflicting article", () => {
+    const { authority } = sequenceFixture();
+    authority.assets = [resource({ id: "blog", fileKind: "link", displayName: "The Synthetic RNA Blog", sourceUrl: "https://example.org/blog" })];
+    for (const p of authority.plan) p.assetIds = ["blog"];
+    for (const id of ["email1", "email2", "email6"]) {
+      const line = emailResourceLink(authority, id);
+      expect(line).toContain("[The Synthetic RNA Blog]");
+      expect(line).not.toMatch(/(?:a|this) \[The /);
+    }
+  });
   it("requires approved instrument, assigned capability, and assigned company evidence", () => {
     const { row } = sequenceFixture();
     const a = planSequence(row, settings, [
@@ -52,7 +63,7 @@ describe("sequence resource retrieval", () => {
     });
     expect(
       a.plan.filter((p) => p.assetIds.length).map((p) => p.touchId),
-    ).toEqual(["email1", "email3", "email4", "email5", "email6"]);
+    ).toEqual(["email1", "email2", "email3", "email4", "email5", "email6"]);
     expect(
       a.plan
         .filter(

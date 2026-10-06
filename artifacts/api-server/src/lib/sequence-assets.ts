@@ -215,12 +215,12 @@ export function emailResourceLink(authority: SequenceAuthority, touchId: string)
   const title = (link?.displayName ?? `${plan.instrument} ${plan.capabilityId?.replace(/^[^-]+-/, "").replace(/-/g, " ")} resource`).replace(/[\[\]\r\n<>]/g, " ").trim();
   const label = `[${title}](${url})`;
   const phrases: Record<string, string> = {
-    email1: `Here is a ${label} with more detail.`,
-    email2: `You may find this ${label} useful.`,
+    email1: `For more detail: ${label}.`,
+    email2: `You may find ${label} useful.`,
     email3: `For more detail: ${label}.`,
     email4: `For reference: ${label}.`,
     email5: `More information is available here: ${label}.`,
-    email6: `I also wanted to share this ${label}.`,
+    email6: `I also wanted to share ${label}.`,
   };
   return phrases[touchId] ?? "";
 }
