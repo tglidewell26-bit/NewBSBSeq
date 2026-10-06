@@ -36,12 +36,12 @@ describe("sequence display, copy and export formatting", () => {
     expect(body("email4")).toContain("Monday, April 20, 2099");
     for (const id of ["email5", "liMsg2", "email6"]) {
       expect(body(id)).toContain("April 20, 2099");
-      expect(body(id)).toContain("available to meet");
+      expect(body(id)).toContain("Would any of these times work for you");
     }
   });  it("matches the requested meeting format and preserves bold when copied", () => {
     const trip1 = [{ date: "2026-10-12", start: "10:00", end: "16:00" }, { date: "2026-10-13", start: "10:00", end: "13:00" }];
     const body = meetingBlock({ ...settings, meetingMode: "IN_PERSON", trip1 });
-    expect(body).toBe("I’ll be in the area **October 12th - 13th**, are you available to meet during the following days and times?\n\nMonday, October 12, 2026: **10 AM–4 PM**\n\nTuesday, October 13, 2026: **10 AM–1 PM**\n\nI look forward to meeting in-person.");
+    expect(body).toBe("I’ll be in the area **October 12th - 13th**. Would any of these times work for you?\n\nMonday, October 12, 2026: **10 AM–4 PM**\n\nTuesday, October 13, 2026: **10 AM–1 PM**\n\nI hope we can connect while I’m in the area.");
     expect(sequenceBodyHtml(body)).toContain("<strong>October 12th - 13th</strong>");
     expect(sequenceBodyHtml(body)).toContain("<strong>10 AM–4 PM</strong>");
     expect(sequenceBodyText(body)).not.toContain("**");
@@ -62,14 +62,14 @@ describe("sequence display, copy and export formatting", () => {
       expect(new Set(links.map(p => p.text)).size).toBe(5);
       expect(links.find(p => p.text === "CellScape")?.href).toContain("/products/cellscape-precise-spatial-proteomics/");
       expect(t.body).not.toMatch(/Best regards|Los_Angeles|Times:|\]\([^)]*\) \|/);
-      if (!["email3", "email6"].includes(t.touchId)) expect(t.body.endsWith("I look forward to meeting in-person.")).toBe(true);
+      if (!["email3", "email6"].includes(t.touchId)) expect(t.body.endsWith("I hope we can connect while I’m in the area.")).toBe(true);
     }
     for (const id of ["liMsg1", "liMsg2"]) {
-      expect(body(id)).toContain("available to meet");
+      expect(body(id)).toContain("Would any of these times work for you");
       expect(body(id)).not.toMatch(/https:/);
       expect(body(id)).toContain("**10 AM–4 PM**");
     }
-    expect(body("liConnect")).not.toContain("available to meet");
+    expect(body("liConnect")).not.toContain("Would any of these times work for you");
     const opening4 = body("email4").split("\n\n")[1];
     expect(opening4).toContain("Sorry I missed you last time.");
     expect((body("email4").match(/October 26th - 29th/g) ?? []).length).toBe(1);
@@ -80,7 +80,7 @@ describe("sequence display, copy and export formatting", () => {
     expect(body("email1")).toContain("I'm Tim Glidewell, your Spatial Regional Account Manager at [Bruker Spatial Biology](https://brukerspatialbiology.com/). It's nice to e-meet you. We help researchers study where genes and proteins are located in tissue.");
     expect(body("email3")).toContain("I’ll also be back **October 26th - 29th**");
     expect(body("email3")).not.toContain("Monday, October 26");
-    expect(body("email3").indexOf("I’ll also be back")).toBeGreaterThan(body("email3").indexOf("I look forward to meeting in-person."));
+    expect(body("email3").indexOf("I’ll also be back")).toBeGreaterThan(body("email3").indexOf("I hope we can connect while I’m in the area."));
     for (const id of ["email3", "email4", "email5", "email6"]) expect(body(id)).toContain("virtual meeting");
     expect(body("email3")).not.toContain("I won’t keep following up");
     for (const id of ["email5"]) {
@@ -88,7 +88,7 @@ describe("sequence display, copy and export formatting", () => {
       expect(body(id)).toContain("another colleague");
     }
     expect(body("email6")).toContain("Since I haven’t heard back, I’ll reach out again in three months.");
-    expect(body("email6").indexOf("three months")).toBeGreaterThan(body("email6").indexOf("available to meet"));
+    expect(body("email6").indexOf("three months")).toBeGreaterThan(body("email6").indexOf("Would any of these times work for you"));
     expect(body("email6")).toContain("reach out sooner");
   });
   it("does not invent a past or future trip when no second trip is configured", () => {

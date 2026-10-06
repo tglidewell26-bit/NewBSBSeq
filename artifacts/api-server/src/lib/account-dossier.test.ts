@@ -11,6 +11,20 @@ const allItems = (packet: any) => [
 ] as any[];
 
 describe("account dossier conversion", () => {
+  it("retains source evidence when company stage is an evidence object", () => {
+    const dossier = sample();
+    dossier.organization.company_stage = { value: "Preclinical", tag: "Stated", evidence: "The program is preclinical.", source_url: "https://example.org/pipeline" };
+    const converted = convertDossier(dossier);
+    expect(converted.researchPacket.qualificationEvidence.categories.translationalStage[0]).toMatchObject({ evidenceState: "EXPLICIT", sourceUrl: "https://example.org/pipeline", basisFacts: ["The program is preclinical."] });
+    expect(converted.notes.some(n => n.path === "organization.company_stage")).toBe(false);
+  });
+  it("preserves historical job status without inventing a posting date", () => {
+    const dossier = sample();
+    dossier.job_postings = [{ title: "Synthetic Research Associate", status: "closed; historical responsibilities only", posted_date: null, source_url: "https://example.org/jobs/1", techniques_named: ["RT-qPCR"] }];
+    const item = allItems(convertDossier(dossier).researchPacket).find(x => x.claim.startsWith("Job posting:"));
+    expect(item.claim).toContain("status: closed; historical responsibilities only");
+    expect(item.claim).not.toContain("posted ");
+  });
   it("detects dossiers and leaves frozen packets alone", () => {
     expect(isAccountDossier(sample())).toBe(true);
     expect(isAccountDossier({ schemaVersion: "bsb-company-research-v1", brief: "x", qualificationEvidence: {} })).toBe(false);

@@ -217,7 +217,7 @@ export function emailResourceLink(authority: SequenceAuthority, touchId: string)
   const phrases: Record<string, string> = {
     email1: `Here is a ${label} with more detail.`,
     email2: `You may find this ${label} useful.`,
-    email3: `This ${label} is another resource to explore.`,
+    email3: `For more detail: ${label}.`,
     email4: `For reference: ${label}.`,
     email5: `More information is available here: ${label}.`,
     email6: `I also wanted to share this ${label}.`,

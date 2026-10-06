@@ -24,7 +24,7 @@ import { hashPacket, normalizeEvidence } from "./bsb-v2";
 import { attachSequenceAssets, emailResourceLink } from "./sequence-assets";
 
 export const PLAN_VERSION = "bsb-plan-11-platform-resources";
-export const VOICE_VERSION = "tim-outreach-20-source-attribution";
+export const VOICE_VERSION = "tim-outreach-21-scoped-research";
 export const digest = hashPacket;
 // Exclude competitor references from customer-facing evidence assignments as
 // well as model output. NanoString is Bruker-owned and intentionally allowed.
@@ -45,15 +45,21 @@ const sourceHost = (value?: string | null) => {
 };
 
 /** Give the writer source language that is supported by the saved metadata. */
-export function allowedSourceAttributions(evidence: AttributionEvidence): string[] {
+export function allowedSourceAttributions(evidence: AttributionEvidence, related: AttributionEvidence[] = []): string[] {
+  // Dossier methods and their source title are separate records. Carry only
+  // source wording across an exact URL match, never the other record's facts.
+  const source = evidence.sourceUrl && related.find(e => e.sourceUrl === evidence.sourceUrl && /^(?:Job posting|Publication\/presentation):/.test(e.claim));
+  if (source && source !== evidence) return allowedSourceAttributions(source);
   const job = evidence.claim.match(/^Job posting:\s*([^(—]+?)(?:\s*\(|\s*—|$)/i);
   if (job?.[1]?.trim())
-    return [`I saw your recent job posting for a ${job[1].trim()}, which made me think...`];
+    return [`I saw your job posting for a ${job[1].trim()}, which made me think...`];
 
   const publication = evidence.claim.match(/^Publication\/presentation:\s*([^(—]+?)(?:\s*\(([^)]*)\)|\s*—|$)/i);
   if (publication?.[1]?.trim()) {
     const title = publication[1].trim();
-    const venue = publication[2]?.split(";").map(v => v.trim()).filter(Boolean).find(v => !/^\d{4}$/.test(v));
+    const metadata = publication[2]?.split(";").map(v => v.trim()).filter(Boolean) ?? [];
+    // Intake serializes buyer unit; venue; year. Never use the unit as a conference.
+    const venue = metadata.length >= 3 ? metadata[1] : metadata.length === 2 && /^\d{4}$/.test(metadata[1]) ? metadata[0] : undefined;
     return [
       `I read in your publication “${title}” that...`,
       ...(venue ? [`I read about your recent poster/presentation at ${venue}...`] : []),
@@ -71,6 +77,8 @@ export function allowedSourceAttributions(evidence: AttributionEvidence): string
 }
 
 const sourceAttributionSpan = (text: string): string | null => {
+  const vague = text.match(/\b(?:the|your)\s+(?:listed|reported|documented|described)\s+(?:work|research|RNA\s+extraction|RT-qPCR|FACS|methods?|activities|workflow)\b/i);
+  if (vague) return vague[0];
   const sourceWords = /\b(?:website|news page|publication|paper|job posting|posting|poster|presentation|post)\b/i;
   const candidates = text.match(/(?:^|[.!?]\s+)([^.!?]*(?:I\s+(?:read|saw|found|noticed|came across)|according to|based on|(?:the|your)\s+[\w-]+\s+posting)[^.!?]*)/gi) ?? [];
   for (const candidate of candidates.map(value => value.replace(/^[.!?]\s+/, "").trim()).filter(value => sourceWords.test(value))) {
@@ -347,6 +355,7 @@ export function planSequence(
           claim: e.claim,
           provenanceType: e.provenanceType,
           sourceUrl: e.sourceUrl,
+          sourceAttribution: allowedSourceAttributions(e, normalized),
         })),
       capabilities: capabilities.filter((c) =>
         plan.some((p) => p.capabilityId === c.id),
@@ -388,7 +397,7 @@ export function meetingBlock(s: OutreachSettings, second = false) {
     (slot) =>
       `${new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${slot.date}T12:00:00Z`))}: **${clock(slot.start)}–${clock(slot.end)}**`,
   );
-  return `I’ll be ${second && s.trip2.length ? "back in" : "in"} the area **${tripDateRange(slots)}**, are you available to meet during the following days and times?\n\n${dates.join("\n\n")}\n\nI look forward to meeting in-person.`;
+  return `I’ll be ${second && s.trip2.length ? "back in" : "in"} the area **${tripDateRange(slots)}**. Would any of these times work for you?\n\n${dates.join("\n\n")}\n\nI hope we can connect while I’m in the area.`;
 }
 export const connectionMiddle = "I’m with Bruker Spatial Biology. I’d like to connect and discuss how spatial biology could help your research.";
 const productLinks: Record<string, string> = {
@@ -656,6 +665,7 @@ export function sequenceModelRequest(
   repairIds?: TouchId[],
   feedback?: Violation[],
 ) {
+  const researchScopeRules = `Do not replace source attribution with vague phrases such as "the listed work", "the reported RNA extraction" or "the documented methods". Name the actual source using an allowed pattern, or make a direct, precisely supported statement. Source wording identifies where the assigned fact came from; it does not authorize additional facts from that source. A job description establishes listed responsibilities or desired experience, not proof of a currently running workflow, expansion, instrument ownership or purchase intent. Do not call an undated or old posting recent, and do not present a closed vacancy as active hiring. For species-specific claims, require explicit species and sample support in this touch's assigned evidence; never borrow human context from another unit or fact. For mixed, mouse, xenograft or unspecified samples use a species-neutral compatible-assay explanation, without target counts or assumed human whole-transcriptome coverage. Lead CosMx explanations with individual cells, cell states and cellular neighborhoods; regional comparisons are possible but must not replace that single-cell framing. Never combine separate sources, teams, assays or sample types into an established workflow. For example, FACS plus RNA extraction does not establish matched tissue sections or same-cell multiomics; propose that comparison as a conditional interest question. Describe same-cell multiomics as comparing RNA abundance and protein expression in the same cells, not as eliminating assumptions or guaranteeing correspondence. Keep prose conversational and concise rather than listing specifications and caveats. These requirements apply equally to drafting and semantic review.`;
   // Resolve each assignment once. Neither model needs trips, signatures, links,
   // rendered bodies, or unrelated facts to write/review the editable copy.
   const assignments = authority.plan.map((p) => ({
@@ -669,7 +679,7 @@ export function sequenceModelRequest(
       .filter((e) => p.evidenceIds.includes(e.evidenceId))
       .map((e) => ({
         evidenceId: e.evidenceId,
-        allowedWording: allowedSourceAttributions(e),
+        allowedWording: e.sourceAttribution ?? allowedSourceAttributions(e, authority.evidence),
       })),
     capability:
       authority.capabilities.find((c) => c.id === p.capabilityId) ?? null,
@@ -693,7 +703,7 @@ Return each touch once with exact quoted spans for any factual or voice issue, o
     service_tier: "default",
     reasoning: { effort: "medium" },
     max_output_tokens: MAX_OUTPUT_TOKENS,
-    instructions: `${sourceAttributionRules}\n${stage === "WRITING" ? writing : reviewing}`,
+    instructions: `${sourceAttributionRules}\n${researchScopeRules}\n${stage === "WRITING" ? writing : reviewing}`,
     input: JSON.stringify({
       assignments,
       evidence: authority.evidence,
