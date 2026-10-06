@@ -16,9 +16,38 @@ import {
 import { emailCapabilities } from "../src/lib/sequence-catalog";
 import { settings, sequenceFixture } from "./sequence-fixture";
 describe("sequence authority and fixed copy", () => {
+  it("carries the real source title across same-URL dossier facts without importing extra facts", () => {
+    const fact = { evidenceId: "fact", claim: "[Synthetic Unit] RNA extraction", sourceUrl: "https://example.org/jobs/1" };
+    const source = { evidenceId: "source", claim: "Job posting: Research Associate (Synthetic Unit; posted 2026-09-01) — RT-qPCR", sourceUrl: fact.sourceUrl };
+    expect(allowedSourceAttributions(fact, [source])[0]).toContain("Research Associate");
+    expect(allowedSourceAttributions(fact, [{ ...source, sourceUrl: "https://example.org/jobs/2" }])[0]).not.toContain("Research Associate");
+    const publication = { evidenceId: "pub", claim: "Publication/presentation: Synthetic cell states (Synthetic Unit; AACR; 2026) — RNA-seq", sourceUrl: "https://example.org/abstract" };
+    expect(allowedSourceAttributions(publication).join(" ")).toContain("at AACR");
+    expect(allowedSourceAttributions(publication).join(" ")).not.toContain("at Synthetic Unit");
+  });
+
+  it.each(["The listed work spans mouse tissues.", "The reported RNA extraction raises a question.", "Your documented methods include FACS."])("rejects vague provenance: %s", middle => {
+    const { authority, touches } = sequenceFixture();
+    touches[0].middle = middle;
+    expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "SOURCE_ATTRIBUTION")).toBe(true);
+  });
+
+  it("uses species-neutral RNA claims and supplies research-scope rules to both models", () => {
+    const { authority, touches } = sequenceFixture();
+    const cap = authority.capabilities.find(c => c.id === "cosmx-rna")!;
+    expect(cap.claim).not.toMatch(/19,000|human|whole-transcriptome/);
+    expect(cap.claim).toContain("single-cell");
+    for (const stage of ["WRITING", "VALIDATING"] as const) {
+      const request = sequenceModelRequest(stage, authority, touches);
+      expect(request.instructions).toContain("never borrow human context from another unit");
+      expect(request.instructions).toContain("Never combine separate sources");
+      expect(request.instructions).toContain("not as eliminating assumptions");
+      expect(request.instructions).toContain("individual cells, cell states and cellular neighborhoods");
+    }
+  });
   it("provides only the approved source wording when metadata supports it", () => {
     expect(allowedSourceAttributions({ evidenceId: "j", claim: "Job posting: Senior Scientist (Therapeutics; posted 2026-09-01) — RNA-seq", sourceUrl: "https://example.com/jobs/1" }))
-      .toEqual(["I saw your recent job posting for a Senior Scientist, which made me think..."]);
+      .toEqual(["I saw your job posting for a Senior Scientist, which made me think..."]);
     expect(allowedSourceAttributions({ evidenceId: "p", claim: "Publication/presentation: Spatial Tumor States (AACR; 2026) — Methods/platforms named: RNA-seq", sourceUrl: "https://doi.org/example" }))
       .toEqual([
         "I read in your publication “Spatial Tumor States” that...",

@@ -1,5 +1,5 @@
 import type { Capability } from "@workspace/api-zod";
-export const CATALOG_VERSION = "bsb-capabilities-2026-09-30-v8";
+export const CATALOG_VERSION = "bsb-capabilities-2026-10-06-v9";
 // Reviewed outreach claims. Specs retain their assay and measurement scope.
 export const capabilities: Capability[] = [
   {
@@ -32,15 +32,15 @@ export const capabilities: Capability[] = [
     biologySources: ["https://www.nature.com/articles/s41587-022-01483-z"],
     id: "cosmx-rna",
     instrument: "CosMx",
-    claim: "CosMx whole-transcriptome imaging measures approximately 19,000 RNA targets at single-cell and subcellular resolution in intact human tissue.",
-    limitation: "The 19,000-target specification is for the human Whole Transcriptome panel, not every CosMx panel or species.",
+    claim: "CosMx single-cell spatial RNA imaging measures gene expression at single-cell and subcellular resolution in compatible tissue, retaining the locations of cells and their neighbors.",
+    limitation: "Panel, species and sample preparation must be compatible. Do not assume human tissue, quote a target count or promise whole-transcriptome coverage from this species-neutral claim. Human and mouse assays are not interchangeable, and xenografts may contain both species.",
     sourceUrl:
       "https://brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/cosmx-rna-assays/whole-transcriptome-panel/",
     sourceSection: "CosMx Spatial Molecular Imager Brochure, SEP 2025 MK5188, pages 3 and 6",
     reviewedAt: "2026-09-27",
   },
   {
-    biologicalValue: "RNA and protein in the same cells connect transcriptional state with measured protein phenotype without assuming RNA predicts protein abundance or matching different cells across sections.",
+    biologicalValue: "Measuring RNA and protein in the same cells lets researchers compare transcript abundance with protein expression directly, rather than inferring their relationship from separate measurements. This does not establish causality or eliminate assay limitations.",
     biologySources: ["https://www.nature.com/articles/s41467-021-25872-1"],
     id: "cosmx-multiomics",
     instrument: "CosMx",

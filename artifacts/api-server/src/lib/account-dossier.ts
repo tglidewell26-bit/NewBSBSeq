@@ -213,7 +213,7 @@ export function convertDossier(dossier: Record<string, any>) {
   if (text(org.company_stage)) {
     const stage = text(org.company_stage);
     if (stage.toLowerCase() === "unknown") b.addUnknown("translationalStage", "UNKNOWN", "Company stage is unknown.");
-    else b.addEvidence("translationalStage", "COMPANY_FACT", stage, "organization.company_stage", "Company stage");
+    else b.addEvidence("translationalStage", "COMPANY_FACT", org.company_stage, "organization.company_stage", "Company stage");
   }
   list(org.recent_milestones).forEach((item, i) =>
     b.addEvidence("buyingReadinessSignals", "COMPANY_FACT", item, `organization.recent_milestones[${i}]`, "Recent milestone"));
@@ -257,7 +257,7 @@ export function convertDossier(dossier: Record<string, any>) {
       text(job.tools_and_software_named) && `Tools/software named: ${text(job.tools_and_software_named)}`,
       text(job.sample_types_named) && `Sample types named: ${text(job.sample_types_named)}`,
     ].filter(Boolean) as string[];
-    const where = [text(job.buyer_unit), text(job.location), text(job.posted_date) && `posted ${text(job.posted_date)}`].filter(Boolean).join("; ");
+    const where = [text(job.buyer_unit), text(job.location), text(job.posted_date) && `posted ${text(job.posted_date)}`, text(job.status) && `status: ${text(job.status)}`].filter(Boolean).join("; ");
     const claim = `Job posting: ${text(job.title) || "Untitled role"}${where ? ` (${where})` : ""}${facts.length ? ` — ${facts.join(". ")}` : ""}`;
     b.addSourced("workflows", "SOURCE", claim, facts, job.source_url, `job_postings[${i}]`);
   });

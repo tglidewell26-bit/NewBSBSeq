@@ -134,6 +134,8 @@ export type SequenceAuthority = {
     claim: string;
     provenanceType: string;
     sourceUrl?: string | null;
+    /** Optional for legacy authorities; contains source wording, not extra research facts. */
+    sourceAttribution?: string[];
   }>;
   capabilities: Capability[];
   assets?: SequenceAsset[];
