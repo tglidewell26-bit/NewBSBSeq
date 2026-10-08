@@ -114,6 +114,8 @@ export type TouchPlan = {
   instrument: (typeof instruments)[number] | null;
   evidenceIds: string[];
   capabilityId: string | null;
+  /** Optional for legacy plans. Approved choices; the anchor is only a resource hint. */
+  capabilityIds?: string[];
   assetIds: string[];
   assetMatches?: Array<{ assetId: string; kind: "attachment" | "image" | "link"; evidenceIds: string[]; topics: string[]; reason: string }>;
 };

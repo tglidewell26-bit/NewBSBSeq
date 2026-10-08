@@ -59,7 +59,10 @@ function positiveConcept(text: string, pattern: RegExp): boolean {
 function conflicts(company: string, asset: string): boolean {
   // Missing sample context is not evidence of compatibility. Explicitly
   // different sample/species context is enough to decline an attachment.
-  return [["ffpe", "fresh frozen"], ["human", "mouse"]].some(pair => {
+  return ["human", "mouse", "murine", "ffpe", "fresh frozen"].some(term =>
+    new RegExp(`\\b${term}\\b`).test(asset) &&
+    !positiveConcept(company, new RegExp(`\\b${term}\\b`))
+  ) || [["ffpe", "fresh frozen"], ["human", "mouse"]].some(pair => {
     const c = pair.filter(t => new RegExp(`\\b${t}\\b`).test(company));
     const a = pair.filter(t => new RegExp(`\\b${t}\\b`).test(asset));
     return c.length === 1 && a.length === 1 && c[0] !== a[0];
@@ -101,7 +104,7 @@ export function attachSequenceAssets(authority: SequenceAuthority, library: Sequ
       const rawContent = [asset.description, ...asset.keywords].join("\n");
       const content = normalized(rawContent);
       const company = normalized(evidence.map(e => e.claim).join(" "));
-      if (conflicts(company, content)) return [];
+      if (conflicts(company, normalized([asset.displayName, asset.fileName, rawContent].join(" ")))) return [];
       const matches: Array<{ topic: string; ids: string[] }> = concepts.filter(c => (c.caps as readonly string[]).includes(p.capabilityId!) && positiveConcept(rawContent, c.pattern))
         .map(c => ({ topic: c.name, ids: evidence.filter(e => positiveConcept(e.claim, c.pattern)).map(e => e.evidenceId) }))
         .filter(m => m.ids.length);
@@ -210,9 +213,14 @@ export function emailResourceLink(authority: SequenceAuthority, touchId: string)
   const link = authority.assets?.find(a => plan.assetIds.includes(a.id) && a.fileKind === "link" && resourceUrl(a.sourceUrl));
   const richResources = plan.instrument === "GeoMx" || plan.instrument === "CosMx";
   const capability = authority.capabilities.find(c => c.id === plan.capabilityId);
-  const url = resourceUrl(link?.sourceUrl) ?? (richResources ? resourceUrl(capability?.sourceUrl) : null);
+  const generalUrls: Record<string, string> = {
+    CosMx: "https://brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/",
+    GeoMx: "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
+  };
+  const general = !!plan.capabilityIds?.length;
+  const url = resourceUrl(link?.sourceUrl) ?? (richResources ? resourceUrl(general ? generalUrls[plan.instrument!] : capability?.sourceUrl) : null);
   if (!url) return "";
-  const title = (link?.displayName ?? `${plan.instrument} ${plan.capabilityId?.replace(/^[^-]+-/, "").replace(/-/g, " ")} resource`).replace(/[\[\]\r\n<>]/g, " ").trim();
+  const title = (link?.displayName ?? (general ? `${plan.instrument} overview` : `${plan.instrument} ${plan.capabilityId?.replace(/^[^-]+-/, "").replace(/-/g, " ")} resource`)).replace(/[\[\]\r\n<>]/g, " ").trim();
   const label = `[${title}](${url})`;
   const phrases: Record<string, string> = {
     email1: `For more detail: ${label}.`,

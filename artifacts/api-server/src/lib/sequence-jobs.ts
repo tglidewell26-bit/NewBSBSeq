@@ -24,6 +24,7 @@ import {
   digest,
   checkDraft,
   checkSemantic,
+  partitionSequenceFindings,
   renderSequence,
   sequenceModelRequest,
   VOICE_VERSION,
@@ -369,10 +370,11 @@ export async function runSequenceJob(
       sequenceModelRequest("VALIDATING", authority, touches, repairIds),
     );
     await recordUsage(id, "VALIDATING", review.usage);
-    const violations = [
+    const findings = [
       ...checked.violations,
       ...checkSemantic(review.value, touches, authority, repairIds),
     ];
+    const { suggestions, violations } = partitionSequenceFindings(findings);
     await stillCurrent(id);
     if (violations.length) {
       const unsafe = new Set(violations.map((v) => v.touchId));
@@ -405,7 +407,7 @@ export async function runSequenceJob(
         );
       sequence = suggestAssetsForWrittenSequence(authority, sequence, await loadSequenceAssets(c));
       const updated = await c.query(
-        `UPDATE bsb_v2_sequence_jobs SET state='APPROVED',sequence=$2::jsonb,content_hash=$3,validation_record=$4::jsonb,updated_at=now()
+        `UPDATE bsb_v2_sequence_jobs SET state='APPROVED',sequence=$2::jsonb,content_hash=$3,validation_record=$4::jsonb,violations=$5::jsonb,updated_at=now()
         WHERE id=$1 AND state='VALIDATING' RETURNING id`,
         [
           id,
@@ -418,6 +420,7 @@ export async function runSequenceJob(
             checks: ["deterministic", "independent-semantic"],
             model: review.usage.model,
           }),
+          JSON.stringify(suggestions),
         ],
       );
       if (!updated.rowCount)
