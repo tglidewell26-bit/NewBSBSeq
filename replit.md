@@ -1,3 +1,9 @@
+# Current workflow: Sequence Finisher
+
+The app now uses Finish Sequence, Knowledge Base, and History. ChatGPT supplies the instrument decision and complete outreach. The app fills scheduling placeholders and suggests resources. Do not restore the older assessment or sequence-writing workflow. See `docs/sequence-finisher.md` for the handoff format, data preservation, and deployment notes.
+
+---
+
 # BSB Sequence Generator V2
 
 Personal Phase 1 application for research-packet intake without sign-in, evidence validation, instrument assessment, and versioned review.
