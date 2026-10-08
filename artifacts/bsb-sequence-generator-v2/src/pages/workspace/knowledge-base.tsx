@@ -140,7 +140,7 @@ export default function KnowledgeBase() {
   </article>;
 
   return <div className="space-y-6 pb-10">
-    <section><p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Knowledge base</p><h1 className="mt-2 text-3xl font-bold">Bruker asset library</h1><p className="mt-2 max-w-3xl text-muted-foreground">Save reference files or resource links for outreach. GeoMx and CosMx sequences include a resource in every email and target images in at least four. CellScape keeps optional resource suggestions.</p></section>
+    <section><p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Knowledge base</p><h1 className="mt-2 text-3xl font-bold">Knowledge Base</h1><p className="mt-2 max-w-3xl text-muted-foreground">Add and manage images, publications, tech notes, panels, and links. The finisher suggests useful direct or related resources for each message; you can change or remove any selection.</p></section>
     <div className="grid items-start gap-6 xl:grid-cols-[.85fr_1.15fr]">
       <Card id="asset-editor" className="min-w-0"><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary" />{draft?.asset ? "Edit saved asset" : "Knowledge base upload"}</CardTitle><CardDescription>Upload PDFs or images, or add a webinar, publication or other HTTPS link with a summary and keywords. Uploaded files can be analyzed automatically; links use the details you enter.</CardDescription></CardHeader><CardContent>
         <div className="mb-4 space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
