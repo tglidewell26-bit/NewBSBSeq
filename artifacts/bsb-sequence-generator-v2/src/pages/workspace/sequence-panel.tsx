@@ -393,12 +393,12 @@ export default function SequencePanel({ packet }: { packet: PacketRecord }) {
           </div>
           {job.violations.map((v, i) => (
             <div
-              role="alert"
+              role={v.ruleId === "VOICE" ? "note" : "alert"}
               key={i}
-              className="border border-destructive/40 rounded p-3 text-sm"
+              className={v.ruleId === "VOICE" ? "border rounded p-3 text-sm" : "border border-destructive/40 rounded p-3 text-sm"}
             >
               <strong>
-                {v.touchId} · {v.ruleId}
+                {v.touchId} · {v.ruleId === "VOICE" ? "Optional style suggestion" : v.ruleId}
               </strong>
               <p>{v.message}</p>
               <blockquote className="my-2 border-l-2 pl-2">

@@ -12,7 +12,6 @@ import {
   sequenceModelRequest,
   allowedSourceAttributions,
   rankResearchEvidence,
-  researchCapability,
 } from "../src/lib/sequences";
 
 import { emailCapabilities } from "../src/lib/sequence-catalog";
@@ -27,25 +26,27 @@ describe("sequence authority and fixed copy", () => {
   });
 
   it("does not force segmentation or mouse custom panels for unrelated methods", () => {
-    const used = new Map([["cosmx-rna", 20], ["cosmx-neighborhoods", 20], ["cosmx-informatics", 20]]);
-    expect(researchCapability("CosMx", "ELISA and multicolor FACS in mouse xenografts", used)?.id).not.toMatch(/segmentation|targeted|multiomics/);
-    expect(researchCapability("CosMx", "Human custom targeted panel", used)?.id).toBe("cosmx-targeted-panels");
+    const { authority } = sequenceFixture();
+    expect(authority.plan[0].capabilityId).toBe("cosmx-rna");
+    expect(authority.plan[0].capabilityIds).toContain("cosmx-multiomics");
+    expect(authority.plan[0].purpose).toContain("without forcing feature variety");
   });
 
-  it("blocks repeated job introductions and lost historical context, including LinkedIn", () => {
+  it("allows accurate source reuse but blocks lost historical context, including LinkedIn", () => {
     const { authority, touches } = sequenceFixture();
     authority.evidence[0].claim = "Closed historical role describes RNA extraction.";
     touches[0].middle = "I saw your job posting for a Scientist, which made me think about RNA.";
     expect(checkDraft({ touches }, authority).violations.some(v => v.ruleId === "SOURCE_ATTRIBUTION" && v.message.includes("historical"))).toBe(true);
     touches[0].middle = "I saw your earlier job posting for a Scientist, which made me think about RNA.";
     touches[1].middle = touches[0].middle;
-    expect(checkDraft({ touches }, authority).violations.some(v => v.touchId === "email2" && v.message.includes("already introduced"))).toBe(true);
+    expect(checkDraft({ touches }, authority).violations.some(v => v.touchId === "email2" && v.message.includes("already introduced"))).toBe(false);
     touches[3].middle = "I saw your job posting for a Scientist.";
     expect(checkDraft({ touches }, authority).violations.some(v => v.touchId === "liMsg1" && v.message.includes("historical"))).toBe(true);
     for (const stage of ["WRITING", "VALIDATING"] as const) {
       const req = sequenceModelRequest(stage, authority, touches);
       const assignments = JSON.parse(req.input).assignments;
-      expect(assignments[1].sourceAttribution[0]).toMatchObject({ alreadyIntroduced: true, historical: true, allowedWording: [] });
+      expect(assignments[1].sourceAttribution[0]).toMatchObject({ alreadyIntroduced: true, historical: true });
+      expect(assignments[1].sourceAttribution[0].allowedWording.length).toBeGreaterThan(0);
       expect(req.instructions).toContain("without assay-specific support");
     }
   });
@@ -423,7 +424,7 @@ describe("sequence authority and fixed copy", () => {
         "Factual presuppositions in questions require the same support as statements",
       );
       expect(request.instructions).toContain(
-        "Prioritize different supported research facts across emails",
+        "Prioritize distinct biological questions and varied supported research hooks",
       );
       expect(request.instructions).toContain("Never say \"the Therapeutics posting\"");
       expect(input.assignments[0].sourceAttribution).toBeDefined();
@@ -450,7 +451,7 @@ describe("sequence authority and fixed copy", () => {
     expect(request.instructions).toContain("Email 1 should name the assigned instrument");
     expect(request.instructions).toContain("do not imply the prospect already has them");
     const review = sequenceModelRequest("VALIDATING", authority);
-    expect(review.instructions).toContain("no concrete measurement or relevant comparison");
+    expect(review.instructions).toContain("weak explanations are optional VOICE suggestions");
   });
   it("renders fixed role introductions and meeting requests without signatures", () => {
     const { touches, authority } = sequenceFixture();
@@ -686,7 +687,7 @@ it("retains editorial approvals on repair while checking factual support everywh
   expect(checkSemantic(review, touches, authority)).toHaveLength(18);
   const request = sequenceModelRequest("VALIDATING", authority, touches, ["liMsg2"]);
   expect(JSON.parse(request.input).repairIds).toEqual(["liMsg2"]);
-  expect(request.instructions).toContain("Retain editorial approval for unchanged touches");
+  expect(request.instructions).toContain("preserve unchanged copy");
   for (const stage of ["WRITING", "VALIDATING"] as const) {
     const instructions = sequenceModelRequest(stage, authority, touches).instructions;
     expect(instructions).not.toContain("targets images in at least four emails");

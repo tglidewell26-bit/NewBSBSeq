@@ -269,8 +269,8 @@ describe("sequence resource retrieval", () => {
     expect(emails.filter(p => p.assetMatches?.some(m => m.kind === "image"))).toHaveLength(6);
     const rendered = renderSequence(touches, planned).filter(t => t.touchId.startsWith("email"));
     expect(rendered.filter(t => t.body.includes("[Spatial discovery webinar](https://example.org/webinar?session=1&view=full)"))).toHaveLength(1);
-    expect(rendered.every(t => t.body.includes("[Spatial discovery webinar]") || t.body.includes(cap.sourceUrl))).toBe(true);
-    expect(renderSequence(touches, a).filter(t => t.touchId.startsWith("email")).every(t => t.body.includes(cap.sourceUrl))).toBe(true);
+    expect(rendered.every(t => t.body.includes("[Spatial discovery webinar]") || t.body.includes(`[${instrument} overview]`))).toBe(true);
+    expect(renderSequence(touches, a).filter(t => t.touchId.startsWith("email")).every(t => t.body.includes(`[${instrument} overview]`))).toBe(true);
   });
 
   it("retains optional, non-repeating CellScape resources and no catalog link fallback", () => {
@@ -333,11 +333,11 @@ it("invalidates a pinned resource if its saved URL changes", async () => {
   await expect(loadSequenceAssets({ query: async () => ({ rows: [{ ...pinned, sourceUrl: "https://example.org/changed" }] }) }, [pinned])).rejects.toMatchObject({ code: "STALE_ASSET" });
 });
 
-it.each(["GeoMx", "CosMx"])("includes at least two non-overview resource URLs in the default %s sequence without saved links", instrument => {
+it.each(["GeoMx", "CosMx"])("preserves pinned specialist URLs in legacy %s plans", instrument => {
   const { authority, touches } = sequenceFixture();
   const options = emailCapabilities(instrument as "GeoMx" | "CosMx", "");
   let index = 0;
-  const a = { ...authority, capabilities: options, plan: authority.plan.map(p => ({ ...p, instrument: instrument as "GeoMx" | "CosMx", capabilityId: p.touchId.startsWith("email") ? options[index++].id : null, assetIds: [] })) };
+  const a = { ...authority, capabilities: options, plan: authority.plan.map(p => ({ ...p, capabilityIds: undefined, instrument: instrument as "GeoMx" | "CosMx", capabilityId: p.touchId.startsWith("email") ? options[index++].id : null, assetIds: [] })) };
   const emails = renderSequence(touches, a).filter(t => t.touchId.startsWith("email"));
   expect(emails.every(t => t.body.includes(" resource]"))).toBe(true);
   const nonOverview = emails.filter(t => /\]\(https:\/\/[^)]+(?:whole-transcriptome-panel|same-cell-multiomics|discovery-proteome-atlas|spatial-multiomics-enabled)[^)]*\)/.test(t.body));
@@ -349,7 +349,7 @@ it("keeps DPA links on the protein angle and rejects mislabeled platform links a
   const { authority, touches } = sequenceFixture();
   const caps = emailCapabilities("GeoMx", "");
   let index = 0;
-  const a = { ...authority, capabilities: caps, plan: authority.plan.map(p => ({ ...p, instrument: "GeoMx" as const, capabilityId: p.touchId.startsWith("email") ? caps[index++].id : null, evidenceIds: [], assetIds: [] })) };
+  const a = { ...authority, capabilities: caps, plan: authority.plan.map(p => ({ ...p, capabilityIds: undefined, instrument: "GeoMx" as const, capabilityId: p.touchId.startsWith("email") ? caps[index++].id : null, evidenceIds: [], assetIds: [] })) };
   const dpa = resource({ id: "dpa", instrument: "GeoMx", fileKind: "link", displayName: "GeoMx DPA Product Bulletin", researchArea: "Unknown", sourceUrl: "https://example.org/dpa", description: "Discovery Proteome Atlas protein profiling, morphology-guided regions of interest, whole transcriptome and pathway analysis.", keywords: ["regions of interest", "whole transcriptome", "protein profiling", "pathway analysis"] });
   const wrong = { ...dpa, id: "wrong-platform", sourceUrl: "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/" };
   const tcr = { ...dpa, id: "tcr", displayName: "TCR profiling add-on", fileKind: "document" as const, fileName: "tcr.pdf", sourceUrl: undefined };
