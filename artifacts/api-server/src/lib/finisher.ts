@@ -2,6 +2,8 @@ import {
   finishInputSchema,
   parseSequence,
   unresolvedPlaceholders,
+  plainMessageText,
+  isLinkedIn,
   type FinishInput,
   type FinishMessage,
   type Resource,
@@ -56,12 +58,33 @@ export function validateTrips(
     }
   }
 }
-function availability(slots: FinishInput["trip1"], timezone: string) {
+export function tripDates(slots: FinishInput["trip1"]) {
+  const dates = [...new Set(slots.map((s) => s.date))].sort();
+  if (!dates.length) return "";
+  const first = dates[0],
+    last = dates[dates.length - 1];
+  const label = (date: string, year = false) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      month: "long",
+      day: "numeric",
+      ...(year ? { year: "numeric" as const } : {}),
+    }).format(new Date(`${date}T12:00:00Z`));
+  if (first === last) return label(first);
+  if (first.slice(0, 4) !== last.slice(0, 4))
+    return `${label(first, true)}–${label(last, true)}`;
+  return `${label(first)}–${first.slice(0, 7) === last.slice(0, 7) ? Number(last.slice(8)) : label(last)}`;
+}
+function availability(
+  slots: FinishInput["trip1"],
+  timezone: string,
+  list = false,
+) {
   const clock = (v: string) => {
     const [h, m] = v.split(":").map(Number);
     return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`;
   };
-  return [...slots]
+  const rows = [...slots]
     .sort(
       (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start),
     )
@@ -80,9 +103,25 @@ function availability(slots: FinishInput["trip1"], timezone: string) {
         })
           .formatToParts(new Date(`${s.date}T12:00:00Z`))
           .find((p) => p.type === "timeZoneName")?.value ?? timezone;
-      return `${day}, ${clock(s.start)}–${clock(s.end)} ${zone}`;
-    })
-    .join("; ");
+      return {
+        date: s.date,
+        day,
+        zone,
+        window: `${clock(s.start)}–${clock(s.end)}`,
+      };
+    });
+  if (!list)
+    return rows.map((s) => `${s.day}, ${s.window} ${s.zone}`).join("; ");
+  const days = new Map<string, typeof rows>();
+  rows.forEach((row) =>
+    days.set(row.date, [...(days.get(row.date) ?? []), row]),
+  );
+  return [...days.values()]
+    .map(
+      (windows) =>
+        `- **${windows[0].day}, ${windows.map((s) => s.window).join(" and ")} ${windows[0].zone}**`,
+    )
+    .join("\n");
 }
 export function finishText(raw: unknown, now = new Date()) {
   const input = finishInputSchema.parse(raw);
@@ -90,19 +129,41 @@ export function finishText(raw: unknown, now = new Date()) {
   const replacements: Record<string, string> = {
     TRIP_1_AVAILABILITY: availability(input.trip1, input.timezone),
     TRIP_2_AVAILABILITY: availability(input.trip2, input.timezone),
+    TRIP_1_DATES: tripDates(input.trip1) ? `**${tripDates(input.trip1)}**` : "",
+    TRIP_2_DATES: tripDates(input.trip2) ? `**${tripDates(input.trip2)}**` : "",
     LOCATION: input.location,
     TIMEZONE: input.timezone,
   };
-  const substitute = (text: string) =>
-    text.replace(
-      /\{\{\s*([A-Z_0-9]+)\s*\}\}/g,
-      (original, key) => replacements[key] || original,
-    );
-  const messages = parseSequence(input.source).map((m) => ({
-    ...m,
-    subject: substitute(m.subject),
-    body: substitute(m.body),
-  }));
+  const substitute = (text: string, block = false) => {
+    const expanded = block
+      ? text.replace(
+          /^[ \t]*\{\{\s*TRIP_([12])_AVAILABILITY\s*\}\}[ \t]*$/gm,
+          (original, trip) => {
+            const list = availability(
+              trip === "1" ? input.trip1 : input.trip2,
+              input.timezone,
+              true,
+            );
+            return list ? `\n${list}\n` : original;
+          },
+        )
+      : text;
+    return expanded
+      .replace(
+        /\{\{\s*([A-Z_0-9]+)\s*\}\}/g,
+        (original, key) => replacements[key] || original,
+      )
+      .trim();
+  };
+  const messages = parseSequence(input.source).map((m) => {
+    const subject = substitute(m.subject),
+      body = substitute(m.body, true);
+    return {
+      ...m,
+      subject: isLinkedIn(m) ? plainMessageText(subject) : subject,
+      body: isLinkedIn(m) ? plainMessageText(body) : body,
+    };
+  });
   if (messages.length > 30)
     throw new Error("Paste up to 30 messages at a time.");
   const warnings: string[] = [];
