@@ -14,10 +14,10 @@ After choosing the instrument and writing the sequence in Tim's voice, provide o
 
 Put the instrument recommendation above the messages. Label every message with a numbered heading such as `Email 1` or `LinkedIn 1`. Use `Subject:` on its own line for email subjects. Preserve the approved sequence order, number of touches, voice, and meeting-request wording.
 
-Use these exact scheduling placeholders within otherwise complete sentences:
+Use these exact scheduling placeholders. Put each availability placeholder alone on its own line, between the lead-in sentence and the meeting question:
 
-- `{{TRIP_1_AVAILABILITY}}` — first visit dates and times, including the time zone.
-- `{{TRIP_2_AVAILABILITY}}` — later visit dates and times, including the time zone.
+- `{{TRIP_1_DATES}}` / `{{TRIP_2_DATES}}` — the trip's date range, bold in email: **October 27–30**, **October 30–November 2**, or **October 27**. The first and last selected availability dates define the range. Cross-year ranges include both years.
+- `{{TRIP_1_AVAILABILITY}}` / `{{TRIP_2_AVAILABILITY}}` — a chronological bulleted list, one bold line per day including year and time zone. Multiple windows on a day are joined with "and". No semicolons or trailing periods.
 - `{{LOCATION}}` — city or visit area, when needed.
 - `{{TIMEZONE}}` — only if a separate time-zone reference is needed.
 
@@ -37,7 +37,9 @@ Hi there,
 
 [Complete account-specific email wording goes here.]
 
-I’ll be in {{LOCATION}} on {{TRIP_1_AVAILABILITY}}. Would you have time to meet?
+I'll be in {{LOCATION}} {{TRIP_1_DATES}}, and I have the following dates and times available:
+{{TRIP_1_AVAILABILITY}}
+Would any of those times work for a brief discussion?
 
 Best,
 Tim
@@ -51,6 +53,24 @@ Subject: [The second subject]
 ```
 
 Replace all illustrative square-bracketed text before using this example. Recipient placeholders such as `{{FIRST_NAME}}` remain editable in the finished messages; unresolved placeholders prevent accidental copying, but drafts can be saved.
+
+For the second trip, use this layout (keep the question specific to the email):
+
+```text
+I'll be back in {{LOCATION}} {{TRIP_2_DATES}}, and I have the following dates and times available:
+{{TRIP_2_AVAILABILITY}}
+Would any of those times work for a brief discussion about whether that distinction is relevant to Earli's research?
+```
+
+The lead-in, availability list and question render as separate paragraphs/blocks. Example list:
+
+- **Tuesday, October 27, 2026, 1 PM–4 PM PDT**
+- **Wednesday, October 28, 2026, 9 AM–11 AM and 2 PM–4 PM PDT**
+- **Friday, October 30, 2026, 10 AM–1 PM PDT**
+
+LinkedIn 1–3 (and other numbered LinkedIn headings) use plain "- " bullets and no bold. Copy supplies formatted HTML and a plain-text alternative for email clients; browsers without rich clipboard support fall back to plain text. Plain copy and .txt downloads contain "- " bullets with no ** markers. The editable message text retains Markdown for email, with a live formatted preview below it.
+
+Older handoffs with an availability placeholder inside a sentence retain the original inline, semicolon-separated output. Missing trips leave their date/availability placeholders unresolved and display the existing warning.
 
 ## Resource matching
 

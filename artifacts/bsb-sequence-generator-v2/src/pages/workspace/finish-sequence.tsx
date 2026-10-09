@@ -12,6 +12,7 @@ import {
 import type { SavedTrip } from "@workspace/api-zod";
 import {
   customerText,
+  messageHtml,
   unresolvedPlaceholders,
   type FinishInput,
   type FinishMessage,
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import TripPicker from "./trip-picker";
+import { copySequence } from "@/lib/sequence-clipboard";
 
 export async function finishApi<T>(
   path: string,
@@ -202,11 +204,11 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
       setBusy(false);
     }
   }
-  async function copy(text: string) {
+  async function copy(messages: FinishMessage[], bodyOnly = false) {
     try {
-      await navigator.clipboard.writeText(text);
+      const format = await copySequence(messages, bodyOnly);
       setStatus(
-        "Copied customer-facing text. Download selected files below to attach them.",
+        `Copied ${format === "rich" ? "formatted" : "plain"} customer-facing text. Download selected files below to attach them.`,
       );
     } catch {
       setError(
@@ -314,7 +316,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
             maxLength={120000}
             onChange={(e) => update({ source: e.target.value })}
             placeholder={
-              "Instrument: CellScape\n\nEmail 1\nSubject: A question about your research\n\nHi {{FIRST_NAME}},\n...\nI’ll be in {{LOCATION}} on {{TRIP_1_AVAILABILITY}}.\n\nResource note: Help illustrate immune profiling; a related panel or instrument image is welcome."
+              "Instrument: CellScape\n\nEmail 1\nSubject: A question about your research\n\nHi {{FIRST_NAME}},\n...\nI'll be in {{LOCATION}} {{TRIP_1_DATES}}, and I have the following dates and times available:\n{{TRIP_1_AVAILABILITY}}\nWould any of those times work for a brief discussion?\n\nResource note: Help illustrate immune profiling; a related panel or instrument image is welcome."
             }
           />
         </label>
@@ -324,12 +326,14 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
           </summary>
           <p className="mt-2">
             Use Email 1, Email 2, or LinkedIn 1 headings. Add Subject: for
-            emails. Use {"{{TRIP_1_AVAILABILITY}}"}, {"{{TRIP_2_AVAILABILITY}}"}
-            , {"{{LOCATION}}"}, and {"{{TIMEZONE}}"} where needed. Put optional
-            resource guidance on one line beginning Resource note: beneath each
-            message. It stays out of copied emails. Keep the instrument
-            recommendation above the messages. Any other placeholders remain
-            visible for you to fill.
+            emails. Use {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the
+            visit sentence. Put {"{{TRIP_1_AVAILABILITY}}"} or
+            {" {{TRIP_2_AVAILABILITY}}"} alone on the next line for a daily
+            list, followed by your meeting question. Use {"{{LOCATION}}"} and
+            {"{{TIMEZONE}}"} where needed. Put optional resource guidance on one
+            line beginning Resource note: beneath each message. It stays out of
+            copied emails. Keep the instrument recommendation above the
+            messages. Any other placeholders remain visible for you to fill.
           </p>
         </details>
       </fieldset>
@@ -422,7 +426,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
               <Button
                 variant="outline"
                 disabled={locked || stale || !!unresolved.length}
-                onClick={() => void copy(customerText(result.messages))}
+                onClick={() => void copy(result.messages)}
               >
                 <Copy className="mr-2 h-4 w-4" />
                 Copy sequence
@@ -499,7 +503,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   disabled={
                     locked || stale || !!unresolvedPlaceholders([m]).length
                   }
-                  onClick={() => void copy(m.body)}
+                  onClick={() => void copy([m], true)}
                 >
                   Copy message
                 </Button>
@@ -522,6 +526,11 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   onChange={(e) => edit(m.id, { body: e.target.value })}
                 />
               </label>
+              <div
+                aria-label={`${m.title} formatted preview`}
+                className="rounded-md border p-4 text-sm leading-relaxed break-words"
+                dangerouslySetInnerHTML={{ __html: messageHtml(m) }}
+              />
               {m.resourceNote && (
                 <details className="text-sm text-muted-foreground">
                   <summary className="cursor-pointer">

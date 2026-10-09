@@ -59,6 +59,8 @@ export type SavedFinish = FinishResult & {
   legacy?: boolean;
 };
 export const PLACEHOLDERS = [
+  "TRIP_1_DATES",
+  "TRIP_2_DATES",
   "TRIP_1_AVAILABILITY",
   "TRIP_2_AVAILABILITY",
   "LOCATION",
@@ -150,9 +152,91 @@ export function unresolvedPlaceholders(messages: FinishMessage[]): string[] {
 }
 export function customerText(messages: FinishMessage[]): string {
   return messages
-    .map(
-      (m) =>
+    .map((m) =>
+      plainMessageText(
         `${m.title}\n${m.subject ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
+      ),
     )
     .join("\n\n---\n\n");
+}
+
+export const isLinkedIn = (message: Pick<FinishMessage, "title">) =>
+  /^LinkedIn\s*\d+\b/i.test(message.title);
+
+/** Plain clipboard/download output never exposes formatting markers. */
+export function plainMessageText(text: string): string {
+  return text
+    .replace(/\*\*/g, "")
+    .replace(/^[ \t]*[•*-][ \t]+/gm, "- ")
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)");
+}
+const escapeHtml = (text: string) =>
+  text.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ]!,
+  );
+
+/** Deliberately small, escaped renderer: bold, safe links, paragraphs and lists.
+ * User-supplied HTML is always displayed as text, never executed.
+ */
+export function messageHtml(
+  message: Pick<FinishMessage, "title" | "body">,
+): string {
+  if (isLinkedIn(message))
+    return `<div style="white-space:pre-wrap">${escapeHtml(plainMessageText(message.body))}</div>`;
+  const inline = (text: string) =>
+    escapeHtml(text)
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>')
+      .replace(/\*\*([^\n]+?)\*\*/g, "<strong>$1</strong>");
+  const output: string[] = [];
+  let paragraph: string[] = [],
+    bullets: string[] = [];
+  const flushParagraph = () => {
+    if (paragraph.length)
+      output.push(`<p style="margin:0 0 12px">${paragraph.join("<br>")}</p>`);
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (bullets.length)
+      output.push(
+        `<ul style="list-style-type:disc;margin:0 0 12px;padding-left:24px">${bullets.join("")}</ul>`,
+      );
+    bullets = [];
+  };
+  for (const line of message.body.replace(/\r\n/g, "\n").split("\n")) {
+    const bullet = line.match(/^[ \t]*[-*•][ \t]+(.*)$/);
+    if (bullet) {
+      flushParagraph();
+      bullets.push(`<li>${inline(bullet[1])}</li>`);
+    } else {
+      flushList();
+      if (!line.trim()) flushParagraph();
+      else paragraph.push(inline(line));
+    }
+  }
+  flushParagraph();
+  flushList();
+  return output.join("");
+}
+
+/** Same payload is used by preview and clipboard; private notes never enter it. */
+export function customerClipboard(messages: FinishMessage[], bodyOnly = false) {
+  return {
+    text: bodyOnly
+      ? plainMessageText(messages[0]?.body ?? "")
+      : customerText(messages),
+    html: messages
+      .map((m) =>
+        messageHtml({
+          ...m,
+          body: bodyOnly
+            ? m.body
+            : `${m.title}\n${m.subject ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
+        }),
+      )
+      .join("<hr>"),
+  };
 }
