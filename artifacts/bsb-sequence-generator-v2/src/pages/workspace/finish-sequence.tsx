@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import TripPicker from "./trip-picker";
+import ResourcePicker from "./resource-picker";
 import { copySequence } from "@/lib/sequence-clipboard";
 
 export async function finishApi<T>(
@@ -341,9 +342,9 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
           <p className="mt-2">
             Use Email 1–6, LinkedIn Connection Request, LinkedIn Message 1, and
             LinkedIn Message 2 headings. Add Subject: for emails and LinkedIn
-            Messages, but not the Connection Request. Use {"{{first_name}}"} for Outreach. Use{" "}
-            {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the visit sentence.
-            Put {"{{TRIP_1_AVAILABILITY}}"} or
+            Messages, but not the Connection Request. Use {"{{first_name}}"} for
+            Outreach. Use {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the
+            visit sentence. Put {"{{TRIP_1_AVAILABILITY}}"} or
             {" {{TRIP_2_AVAILABILITY}}"} alone on the next line for a daily
             list, followed by your meeting question. Use {"{{LOCATION}}"} and
             {"{{TIMEZONE}}"} where needed. Put optional resource guidance on one
@@ -383,7 +384,8 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
         </label>
         <p className="text-sm text-muted-foreground">
           Every sequence requires two trips. Add at least one availability
-          window to each visit. The Connection Request still has no availability.
+          window to each visit. The Connection Request still has no
+          availability.
         </p>
         {(["trip1", "trip2"] as const).map((key, i) => (
           <details
@@ -392,9 +394,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
             className="rounded-lg"
           >
             <summary className="cursor-pointer py-2 font-medium">
-              {i === 0
-                ? "First visit (required)"
-                : "Second visit (required)"}
+              {i === 0 ? "First visit (required)" : "Second visit (required)"}
               {input[key].length ? ` · ${input[key].length} time windows` : ""}
             </summary>
             <TripPicker
@@ -423,7 +423,13 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
         )}
         <Button
           size="lg"
-          disabled={locked || !input.company.trim() || !input.source.trim() || !input.trip1.length || !input.trip2.length}
+          disabled={
+            locked ||
+            !input.company.trim() ||
+            !input.source.trim() ||
+            !input.trip1.length ||
+            !input.trip2.length
+          }
           onClick={() => void finish()}
         >
           {busy ? (
@@ -597,117 +603,127 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                     platform introduction. Select what helps; download files to
                     attach them.
                   </p>
-                  {[
-                    ...new Set([
-                      ...result.suggestions
-                        .filter((s) => s.messageId === m.id)
-                        .map((s) => s.assetId),
-                      ...m.selectedAssetIds,
-                    ]),
-                  ].map((id) => {
-                    const asset = resources.find((a) => a.id === id);
-                    if (!asset)
-                      return (
-                        <label key={id}>
-                          <input
-                            type="checkbox"
-                            checked
-                            onChange={() =>
-                              edit(m.id, {
-                                selectedAssetIds: m.selectedAssetIds.filter(
-                                  (x) => x !== id,
-                                ),
-                              })
-                            }
-                          />{" "}
-                          Removed resource — deselect
-                        </label>
-                      );
-                    const suggestion = result.suggestions.find(
-                      (s) => s.messageId === m.id && s.assetId === id,
-                    );
-                    return (
-                      <div
-                        key={id}
-                        className="rounded-lg border p-3 flex items-start gap-3"
-                      >
-                        <input
-                          aria-label={`Use ${asset.displayName} for ${m.title}`}
-                          disabled={locked}
-                          className="mt-1"
-                          type="checkbox"
-                          checked={m.selectedAssetIds.includes(id)}
-                          onChange={(e) =>
-                            edit(m.id, {
-                              selectedAssetIds: e.target.checked
-                                ? [...m.selectedAssetIds, id]
-                                : m.selectedAssetIds.filter((x) => x !== id),
-                            })
-                          }
-                        />
-                        {asset.fileKind === "image" ? (
-                          <img
-                            className="h-20 w-24 rounded object-contain bg-muted"
-                            src={`/api/bsb-v2/assets/${encodeURIComponent(id)}/preview`}
-                            alt={asset.displayName}
-                          />
-                        ) : (
-                          <FileText className="h-5 w-5 shrink-0" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium">{asset.displayName}</p>
-                          {suggestion && (
-                            <p className="text-sm text-muted-foreground">
-                              {suggestion.relevance} · {suggestion.reason}
-                            </p>
-                          )}
-                          <a
-                            className="text-sm underline"
-                            href={
-                              asset.fileKind === "link"
-                                ? (asset.sourceUrl ?? undefined)
-                                : `/api/bsb-v2/assets/${encodeURIComponent(id)}/download`
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {asset.fileKind === "link"
-                              ? "Open resource"
-                              : "Download file"}
-                          </a>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <label className="block text-sm">
-                    Choose another resource
-                    <select
-                      aria-label={`Add resource to ${m.title}`}
-                      disabled={locked}
-                      className="block w-full rounded-md border bg-background p-2 mt-1"
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value)
+                  {(["image", "document"] as const).map((kind) => (
+                    <section
+                      key={kind}
+                      aria-label={`${m.title} ${kind === "image" ? "Images" : "Documents"}`}
+                      className="space-y-3"
+                    >
+                      <h5 className="font-medium">
+                        {kind === "image" ? "Images" : "Documents & links"}
+                      </h5>
+                      {[
+                        ...new Set([
+                          ...result.suggestions
+                            .filter((s) => s.messageId === m.id)
+                            .map((s) => s.assetId),
+                          ...m.selectedAssetIds,
+                        ]),
+                      ]
+                        .filter((id) => {
+                          const asset = resources.find((a) => a.id === id);
+                          return kind === "image"
+                            ? asset?.fileKind === "image"
+                            : asset?.fileKind !== "image";
+                        })
+                        .map((id) => {
+                          const asset = resources.find((a) => a.id === id);
+                          if (!asset)
+                            return (
+                              <label key={id}>
+                                <input
+                                  type="checkbox"
+                                  checked
+                                  onChange={() =>
+                                    edit(m.id, {
+                                      selectedAssetIds:
+                                        m.selectedAssetIds.filter(
+                                          (x) => x !== id,
+                                        ),
+                                    })
+                                  }
+                                />{" "}
+                                Removed resource — deselect
+                              </label>
+                            );
+                          const suggestion = result.suggestions.find(
+                            (s) => s.messageId === m.id && s.assetId === id,
+                          );
+                          return (
+                            <div
+                              key={id}
+                              className="rounded-lg border p-3 flex items-start gap-3"
+                            >
+                              <input
+                                aria-label={`Use ${asset.displayName} for ${m.title}`}
+                                disabled={locked}
+                                className="mt-1"
+                                type="checkbox"
+                                checked={m.selectedAssetIds.includes(id)}
+                                onChange={(e) =>
+                                  edit(m.id, {
+                                    selectedAssetIds: e.target.checked
+                                      ? [...m.selectedAssetIds, id]
+                                      : m.selectedAssetIds.filter(
+                                          (x) => x !== id,
+                                        ),
+                                  })
+                                }
+                              />
+                              {asset.fileKind === "image" ? (
+                                <img
+                                  className="h-20 w-24 rounded object-contain bg-muted"
+                                  src={`/api/bsb-v2/assets/${encodeURIComponent(id)}/preview`}
+                                  alt={asset.displayName}
+                                />
+                              ) : (
+                                <FileText className="h-5 w-5 shrink-0" />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium">
+                                  {asset.displayName}
+                                </p>
+                                {suggestion && (
+                                  <p className="text-sm text-muted-foreground">
+                                    {suggestion.relevance} · {suggestion.reason}
+                                  </p>
+                                )}
+                                <a
+                                  className="text-sm underline"
+                                  href={
+                                    asset.fileKind === "link"
+                                      ? (asset.sourceUrl ?? undefined)
+                                      : `/api/bsb-v2/assets/${encodeURIComponent(id)}/download`
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {asset.fileKind === "link"
+                                    ? "Open resource"
+                                    : "Download file"}
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      <ResourcePicker
+                        kind={kind}
+                        title={m.title}
+                        assets={library.data ?? []}
+                        selectedIds={m.selectedAssetIds}
+                        disabled={locked}
+                        loading={library.isLoading}
+                        failed={library.isError}
+                        onSelect={(id) =>
                           edit(m.id, {
                             selectedAssetIds: [
-                              ...new Set([
-                                ...m.selectedAssetIds,
-                                e.target.value,
-                              ]),
+                              ...new Set([...m.selectedAssetIds, id]),
                             ],
-                          });
-                      }}
-                    >
-                      <option value="">Browse the Knowledge Base…</option>
-                      {(library.data ?? [])
-                        .filter((a) => !m.selectedAssetIds.includes(a.id))
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.displayName} · {a.instrument} · {a.fileKind}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
+                          })
+                        }
+                      />
+                    </section>
+                  ))}
                   {!resources.length && (
                     <Link
                       href="/workspace/knowledge"

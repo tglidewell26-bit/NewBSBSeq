@@ -121,3 +121,10 @@ Pull the GitHub changes into the existing Replit app, then restart/redeploy usin
 Focused tests cover preserved wording, first/second visit substitution, time zones, invalid/past/overlapping slots, private-note removal, related panel and instrument-image matching, invalid AI IDs, provider fallback, and catalog batching. HTTP tests use a disposable database for save/reopen/update/delete, concurrent-edit protection, removed resources, earlier sequences, and preservation of accounts/assets.
 
 The opt-in HTTP test requires `BSB_FINISHER_TEST_DB=true` and a **disposable** `DATABASE_URL`; do not point it at the live Replit database. Live semantic matching against Tim's actual resource collection still needs an in-app trial after pulling the code.
+
+
+## Browsing supporting resources
+
+Each eligible message has separate Images and Documents & links sections. Expand Browse Knowledge Base images or documents beside the corresponding suggestions. Search names, filenames, descriptions and keywords; filter either browser by instrument. Documents also filter by type (publications, posters, tech notes, panels/brochures, webinars and other saved categories). Explicit poster titles/filenames are grouped under Posters for browsing, without rewriting stored metadata. Web resources remain available under Documents & links.
+
+Selections remain visible when filters change. Add selects a resource; deselect its checkbox to remove it. Suggestions, resource matching, saved History and Knowledge Base data are unchanged. The LinkedIn Connection Request has neither browser.
