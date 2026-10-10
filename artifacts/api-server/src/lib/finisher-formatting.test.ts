@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { finishText, tripDates } from "./finisher";
 import {
+  blockingPlaceholders,
+  linkBrands,
+  BRAND_LINKS,
   customerClipboard,
   customerText,
   messageHtml,
@@ -28,6 +31,53 @@ const input: FinishInput = {
   trip2: [],
 };
 describe("visit formatting and customer exports", () => {
+  it("allows recipient merge fields while still blocking unfinished scheduling", () => {
+    const messages = finishText(
+      {
+        ...input,
+        source:
+          "Email 1\nHi {{first_name}}, {{FIRST_NAME}} [First Name] {{lastName}} {{full_name}}\n{{TRIP_2_DATES}}",
+      },
+      now,
+    ).messages;
+    expect(blockingPlaceholders(messages)).toEqual(["{{TRIP_2_DATES}}"]);
+    expect(customerClipboard(messages, true).text).toContain("{{first_name}}");
+  });
+  it("links every brand mention in rich output and supplies URLs in plain output", () => {
+    const body =
+      "CosMx, CellScape, GeoMx and Bruker Spatial Biology. **CosMx** again.";
+    const messages = finishText(
+      { ...input, source: "Email 1\n" + body },
+      now,
+    ).messages;
+    const payload = customerClipboard(messages, true);
+    for (const url of Object.values(BRAND_LINKS)) {
+      expect(payload.html).toContain(`href="${url}"`);
+      expect(payload.text).toContain(url);
+    }
+    expect(payload.html.match(/<a href=/g)).toHaveLength(5);
+    expect(messages[0].body).toBe(body);
+    expect(customerText(messages)).toContain(BRAND_LINKS.cosmx);
+    expect(messageHtml({ title: "LinkedIn 1", body })).toContain(
+      BRAND_LINKS.cosmx,
+    );
+  });
+  it("preserves existing links and bare URLs without nested links", () => {
+    const body =
+      "[CosMx](https://example.com/application) https://example.com/CosMx **GeoMx**";
+    const linked = linkBrands(body);
+    expect(linkBrands(linked)).toBe(linked);
+    const html = messageHtml({ title: "Email 1", body });
+    expect(html.match(/<a href=/g)).toHaveLength(2);
+    expect(html).toContain('href="https://example.com/application"');
+    expect(html).toContain("https://example.com/CosMx");
+    expect(
+      messageHtml({
+        title: "Email 1",
+        body: "CosMx (https://example.com/application)",
+      }).match(/<a href=/g),
+    ).toHaveLength(1);
+  });
   it.each([
     [[], ""],
     [[slot("2026-10-27")], "October 27"],

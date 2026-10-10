@@ -83,10 +83,10 @@ test("paste, finish, save, reopen and delete", async ({ page }) => {
   await page
     .getByRole("button", { name: "Finish sequence", exact: true })
     .click();
-  await expect(page.getByLabel("Message", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("Email 1 formatted preview")).toContainText(
     /Tuesday, November 10/,
   );
-  await expect(page.getByLabel("Message", { exact: true })).not.toHaveValue(
+  await expect(page.getByLabel("Email 1 formatted preview")).not.toContainText(
     /Resource note/,
   );
   await expect(
@@ -100,7 +100,7 @@ test("paste, finish, save, reopen and delete", async ({ page }) => {
   await expect(page.getByRole("status")).toContainText("Saved to History");
   await page.getByRole("link", { name: "History", exact: true }).click();
   await page.getByRole("link", { name: "Earli", exact: true }).click();
-  await expect(page.getByLabel("Message", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("Email 1 formatted preview")).toContainText(
     /Could immune profiling help/,
   );
   await page.getByRole("link", { name: "History", exact: true }).click();

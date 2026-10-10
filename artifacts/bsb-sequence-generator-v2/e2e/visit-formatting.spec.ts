@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { finishText } from "../../api-server/src/lib/finisher";
 
 const draft =
-  "Email 1\nSubject: Meeting\nI'll be in Palo Alto {{TRIP_1_DATES}}, and I have the following dates and times available:\n{{TRIP_1_AVAILABILITY}}\nWould any of those times work?\nResource note: private guidance\n\nLinkedIn 1\nI'll be in Palo Alto {{TRIP_1_DATES}}:\n{{TRIP_1_AVAILABILITY}}\nCould we meet?";
+  "Email 1\nSubject: Meeting\nHi {{first_name}},\nCosMx, CellScape, GeoMx and Bruker Spatial Biology.\nI'll be in Palo Alto {{TRIP_1_DATES}}, and I have the following dates and times available:\n{{TRIP_1_AVAILABILITY}}\nWould any of those times work?\nResource note: private guidance\n\nLinkedIn 1\nI'll be in Palo Alto {{TRIP_1_DATES}}:\n{{TRIP_1_AVAILABILITY}}\nCould we meet?";
 const result = finishText(
   {
     company: "Earli",
@@ -59,6 +59,11 @@ test("formatted preview, rich copy, plain download and live edits", async ({
   page,
 }) => {
   const preview = page.getByLabel("Email 1 formatted preview");
+  await expect(page.getByLabel("Message", { exact: true })).toHaveCount(0);
+  await expect(preview.getByRole("link")).toHaveCount(4);
+  await expect(
+    page.getByRole("button", { name: "Copy sequence", exact: true }),
+  ).toBeEnabled();
   await expect(preview.locator("strong").first()).toHaveText("October 27");
   await expect(preview.locator("li strong")).toHaveText(
     "Tuesday, October 27, 2026, 1 PM–4 PM PDT",
@@ -74,6 +79,9 @@ test("formatted preview, rich copy, plain download and live edits", async ({
     .poll(() => page.evaluate(() => (window as any).copied.html))
     .toContain("<li><strong>");
   let copied = await page.evaluate(() => (window as any).copied);
+  expect(copied.text).toContain("{{first_name}}");
+  expect(copied.html).toContain('href="https://brukerspatialbiology.com/"');
+  expect(copied.html.match(/<a href=/g)).toHaveLength(4);
   expect(copied.text).toContain("\n- Tuesday");
   expect(copied.text).not.toContain("**");
   expect(copied.html + copied.text).not.toContain("private guidance");
@@ -100,9 +108,16 @@ test("formatted preview, rich copy, plain download and live edits", async ({
   expect(text).not.toContain("**");
   expect(text).not.toContain("private guidance");
   await page
+    .getByRole("button", { name: "Edit message", exact: true })
+    .first()
+    .click();
+  await expect(preview).toHaveCount(0);
+  await page
     .getByLabel("Message", { exact: true })
     .first()
     .fill("Edited **availability**\n\n- **New window**");
+  await page.getByRole("button", { name: "Done editing", exact: true }).click();
+  await expect(page.getByLabel("Message", { exact: true })).toHaveCount(0);
   await expect(preview.locator("li strong")).toHaveText("New window");
 });
 
