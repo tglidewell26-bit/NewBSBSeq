@@ -1,3 +1,4 @@
+import { selectTwoTrips } from "./two-trip-helper";
 import { test, expect } from "@playwright/test";
 import { finishText } from "../../api-server/src/lib/finisher";
 const titles = [
@@ -41,6 +42,7 @@ for (const legacy of [false, true]) {
     await page
       .getByLabel("Sequence from ChatGPT", { exact: true })
       .fill(source);
+    await selectTwoTrips(page);
     await page
       .getByRole("button", { name: "Finish sequence", exact: true })
       .click();

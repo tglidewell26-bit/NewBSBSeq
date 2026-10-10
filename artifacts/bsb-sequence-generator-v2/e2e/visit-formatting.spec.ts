@@ -1,3 +1,4 @@
+import { selectTwoTrips } from "./two-trip-helper";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { finishText } from "../../api-server/src/lib/finisher";
@@ -51,6 +52,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/workspace");
   await page.getByLabel("Company", { exact: true }).fill("Earli");
   await page.getByLabel("Sequence from ChatGPT", { exact: true }).fill(draft);
+  await selectTwoTrips(page);
   await page
     .getByRole("button", { name: "Finish sequence", exact: true })
     .click();

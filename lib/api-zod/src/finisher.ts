@@ -14,6 +14,15 @@ export const finishInputSchema = z.object({
   trip2: z.array(slotSchema).max(31).default([]),
 });
 export type FinishInput = z.infer<typeof finishInputSchema>;
+// Require both visits for new finishing requests, without invalidating saved history.
+export const finishRequestSchema = finishInputSchema.superRefine((input, ctx) => {
+  for (const key of ["trip1", "trip2"] as const) {
+    if (!input[key].length) ctx.addIssue({
+      code: "custom", path: [key],
+      message: `Add at least one availability window for ${key === "trip1" ? "Trip 1" : "Trip 2"}. Every sequence requires two trips.`,
+    });
+  }
+});
 export const messageSchema = z.object({
   id: z.string().max(100),
   title: z.string().max(300),
