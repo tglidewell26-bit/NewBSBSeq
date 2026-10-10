@@ -68,6 +68,18 @@ export const PLACEHOLDERS = [
 ] as const;
 
 /** Parse structure only. Message wording never goes through an AI writer. */
+export function messageTitle(title: string): string {
+  const match = title.match(
+    /^LinkedIn\s*(?:Connection\s+Request\b|Message\s*([12])\b|([123])\b)/i,
+  );
+  if (!match) return title;
+  if (match[1]) return `LinkedIn Message ${match[1]}`;
+  return match[2] && match[2] !== "1"
+    ? `LinkedIn Message ${Number(match[2]) - 1}`
+    : "LinkedIn Connection Request";
+}
+const headingPattern =
+  /^(?:(?:Email|Message|Touch)\s*\d+\b|LinkedIn\s*(?:Connection\s+Request\b|Message\s*\d+\b|\d+\b))/i;
 export function parseSequence(source: string): FinishMessage[] {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const messages: FinishMessage[] = [];
@@ -78,7 +90,7 @@ export function parseSequence(source: string): FinishMessage[] {
       .replace(/\*\*/g, "")
       .trim();
   const hasHeadings = lines.some((line) =>
-    /^(?:Email|LinkedIn|Message|Touch)\s*\d+\b/i.test(cleanHeading(line)),
+    headingPattern.test(cleanHeading(line)),
   );
   let current: FinishMessage | undefined = hasHeadings
     ? undefined
@@ -101,18 +113,19 @@ export function parseSequence(source: string): FinishMessage[] {
     // Accept plain or Markdown headings, numbered lists, and Email 1 — Subject.
     if (/^\s*```/.test(line)) continue;
     const clean = cleanHeading(line);
-    if (/^(?:Email|LinkedIn|Message|Touch)\s*\d+\b/i.test(clean)) {
+    if (headingPattern.test(clean)) {
       flush();
       current = {
         id: `message-${messages.length + 1}`,
-        title: clean,
+        title: messageTitle(clean),
         subject: "",
         body: "",
         resourceNote: "",
         selectedAssetIds: [],
       };
     } else if (current && /^Subject\s*:/i.test(clean)) {
-      current.subject = clean.replace(/^Subject\s*:\s*/i, "");
+      if (!isLinkedIn(current))
+        current.subject = clean.replace(/^Subject\s*:\s*/i, "");
     } else if (
       current &&
       /^(?:Resource note|Resource purpose|Resource suggestion|Image suggestion|Attachment suggestion)\s*:/i.test(
@@ -143,7 +156,7 @@ export function unresolvedPlaceholders(messages: FinishMessage[]): string[] {
     ...new Set(
       messages.flatMap(
         (m) =>
-          `${m.subject}\n${m.body}`.match(
+          `${isLinkedIn(m) ? "" : m.subject}\n${m.body}`.match(
             /\{\{[^{}\n]+\}\}|\[(?:TRIP[^\]\n]*|VISIT[^\]\n]*|DATES?[^\]\n]*|TIMES?[^\]\n]*|LOCATION|FIRST[_ ]?NAME)\]/gi,
           ) ?? [],
       ),
@@ -154,7 +167,7 @@ export function customerText(messages: FinishMessage[]): string {
   return messages
     .map((m) =>
       customerPlainText(
-        `${m.title}\n${m.subject ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
+        `${messageTitle(m.title)}\n${m.subject && !isLinkedIn(m) ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
       ),
     )
     .join("\n\n---\n\n");
@@ -204,7 +217,9 @@ export const customerPlainText = (text: string) =>
   plainMessageText(linkBrands(text));
 
 export const isLinkedIn = (message: Pick<FinishMessage, "title">) =>
-  /^LinkedIn\s*\d+\b/i.test(message.title);
+  /^LinkedIn\s*(?:Connection\s+Request\b|Message\s*\d+\b|\d+\b)/i.test(
+    message.title,
+  );
 
 /** Plain clipboard/download output never exposes formatting markers. */
 export function plainMessageText(text: string): string {
@@ -280,7 +295,7 @@ export function customerClipboard(messages: FinishMessage[], bodyOnly = false) {
           ...m,
           body: bodyOnly
             ? m.body
-            : `${m.title}\n${m.subject ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
+            : `${messageTitle(m.title)}\n${m.subject && !isLinkedIn(m) ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
         }),
       )
       .join("<hr>"),

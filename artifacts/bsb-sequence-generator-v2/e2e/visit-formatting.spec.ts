@@ -4,10 +4,11 @@ import { finishText } from "../../api-server/src/lib/finisher";
 
 const draft =
   "Email 1\nSubject: Meeting\nHi {{first_name}},\nCosMx, CellScape, GeoMx and Bruker Spatial Biology.\nI'll be in Palo Alto {{TRIP_1_DATES}}, and I have the following dates and times available:\n{{TRIP_1_AVAILABILITY}}\nWould any of those times work?\nResource note: private guidance\n\nLinkedIn 1\nI'll be in Palo Alto {{TRIP_1_DATES}}:\n{{TRIP_1_AVAILABILITY}}\nCould we meet?";
+const updatedDraft = draft.replaceAll("LinkedIn 1", "LinkedIn Message 1");
 const result = finishText(
   {
     company: "Earli",
-    source: draft,
+    source: updatedDraft,
     trip1: [{ date: "2026-10-27", start: "13:00", end: "16:00" }],
   },
   new Date("2026-10-08T18:00:00Z"),
@@ -68,7 +69,7 @@ test("formatted preview, rich copy, plain download and live edits", async ({
   await expect(preview.locator("li strong")).toHaveText(
     "Tuesday, October 27, 2026, 1 PM–4 PM PDT",
   );
-  const linkedIn = page.getByLabel("LinkedIn 1 formatted preview");
+  const linkedIn = page.getByLabel("LinkedIn Message 1 formatted preview");
   await expect(linkedIn.locator("strong")).toHaveCount(0);
   await expect(linkedIn).toContainText("- Tuesday, October 27");
   await page
@@ -97,7 +98,7 @@ test("formatted preview, rich copy, plain download and live edits", async ({
     .click();
   await expect
     .poll(() => page.evaluate(() => (window as any).copied.text))
-    .toContain("LinkedIn 1");
+    .toContain("LinkedIn Message 1");
   const downloadEvent = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "Download text", exact: true })

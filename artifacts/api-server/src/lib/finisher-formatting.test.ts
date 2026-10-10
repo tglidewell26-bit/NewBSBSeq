@@ -145,13 +145,14 @@ describe("visit formatting and customer exports", () => {
       }),
     ).not.toContain("<img");
   });
-  it.each([1, 2, 3])(
+  it.each([1, 2])(
     "keeps LinkedIn %i plain in storage, preview and both copy formats",
     (number) => {
       const messages = finishText(
         {
           ...input,
-          source: input.source.replace("Email 1", `LinkedIn ${number}`),
+          trip2: input.trip1,
+          source: input.source.replace("Email 1", `LinkedIn Message ${number}`),
         },
         now,
       ).messages;
