@@ -40,6 +40,8 @@ The finisher preserves this wording exactly; it does not reject or rewrite “So
 
 Use these exact scheduling placeholders. Put each availability placeholder alone on its own line, between the lead-in sentence and the meeting question:
 
+Every sequence requires TWO trips; there is no one-visit option. Enter at least one valid availability window for each trip before finishing. Trip 1 applies to Email 1, Email 2, LinkedIn Message 1 and Email 3. Trip 2 applies to Email 4, Email 5, LinkedIn Message 2 and Email 6. The Connection Request has no availability. Existing saved sequences remain accessible; finishing them again requires both visits.
+
 - `{{TRIP_1_DATES}}` / `{{TRIP_2_DATES}}` — the trip's date range, bold in email: **October 27–30**, **October 30–November 2**, or **October 27**. The first and last selected availability dates define the range. Cross-year ranges include both years.
 - `{{TRIP_1_AVAILABILITY}}` / `{{TRIP_2_AVAILABILITY}}` — a chronological bulleted list, one bold line per day including year and time zone. Multiple windows on a day are joined with "and". No semicolons or trailing periods.
 - `{{LOCATION}}` — city or visit area, when needed.

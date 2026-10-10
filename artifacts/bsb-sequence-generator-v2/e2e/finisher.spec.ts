@@ -1,3 +1,4 @@
+import { selectTwoTrips } from "./two-trip-helper";
 import { test, expect } from "@playwright/test";
 const asset = {
   id: "panel",
@@ -80,6 +81,7 @@ test("paste, finish, save, reopen and delete", async ({ page }) => {
   await page.getByLabel("First visit start date").fill("2026-11-10");
   await page.getByLabel("First visit end date").fill("2026-11-10");
   await page.getByRole("button", { name: "Morning", exact: true }).click();
+  await selectTwoTrips(page);
   await page
     .getByRole("button", { name: "Finish sequence", exact: true })
     .click();
@@ -128,6 +130,7 @@ test("tabs preserve drafts; changed dates cannot silently reuse an old result", 
   await expect(page.getByLabel("Company", { exact: true })).toHaveValue(
     "Astellas",
   );
+  await selectTwoTrips(page);
   await page
     .getByRole("button", { name: "Finish sequence", exact: true })
     .click();

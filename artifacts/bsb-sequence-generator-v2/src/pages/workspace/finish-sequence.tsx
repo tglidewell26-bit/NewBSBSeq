@@ -382,19 +382,19 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
           </select>
         </label>
         <p className="text-sm text-muted-foreground">
-          Only scheduling placeholders are replaced. Leave trips blank for
-          messages that do not use them.
+          Every sequence requires two trips. Add at least one availability
+          window to each visit. The Connection Request still has no availability.
         </p>
         {(["trip1", "trip2"] as const).map((key, i) => (
           <details
             key={`${editorKey}-${saved?.id ?? "new"}-${key}`}
-            open={i === 0}
+            open
             className="rounded-lg"
           >
             <summary className="cursor-pointer py-2 font-medium">
               {i === 0
-                ? "First visit / meeting availability"
-                : "Second visit (optional)"}
+                ? "First visit (required)"
+                : "Second visit (required)"}
               {input[key].length ? ` · ${input[key].length} time windows` : ""}
             </summary>
             <TripPicker
@@ -423,7 +423,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
         )}
         <Button
           size="lg"
-          disabled={locked || !input.company.trim() || !input.source.trim()}
+          disabled={locked || !input.company.trim() || !input.source.trim() || !input.trip1.length || !input.trip2.length}
           onClick={() => void finish()}
         >
           {busy ? (

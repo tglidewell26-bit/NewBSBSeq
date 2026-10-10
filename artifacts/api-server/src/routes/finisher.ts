@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
 import {
   saveFinishedSchema,
+  finishRequestSchema,
   type Resource,
   type SavedFinish,
   type FinishMessage,
@@ -151,7 +152,12 @@ router.post(
   wrap(async (req, res) => {
     let prepared;
     try {
-      prepared = finishText(req.body);
+      const parsed = finishRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues.map((issue) => issue.message).join(" ") });
+        return;
+      }
+      prepared = finishText(parsed.data);
     } catch (e) {
       res.status(400).json({
         error:
