@@ -153,12 +153,55 @@ export function unresolvedPlaceholders(messages: FinishMessage[]): string[] {
 export function customerText(messages: FinishMessage[]): string {
   return messages
     .map((m) =>
-      plainMessageText(
+      customerPlainText(
         `${m.title}\n${m.subject ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
       ),
     )
     .join("\n\n---\n\n");
 }
+
+/** Names are merge fields for the sending tool, not unfinished scheduling. */
+export function blockingPlaceholders(messages: FinishMessage[]): string[] {
+  return unresolvedPlaceholders(messages).filter(
+    (token) =>
+      !/^(?:firstname|lastname|fullname)$/i.test(
+        token.replace(/[{}\[\]\s_-]/g, ""),
+      ),
+  );
+}
+
+export const BRAND_LINKS: Record<string, string> = {
+  cosmx:
+    "https://brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/",
+  cellscape:
+    "https://brukerspatialbiology.com/products/cellscape-precise-spatial-proteomics/cellscape-psp-overview/",
+  geomx:
+    "https://brukerspatialbiology.com/products/geomx-digital-spatial-profiler/geomx-dsp-overview/",
+  "bruker spatial biology": "https://brukerspatialbiology.com/",
+};
+
+/** Preserve supplied links and URLs; link every otherwise unlinked brand mention.
+ * Applied at display/export time so saved drafts and resource matching stay intact.
+ */
+export function linkBrands(text: string): string {
+  text = text.replace(
+    /\b(Bruker Spatial Biology|CosMx|CellScape|GeoMx) \((https?:\/\/[^\s)]+)\)/gi,
+    "[$1]($2)",
+  );
+  return text
+    .split(/(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<>]+)/g)
+    .map((part, index) =>
+      index % 2
+        ? part
+        : part.replace(
+            /\b(?:Bruker Spatial Biology|CosMx|CellScape|GeoMx)\b/gi,
+            (name) => `[${name}](${BRAND_LINKS[name.toLowerCase()]})`,
+          ),
+    )
+    .join("");
+}
+export const customerPlainText = (text: string) =>
+  plainMessageText(linkBrands(text));
 
 export const isLinkedIn = (message: Pick<FinishMessage, "title">) =>
   /^LinkedIn\s*\d+\b/i.test(message.title);
@@ -186,10 +229,13 @@ export function messageHtml(
   message: Pick<FinishMessage, "title" | "body">,
 ): string {
   if (isLinkedIn(message))
-    return `<div style="white-space:pre-wrap">${escapeHtml(plainMessageText(message.body))}</div>`;
+    return `<div style="white-space:pre-wrap">${escapeHtml(customerPlainText(message.body))}</div>`;
   const inline = (text: string) =>
-    escapeHtml(text)
-      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>')
+    escapeHtml(linkBrands(text))
+      .replace(
+        /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
+        '<a href="$2" style="color:#0563c1;text-decoration:underline">$1</a>',
+      )
       .replace(/\*\*([^\n]+?)\*\*/g, "<strong>$1</strong>");
   const output: string[] = [];
   let paragraph: string[] = [],
@@ -226,7 +272,7 @@ export function messageHtml(
 export function customerClipboard(messages: FinishMessage[], bodyOnly = false) {
   return {
     text: bodyOnly
-      ? plainMessageText(messages[0]?.body ?? "")
+      ? customerPlainText(messages[0]?.body ?? "")
       : customerText(messages),
     html: messages
       .map((m) =>

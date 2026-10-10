@@ -52,7 +52,7 @@ Subject: [The second subject]
 [Complete second email, with a distinct useful point.]
 ```
 
-Replace all illustrative square-bracketed text before using this example. Recipient placeholders such as `{{FIRST_NAME}}` remain editable in the finished messages; unresolved placeholders prevent accidental copying, but drafts can be saved.
+Replace all illustrative square-bracketed text before using this example. Recipient name placeholders such as `{{FIRST_NAME}}`, `{{first_name}}`, and `[First Name]` remain intact when copied for personalization in the sending tool. Missing scheduling or other unresolved placeholders still show a warning and block copying; drafts can be saved.
 
 For the second trip, use this layout (keep the question specific to the email):
 
@@ -68,7 +68,9 @@ The lead-in, availability list and question render as separate paragraphs/blocks
 - **Wednesday, October 28, 2026, 9 AM–11 AM and 2 PM–4 PM PDT**
 - **Friday, October 30, 2026, 10 AM–1 PM PDT**
 
-LinkedIn 1–3 (and other numbered LinkedIn headings) use plain "- " bullets and no bold. Copy supplies formatted HTML and a plain-text alternative for email clients; browsers without rich clipboard support fall back to plain text. Plain copy and .txt downloads contain "- " bullets with no ** markers. The editable message text retains Markdown for email, with a live formatted preview below it.
+LinkedIn 1–3 (and other numbered LinkedIn headings) use plain "- " bullets and no bold. Copy supplies formatted HTML and a plain-text alternative for email clients; browsers without rich clipboard support fall back to plain text. Plain copy and .txt downloads contain "- " bullets with no ** markers. Each message appears once as a formatted preview. Use **Edit message** to switch to editable text, then **Done editing** to return to the preview.
+
+Every unlinked mention of CosMx, CellScape, GeoMx, or Bruker Spatial Biology automatically links to its official product or company page in email previews and rich-text copy. Existing links are preserved. Plain-text exports and LinkedIn include the URL beside the name because plain text cannot embed a hyperlink. This applies to reopened History entries too, without changing saved wording or resource matching.
 
 Older handoffs with an availability placeholder inside a sentence retain the original inline, semicolon-separated output. Missing trips leave their date/availability placeholders unresolved and display the existing warning.
 

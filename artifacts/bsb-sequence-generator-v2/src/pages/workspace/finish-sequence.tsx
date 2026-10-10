@@ -14,6 +14,7 @@ import {
   customerText,
   messageHtml,
   unresolvedPlaceholders,
+  blockingPlaceholders,
   type FinishInput,
   type FinishMessage,
   type FinishResult,
@@ -63,6 +64,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
   dirtyRef.current = dirty;
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [editingMessages, setEditingMessages] = useState<string[]>([]);
   const revision = useRef(0);
   const trips = useQuery({
     queryKey: ["finisher-trips"],
@@ -134,7 +136,12 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
     setStatus("");
   };
   const stale = Boolean(result && finishedInput !== JSON.stringify(input));
-  const unresolved = result ? unresolvedPlaceholders(result.messages) : [];
+  const unresolved = result ? blockingPlaceholders(result.messages) : [];
+  const recipientFields = result
+    ? unresolvedPlaceholders(result.messages).filter(
+        (p) => !unresolved.includes(p),
+      )
+    : [];
   const resources = [
     ...(library.data ?? []),
     ...(result?.resources ?? []).filter(
@@ -466,6 +473,12 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
               {unresolved.join(", ")}. You can save an unfinished draft.
             </p>
           )}
+          {!!recipientFields.length && (
+            <p className="text-sm text-muted-foreground">
+              Recipient fields ({recipientFields.join(", ")}) are kept for your
+              sending tool. You can copy the sequence with these fields intact.
+            </p>
+          )}
           {!!missing.length && (
             <p role="alert">
               A previously selected resource is no longer in the Knowledge Base.
@@ -501,7 +514,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   variant="ghost"
                   size="sm"
                   disabled={
-                    locked || stale || !!unresolvedPlaceholders([m]).length
+                    locked || stale || !!blockingPlaceholders([m]).length
                   }
                   onClick={() => void copy([m], true)}
                 >
@@ -516,21 +529,41 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   onChange={(e) => edit(m.id, { subject: e.target.value })}
                 />
               </label>
-              <label className="block text-sm">
-                Message
-                <Textarea
-                  aria-label="Message"
-                  disabled={locked}
-                  className="min-h-52 mt-1 leading-relaxed"
-                  value={m.body}
-                  onChange={(e) => edit(m.id, { body: e.target.value })}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={locked}
+                onClick={() =>
+                  setEditingMessages((ids) =>
+                    ids.includes(m.id)
+                      ? ids.filter((id) => id !== m.id)
+                      : [...ids, m.id],
+                  )
+                }
+              >
+                {editingMessages.includes(m.id)
+                  ? "Done editing"
+                  : "Edit message"}
+              </Button>
+              {editingMessages.includes(m.id) && (
+                <label className="block text-sm">
+                  Message
+                  <Textarea
+                    aria-label="Message"
+                    disabled={locked}
+                    className="min-h-52 mt-1 leading-relaxed"
+                    value={m.body}
+                    onChange={(e) => edit(m.id, { body: e.target.value })}
+                  />
+                </label>
+              )}
+              {!editingMessages.includes(m.id) && (
+                <div
+                  aria-label={`${m.title} formatted preview`}
+                  className="rounded-md border p-4 text-sm leading-relaxed break-words"
+                  dangerouslySetInnerHTML={{ __html: messageHtml(m) }}
                 />
-              </label>
-              <div
-                aria-label={`${m.title} formatted preview`}
-                className="rounded-md border p-4 text-sm leading-relaxed break-words"
-                dangerouslySetInnerHTML={{ __html: messageHtml(m) }}
-              />
+              )}
               {m.resourceNote && (
                 <details className="text-sm text-muted-foreground">
                   <summary className="cursor-pointer">
