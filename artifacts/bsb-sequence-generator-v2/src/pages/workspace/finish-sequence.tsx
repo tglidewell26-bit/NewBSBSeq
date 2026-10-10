@@ -15,7 +15,9 @@ import {
   messageHtml,
   unresolvedPlaceholders,
   blockingPlaceholders,
-  isLinkedIn,
+  isConnectionRequest,
+  normalizeFirstName,
+  connectionText,
   messageTitle,
   type FinishInput,
   type FinishMessage,
@@ -152,6 +154,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
   ];
   const missing = library.isSuccess
     ? (result?.messages ?? [])
+        .filter((m) => !isConnectionRequest(m))
         .flatMap((m) => m.selectedAssetIds)
         .filter((id) => !library.data.some((a) => a.id === id))
     : [];
@@ -171,9 +174,11 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
       const value = await finishApi<FinishResult>("finish", "POST", input);
       value.messages = value.messages.map((m) => ({
         ...m,
-        selectedAssetIds: value.suggestions
-          .filter((s) => s.messageId === m.id)
-          .map((s) => s.assetId),
+        selectedAssetIds: isConnectionRequest(m)
+          ? []
+          : value.suggestions
+              .filter((s) => s.messageId === m.id)
+              .map((s) => s.assetId),
       }));
       setResult(value);
       setFinishedInput(JSON.stringify(input));
@@ -335,7 +340,8 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
           </summary>
           <p className="mt-2">
             Use Email 1–6, LinkedIn Connection Request, LinkedIn Message 1, and
-            LinkedIn Message 2 headings. Add Subject: only for emails. Use{" "}
+            LinkedIn Message 2 headings. Add Subject: for emails and LinkedIn
+            Messages, but not the Connection Request. Use {"{{first_name}}"} for Outreach. Use{" "}
             {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the visit sentence.
             Put {"{{TRIP_1_AVAILABILITY}}"} or
             {" {{TRIP_2_AVAILABILITY}}"} alone on the next line for a daily
@@ -526,12 +532,12 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   Copy message
                 </Button>
               </div>
-              {!isLinkedIn(m) && (
+              {!isConnectionRequest(m) && (
                 <label className="block text-sm">
                   Subject
                   <Input
                     disabled={locked}
-                    value={m.subject}
+                    value={normalizeFirstName(m.subject)}
                     onChange={(e) => edit(m.id, { subject: e.target.value })}
                   />
                 </label>
@@ -559,7 +565,11 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                     aria-label="Message"
                     disabled={locked}
                     className="min-h-52 mt-1 leading-relaxed"
-                    value={m.body}
+                    value={
+                      isConnectionRequest(m)
+                        ? connectionText(m.body)
+                        : normalizeFirstName(m.body)
+                    }
                     onChange={(e) => edit(m.id, { body: e.target.value })}
                   />
                 </label>
@@ -571,7 +581,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   dangerouslySetInnerHTML={{ __html: messageHtml(m) }}
                 />
               )}
-              {m.resourceNote && (
+              {m.resourceNote && !isConnectionRequest(m) && (
                 <details className="text-sm text-muted-foreground">
                   <summary className="cursor-pointer">
                     Resource guidance from ChatGPT (not copied)
@@ -579,130 +589,135 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   <p className="mt-2">{m.resourceNote}</p>
                 </details>
               )}
-              <div className="border-t pt-4 space-y-3">
-                <h4 className="font-medium">Images & attachments</h4>
-                <p className="text-sm text-muted-foreground">
-                  Suggestions can be direct matches, related resources, or a
-                  platform introduction. Select what helps; download files to
-                  attach them.
-                </p>
-                {[
-                  ...new Set([
-                    ...result.suggestions
-                      .filter((s) => s.messageId === m.id)
-                      .map((s) => s.assetId),
-                    ...m.selectedAssetIds,
-                  ]),
-                ].map((id) => {
-                  const asset = resources.find((a) => a.id === id);
-                  if (!asset)
+              {!isConnectionRequest(m) && (
+                <div className="border-t pt-4 space-y-3">
+                  <h4 className="font-medium">Images & attachments</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Suggestions can be direct matches, related resources, or a
+                    platform introduction. Select what helps; download files to
+                    attach them.
+                  </p>
+                  {[
+                    ...new Set([
+                      ...result.suggestions
+                        .filter((s) => s.messageId === m.id)
+                        .map((s) => s.assetId),
+                      ...m.selectedAssetIds,
+                    ]),
+                  ].map((id) => {
+                    const asset = resources.find((a) => a.id === id);
+                    if (!asset)
+                      return (
+                        <label key={id}>
+                          <input
+                            type="checkbox"
+                            checked
+                            onChange={() =>
+                              edit(m.id, {
+                                selectedAssetIds: m.selectedAssetIds.filter(
+                                  (x) => x !== id,
+                                ),
+                              })
+                            }
+                          />{" "}
+                          Removed resource — deselect
+                        </label>
+                      );
+                    const suggestion = result.suggestions.find(
+                      (s) => s.messageId === m.id && s.assetId === id,
+                    );
                     return (
-                      <label key={id}>
+                      <div
+                        key={id}
+                        className="rounded-lg border p-3 flex items-start gap-3"
+                      >
                         <input
+                          aria-label={`Use ${asset.displayName} for ${m.title}`}
+                          disabled={locked}
+                          className="mt-1"
                           type="checkbox"
-                          checked
-                          onChange={() =>
+                          checked={m.selectedAssetIds.includes(id)}
+                          onChange={(e) =>
                             edit(m.id, {
-                              selectedAssetIds: m.selectedAssetIds.filter(
-                                (x) => x !== id,
-                              ),
+                              selectedAssetIds: e.target.checked
+                                ? [...m.selectedAssetIds, id]
+                                : m.selectedAssetIds.filter((x) => x !== id),
                             })
                           }
-                        />{" "}
-                        Removed resource — deselect
-                      </label>
-                    );
-                  const suggestion = result.suggestions.find(
-                    (s) => s.messageId === m.id && s.assetId === id,
-                  );
-                  return (
-                    <div
-                      key={id}
-                      className="rounded-lg border p-3 flex items-start gap-3"
-                    >
-                      <input
-                        aria-label={`Use ${asset.displayName} for ${m.title}`}
-                        disabled={locked}
-                        className="mt-1"
-                        type="checkbox"
-                        checked={m.selectedAssetIds.includes(id)}
-                        onChange={(e) =>
-                          edit(m.id, {
-                            selectedAssetIds: e.target.checked
-                              ? [...m.selectedAssetIds, id]
-                              : m.selectedAssetIds.filter((x) => x !== id),
-                          })
-                        }
-                      />
-                      {asset.fileKind === "image" ? (
-                        <img
-                          className="h-20 w-24 rounded object-contain bg-muted"
-                          src={`/api/bsb-v2/assets/${encodeURIComponent(id)}/preview`}
-                          alt={asset.displayName}
                         />
-                      ) : (
-                        <FileText className="h-5 w-5 shrink-0" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium">{asset.displayName}</p>
-                        {suggestion && (
-                          <p className="text-sm text-muted-foreground">
-                            {suggestion.relevance} · {suggestion.reason}
-                          </p>
+                        {asset.fileKind === "image" ? (
+                          <img
+                            className="h-20 w-24 rounded object-contain bg-muted"
+                            src={`/api/bsb-v2/assets/${encodeURIComponent(id)}/preview`}
+                            alt={asset.displayName}
+                          />
+                        ) : (
+                          <FileText className="h-5 w-5 shrink-0" />
                         )}
-                        <a
-                          className="text-sm underline"
-                          href={
-                            asset.fileKind === "link"
-                              ? (asset.sourceUrl ?? undefined)
-                              : `/api/bsb-v2/assets/${encodeURIComponent(id)}/download`
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {asset.fileKind === "link"
-                            ? "Open resource"
-                            : "Download file"}
-                        </a>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium">{asset.displayName}</p>
+                          {suggestion && (
+                            <p className="text-sm text-muted-foreground">
+                              {suggestion.relevance} · {suggestion.reason}
+                            </p>
+                          )}
+                          <a
+                            className="text-sm underline"
+                            href={
+                              asset.fileKind === "link"
+                                ? (asset.sourceUrl ?? undefined)
+                                : `/api/bsb-v2/assets/${encodeURIComponent(id)}/download`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {asset.fileKind === "link"
+                              ? "Open resource"
+                              : "Download file"}
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                <label className="block text-sm">
-                  Choose another resource
-                  <select
-                    aria-label={`Add resource to ${m.title}`}
-                    disabled={locked}
-                    className="block w-full rounded-md border bg-background p-2 mt-1"
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value)
-                        edit(m.id, {
-                          selectedAssetIds: [
-                            ...new Set([...m.selectedAssetIds, e.target.value]),
-                          ],
-                        });
-                    }}
-                  >
-                    <option value="">Browse the Knowledge Base…</option>
-                    {(library.data ?? [])
-                      .filter((a) => !m.selectedAssetIds.includes(a.id))
-                      .map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.displayName} · {a.instrument} · {a.fileKind}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                {!resources.length && (
-                  <Link
-                    href="/workspace/knowledge"
-                    className="text-sm underline"
-                  >
-                    Add your first resource in Knowledge Base
-                  </Link>
-                )}
-              </div>
+                    );
+                  })}
+                  <label className="block text-sm">
+                    Choose another resource
+                    <select
+                      aria-label={`Add resource to ${m.title}`}
+                      disabled={locked}
+                      className="block w-full rounded-md border bg-background p-2 mt-1"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value)
+                          edit(m.id, {
+                            selectedAssetIds: [
+                              ...new Set([
+                                ...m.selectedAssetIds,
+                                e.target.value,
+                              ]),
+                            ],
+                          });
+                      }}
+                    >
+                      <option value="">Browse the Knowledge Base…</option>
+                      {(library.data ?? [])
+                        .filter((a) => !m.selectedAssetIds.includes(a.id))
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.displayName} · {a.instrument} · {a.fileKind}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  {!resources.length && (
+                    <Link
+                      href="/workspace/knowledge"
+                      className="text-sm underline"
+                    >
+                      Add your first resource in Knowledge Base
+                    </Link>
+                  )}
+                </div>
+              )}
             </article>
           ))}
         </section>

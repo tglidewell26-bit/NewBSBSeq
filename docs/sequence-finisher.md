@@ -26,9 +26,9 @@ LinkedIn Message 2
 Email 6
 ```
 
-Use `Subject:` on its own line for emails only. LinkedIn never has a Subject field. Older headings remain supported: `LinkedIn 1` maps to `LinkedIn Connection Request`, `LinkedIn 2` maps to `LinkedIn Message 1`, and `LinkedIn 3` maps to `LinkedIn Message 2`. The app preserves message order.
+Use `Subject:` on its own line for emails and LinkedIn Message 1 / LinkedIn Message 2. Only LinkedIn Connection Request has no Subject field. Older headings remain supported: `LinkedIn 1` maps to `LinkedIn Connection Request`, `LinkedIn 2` maps to `LinkedIn Message 1`, and `LinkedIn 3` maps to `LinkedIn Message 2`. The app preserves message order.
 
-LinkedIn Message 1 uses Trip 1 placeholders and LinkedIn Message 2 uses Trip 2 placeholders. The finisher normalizes any trip placeholders in those messages to the correct trip. The Connection Request has no visit dates or availability; do not include trip placeholders there. If mistakenly supplied, they remain unresolved with a warning instead of inserting availability or rewriting the surrounding sentence.
+LinkedIn Message 1 uses Trip 1 placeholders and LinkedIn Message 2 uses Trip 2 placeholders. The finisher normalizes any trip placeholders in those messages to the correct trip. The Connection Request is plain text with no hyperlinks, attachments, resource picker or resource suggestions. Product names are not auto-linked; supplied links are reduced to their text and bare URLs are removed. It has no visit dates or availability; do not include trip placeholders there. If mistakenly supplied, they remain unresolved with a warning instead of inserting availability or rewriting the surrounding sentence.
 
 Email 4 starts immediately after its greeting and paragraph break with this exact opening:
 
@@ -76,7 +76,7 @@ Subject: [The second subject]
 [Complete second email, with a distinct useful point.]
 ```
 
-Replace all illustrative square-bracketed text before using this example. Recipient name placeholders such as `{{FIRST_NAME}}`, `{{first_name}}`, and `[First Name]` remain intact when copied for personalization in the sending tool. Missing scheduling or other unresolved placeholders still show a warning and block copying; drafts can be saved.
+Replace all illustrative square-bracketed text before using this example. Always write `{{first_name}}` exactly for Outreach. Variants such as `{{FIRST_NAME}}`, `{{First_Name}}`, `{first_name}`, `{{ first_name }}` and `[First Name]` are normalized to `{{first_name}}` in display, copy and downloads and never block copying. Missing scheduling or other unresolved placeholders still show a warning and block copying; drafts can be saved.
 
 For the second trip, use this layout (keep the question specific to the email):
 
@@ -92,9 +92,9 @@ The lead-in, availability list and question render as separate paragraphs/blocks
 - **Wednesday, October 28, 2026, 9 AM–11 AM and 2 PM–4 PM PDT**
 - **Friday, October 30, 2026, 10 AM–1 PM PDT**
 
-LinkedIn 1–3 (and other numbered LinkedIn headings) use plain "- " bullets and no bold. Copy supplies formatted HTML and a plain-text alternative for email clients; browsers without rich clipboard support fall back to plain text. Plain copy and .txt downloads contain "- " bullets with no ** markers. Each message appears once as a formatted preview. Use **Edit message** to switch to editable text, then **Done editing** to return to the preview.
+LinkedIn Message 1 and LinkedIn Message 2 use the same rich formatting as emails: bold date ranges, bold daily bullets and real embedded product hyperlinks. Only the Connection Request stays plain text. Copy supplies formatted HTML and a plain-text alternative for email clients; browsers without rich clipboard support fall back to plain text. Plain copy and .txt downloads contain "- " bullets with no ** markers. Each message appears once as a formatted preview. Use **Edit message** to switch to editable text, then **Done editing** to return to the preview.
 
-Every unlinked mention of CosMx, CellScape, GeoMx, or Bruker Spatial Biology automatically links to its official product or company page in email previews and rich-text copy. Existing links are preserved. Plain-text exports and LinkedIn include the URL beside the name because plain text cannot embed a hyperlink. This applies to reopened History entries too, without changing saved wording or resource matching.
+Every unlinked mention of CosMx, CellScape, GeoMx, or Bruker Spatial Biology automatically links to its official product or company page in email previews and rich-text copy. Existing links are preserved. Plain-text exports include the URL beside the name because plain text cannot embed a hyperlink; Connection Requests omit links and URLs entirely. This applies to reopened History entries too, without changing saved wording or resource matching.
 
 Older handoffs with an availability placeholder inside a sentence retain the original inline, semicolon-separated output. Missing trips leave their date/availability placeholders unresolved and display the existing warning.
 

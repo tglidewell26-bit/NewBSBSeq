@@ -81,6 +81,7 @@ export function messageTitle(title: string): string {
 const headingPattern =
   /^(?:(?:Email|Message|Touch)\s*\d+\b|LinkedIn\s*(?:Connection\s+Request\b|Message\s*\d+\b|\d+\b))/i;
 export function parseSequence(source: string): FinishMessage[] {
+  source = normalizeFirstName(source);
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const messages: FinishMessage[] = [];
   const cleanHeading = (line: string) =>
@@ -124,7 +125,7 @@ export function parseSequence(source: string): FinishMessage[] {
         selectedAssetIds: [],
       };
     } else if (current && /^Subject\s*:/i.test(clean)) {
-      if (!isLinkedIn(current))
+      if (!isConnectionRequest(current))
         current.subject = clean.replace(/^Subject\s*:\s*/i, "");
     } else if (
       current &&
@@ -156,7 +157,9 @@ export function unresolvedPlaceholders(messages: FinishMessage[]): string[] {
     ...new Set(
       messages.flatMap(
         (m) =>
-          `${isLinkedIn(m) ? "" : m.subject}\n${m.body}`.match(
+          normalizeFirstName(
+            `${isConnectionRequest(m) ? "" : m.subject}\n${m.body}`,
+          ).match(
             /\{\{[^{}\n]+\}\}|\[(?:TRIP[^\]\n]*|VISIT[^\]\n]*|DATES?[^\]\n]*|TIMES?[^\]\n]*|LOCATION|FIRST[_ ]?NAME)\]/gi,
           ) ?? [],
       ),
@@ -166,8 +169,9 @@ export function unresolvedPlaceholders(messages: FinishMessage[]): string[] {
 export function customerText(messages: FinishMessage[]): string {
   return messages
     .map((m) =>
-      customerPlainText(
-        `${messageTitle(m.title)}\n${m.subject && !isLinkedIn(m) ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
+      messagePlainText(
+        m,
+        `${messageTitle(m.title)}\n${m.subject && !isConnectionRequest(m) ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
       ),
     )
     .join("\n\n---\n\n");
@@ -221,9 +225,30 @@ export const isLinkedIn = (message: Pick<FinishMessage, "title">) =>
     message.title,
   );
 
+export const isConnectionRequest = (message: Pick<FinishMessage, "title">) =>
+  messageTitle(message.title) === "LinkedIn Connection Request";
+export function normalizeFirstName(text: string): string {
+  return text.replace(
+    /\{\{\s*first[ _-]?name\s*\}\}|\{\s*first[ _-]?name\s*\}|\[\s*first[ _-]?name\s*\]/gi,
+    "{{first_name}}",
+  );
+}
+export function connectionText(text: string): string {
+  return plainMessageText(
+    text
+      .replace(/\[([^\]\n]+)\]\([^\s)]+\)/g, "$1")
+      .replace(/\(https?:\/\/[^\s)]+\)/gi, "")
+      .replace(/(?:https?:\/\/|www\.)[^\s<>]+/gi, ""),
+  )
+    .replace(/[ \t]+$/gm, "")
+    .trim();
+}
+const messagePlainText = (m: Pick<FinishMessage, "title">, text: string) =>
+  isConnectionRequest(m) ? connectionText(text) : customerPlainText(text);
+
 /** Plain clipboard/download output never exposes formatting markers. */
 export function plainMessageText(text: string): string {
-  return text
+  return normalizeFirstName(text)
     .replace(/\*\*/g, "")
     .replace(/^[ \t]*[•*-][ \t]+/gm, "- ")
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)");
@@ -243,10 +268,10 @@ const escapeHtml = (text: string) =>
 export function messageHtml(
   message: Pick<FinishMessage, "title" | "body">,
 ): string {
-  if (isLinkedIn(message))
-    return `<div style="white-space:pre-wrap">${escapeHtml(customerPlainText(message.body))}</div>`;
+  if (isConnectionRequest(message))
+    return `<div style="white-space:pre-wrap">${escapeHtml(connectionText(message.body))}</div>`;
   const inline = (text: string) =>
-    escapeHtml(linkBrands(text))
+    escapeHtml(linkBrands(normalizeFirstName(text)))
       .replace(
         /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
         '<a href="$2" style="color:#0563c1;text-decoration:underline">$1</a>',
@@ -287,7 +312,9 @@ export function messageHtml(
 export function customerClipboard(messages: FinishMessage[], bodyOnly = false) {
   return {
     text: bodyOnly
-      ? customerPlainText(messages[0]?.body ?? "")
+      ? messages[0]
+        ? messagePlainText(messages[0], messages[0].body)
+        : ""
       : customerText(messages),
     html: messages
       .map((m) =>
@@ -295,7 +322,7 @@ export function customerClipboard(messages: FinishMessage[], bodyOnly = false) {
           ...m,
           body: bodyOnly
             ? m.body
-            : `${messageTitle(m.title)}\n${m.subject && !isLinkedIn(m) ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
+            : `${messageTitle(m.title)}\n${m.subject && !isConnectionRequest(m) ? `Subject: ${m.subject}\n\n` : ""}${m.body}`,
         }),
       )
       .join("<hr>"),
