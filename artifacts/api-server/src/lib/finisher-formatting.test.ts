@@ -58,7 +58,7 @@ describe("visit formatting and customer exports", () => {
     expect(payload.html.match(/<a href=/g)).toHaveLength(5);
     expect(messages[0].body).toBe(body);
     expect(customerText(messages)).toContain(BRAND_LINKS.cosmx);
-    expect(messageHtml({ title: "LinkedIn 1", body })).toContain(
+    expect(messageHtml({ title: "LinkedIn Message 1", body })).toContain(
       BRAND_LINKS.cosmx,
     );
   });
@@ -146,7 +146,7 @@ describe("visit formatting and customer exports", () => {
     ).not.toContain("<img");
   });
   it.each([1, 2])(
-    "keeps LinkedIn %i plain in storage, preview and both copy formats",
+    "formats LinkedIn Message %i like email, with plain fallback",
     (number) => {
       const messages = finishText(
         {
@@ -156,12 +156,12 @@ describe("visit formatting and customer exports", () => {
         },
         now,
       ).messages;
-      expect(messages[0].body).not.toContain("**");
-      expect(messages[0].body).toContain("\n- Wednesday, October 28");
+      expect(messages[0].body).toContain("**");
+      expect(messages[0].body).toContain("\n- **Wednesday, October 28");
       const payload = customerClipboard(messages, true);
-      expect(payload.html).not.toMatch(/<strong>|<ul/);
-      expect(payload.html).toContain("- Wednesday, October 28");
-      expect(payload.text).toBe(messages[0].body);
+      expect(payload.html).toMatch(/<strong>|<ul/);
+      expect(payload.html).toContain("<li><strong>Wednesday, October 28");
+      expect(payload.text).toBe(messages[0].body.replaceAll("**", ""));
     },
   );
 });

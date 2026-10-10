@@ -70,8 +70,8 @@ test("formatted preview, rich copy, plain download and live edits", async ({
     "Tuesday, October 27, 2026, 1 PM–4 PM PDT",
   );
   const linkedIn = page.getByLabel("LinkedIn Message 1 formatted preview");
-  await expect(linkedIn.locator("strong")).toHaveCount(0);
-  await expect(linkedIn).toContainText("- Tuesday, October 27");
+  await expect(linkedIn.locator("strong")).toHaveCount(2);
+  await expect(linkedIn).toContainText("Tuesday, October 27");
   await page
     .getByRole("button", { name: "Copy message", exact: true })
     .first()
@@ -92,7 +92,7 @@ test("formatted preview, rich copy, plain download and live edits", async ({
     .click();
   await expect
     .poll(() => page.evaluate(() => (window as any).copied.html))
-    .not.toContain("<strong>");
+    .toContain("<strong>");
   await page
     .getByRole("button", { name: "Copy sequence", exact: true })
     .click();

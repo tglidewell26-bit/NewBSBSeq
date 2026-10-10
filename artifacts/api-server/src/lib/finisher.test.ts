@@ -71,7 +71,7 @@ describe("Sequence finishing", () => {
     );
     expect(unresolvedPlaceholders(result.messages)).toEqual([
       "{{TRIP_2_AVAILABILITY}}",
-      "{{FIRST_NAME}}",
+      "{{first_name}}",
     ]);
   });
   it("separates private resource notes even without numbered headings", () => {

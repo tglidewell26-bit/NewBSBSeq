@@ -5,7 +5,7 @@ import {
   customerText,
   customerClipboard,
   blockingPlaceholders,
-  isLinkedIn,
+  isConnectionRequest,
 } from "@workspace/api-zod/finisher";
 const titles = [
   "Email 1",
@@ -42,7 +42,7 @@ describe("new handoff headings", () => {
     messages.forEach((m, i) => {
       expect(m.body).toBe(`Hi {{first_name}},\n\nBody ${i}.`);
       expect(m.resourceNote).toBe(`note ${i}`);
-      expect(m.subject).toBe(isLinkedIn(m) ? "" : `Subject ${i}`);
+      expect(m.subject).toBe(isConnectionRequest(m) ? "" : `Subject ${i}`);
     });
   });
   it("maps old headings and omits old saved LinkedIn subjects from exports and warnings", () => {
@@ -75,7 +75,7 @@ describe("new handoff headings", () => {
     expect(result.messages[1].body).not.toContain("November");
     expect(result.messages[2].body).toContain("November 10");
     expect(result.messages[2].body).not.toContain("October");
-    expect(result.messages[1].body).toContain("- Tuesday");
+    expect(result.messages[1].body).toContain("- **Tuesday");
     expect(customerText(result.messages)).not.toContain("**");
   });
   it("does not insert availability into a connection request; flags an invalid handoff", () => {
