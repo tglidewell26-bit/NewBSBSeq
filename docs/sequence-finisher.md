@@ -12,7 +12,31 @@ ChatGPT researches the company, selects the instrument, and writes the outreach.
 
 After choosing the instrument and writing the sequence in Tim's voice, provide one clean copyable handoff using the following format. No JSON is required.
 
-Put the instrument recommendation above the messages. Label every message with a numbered heading such as `Email 1` or `LinkedIn 1`. Use `Subject:` on its own line for email subjects. Preserve the approved sequence order, number of touches, voice, and meeting-request wording.
+Put the instrument recommendation above the messages. Use these exact message headings in this order:
+
+```text
+Email 1
+Email 2
+LinkedIn Connection Request
+LinkedIn Message 1
+Email 3
+Email 4
+Email 5
+LinkedIn Message 2
+Email 6
+```
+
+Use `Subject:` on its own line for emails only. LinkedIn never has a Subject field. Older headings remain supported: `LinkedIn 1` maps to `LinkedIn Connection Request`, `LinkedIn 2` maps to `LinkedIn Message 1`, and `LinkedIn 3` maps to `LinkedIn Message 2`. The app preserves message order.
+
+LinkedIn Message 1 uses Trip 1 placeholders and LinkedIn Message 2 uses Trip 2 placeholders. The finisher normalizes any trip placeholders in those messages to the correct trip. The Connection Request has no visit dates or availability; do not include trip placeholders there. If mistakenly supplied, they remain unresolved with a warning instead of inserting availability or rewriting the surrounding sentence.
+
+Email 4 starts immediately after its greeting and paragraph break with this exact opening:
+
+```text
+Sorry I missed you last time. As a reminder, my name is Tim Glidewell and I am your Spatial Regional Account Manager with Bruker Spatial Biology.
+```
+
+The finisher preserves this wording exactly; it does not reject or rewrite “Sorry I missed you.” The existing Bruker Spatial Biology hyperlink is applied for display/copy without changing the words.
 
 Use these exact scheduling placeholders. Put each availability placeholder alone on its own line, between the lead-in sentence and the meeting question:
 

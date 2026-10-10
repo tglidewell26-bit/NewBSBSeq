@@ -15,6 +15,8 @@ import {
   messageHtml,
   unresolvedPlaceholders,
   blockingPlaceholders,
+  isLinkedIn,
+  messageTitle,
   type FinishInput,
   type FinishMessage,
   type FinishResult,
@@ -332,9 +334,10 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
             How ChatGPT should format the handoff
           </summary>
           <p className="mt-2">
-            Use Email 1, Email 2, or LinkedIn 1 headings. Add Subject: for
-            emails. Use {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the
-            visit sentence. Put {"{{TRIP_1_AVAILABILITY}}"} or
+            Use Email 1–6, LinkedIn Connection Request, LinkedIn Message 1, and
+            LinkedIn Message 2 headings. Add Subject: only for emails. Use{" "}
+            {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the visit sentence.
+            Put {"{{TRIP_1_AVAILABILITY}}"} or
             {" {{TRIP_2_AVAILABILITY}}"} alone on the next line for a daily
             list, followed by your meeting question. Use {"{{LOCATION}}"} and
             {"{{TIMEZONE}}"} where needed. Put optional resource guidance on one
@@ -509,7 +512,9 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
               className="rounded-xl border bg-card p-6 space-y-4"
             >
               <div className="flex justify-between items-center gap-3">
-                <h3 className="font-semibold text-lg">{m.title}</h3>
+                <h3 className="font-semibold text-lg">
+                  {messageTitle(m.title)}
+                </h3>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -521,14 +526,16 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
                   Copy message
                 </Button>
               </div>
-              <label className="block text-sm">
-                Subject
-                <Input
-                  disabled={locked}
-                  value={m.subject}
-                  onChange={(e) => edit(m.id, { subject: e.target.value })}
-                />
-              </label>
+              {!isLinkedIn(m) && (
+                <label className="block text-sm">
+                  Subject
+                  <Input
+                    disabled={locked}
+                    value={m.subject}
+                    onChange={(e) => edit(m.id, { subject: e.target.value })}
+                  />
+                </label>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -559,7 +566,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
               )}
               {!editingMessages.includes(m.id) && (
                 <div
-                  aria-label={`${m.title} formatted preview`}
+                  aria-label={`${messageTitle(m.title)} formatted preview`}
                   className="rounded-md border p-4 text-sm leading-relaxed break-words"
                   dangerouslySetInnerHTML={{ __html: messageHtml(m) }}
                 />

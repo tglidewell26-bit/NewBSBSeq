@@ -134,30 +134,48 @@ export function finishText(raw: unknown, now = new Date()) {
     LOCATION: input.location,
     TIMEZONE: input.timezone,
   };
-  const substitute = (text: string, block = false) => {
-    const expanded = block
-      ? text.replace(
-          /^[ \t]*\{\{\s*TRIP_([12])_AVAILABILITY\s*\}\}[ \t]*$/gm,
-          (original, trip) => {
-            const list = availability(
-              trip === "1" ? input.trip1 : input.trip2,
-              input.timezone,
-              true,
-            );
-            return list ? `\n${list}\n` : original;
-          },
-        )
-      : text;
+  const substitute = (text: string, block = false, allowTrip = true) => {
+    const expanded =
+      block && allowTrip
+        ? text.replace(
+            /^[ \t]*\{\{\s*TRIP_([12])_AVAILABILITY\s*\}\}[ \t]*$/gm,
+            (original, trip) => {
+              const list = availability(
+                trip === "1" ? input.trip1 : input.trip2,
+                input.timezone,
+                true,
+              );
+              return list ? `\n${list}\n` : original;
+            },
+          )
+        : text;
     return expanded
-      .replace(
-        /\{\{\s*([A-Z_0-9]+)\s*\}\}/g,
-        (original, key) => replacements[key] || original,
+      .replace(/\{\{\s*([A-Z_0-9]+)\s*\}\}/g, (original, key) =>
+        !allowTrip && key.startsWith("TRIP_")
+          ? original
+          : replacements[key] || original,
       )
       .trim();
   };
   const messages = parseSequence(input.source).map((m) => {
-    const subject = substitute(m.subject),
-      body = substitute(m.body, true);
+    const trip =
+      m.title === "LinkedIn Message 1"
+        ? 1
+        : m.title === "LinkedIn Message 2"
+          ? 2
+          : null;
+    const source = trip
+      ? m.body.replace(
+          /\{\{\s*TRIP_[12]_(DATES|AVAILABILITY)\s*\}\}/g,
+          `{{TRIP_${trip}_$1}}`,
+        )
+      : m.body;
+    const subject = isLinkedIn(m) ? "" : substitute(m.subject),
+      body = substitute(
+        source,
+        true,
+        m.title !== "LinkedIn Connection Request",
+      );
     return {
       ...m,
       subject: isLinkedIn(m) ? plainMessageText(subject) : subject,
@@ -167,6 +185,16 @@ export function finishText(raw: unknown, now = new Date()) {
   if (messages.length > 30)
     throw new Error("Paste up to 30 messages at a time.");
   const warnings: string[] = [];
+  if (
+    messages.some(
+      (m) =>
+        m.title === "LinkedIn Connection Request" &&
+        /\{\{\s*TRIP_/.test(m.body),
+    )
+  )
+    warnings.push(
+      "LinkedIn Connection Request does not use visit availability. Remove its trip placeholders; no dates were inserted.",
+    );
   const unresolved = unresolvedPlaceholders(messages);
   if (unresolved.length)
     warnings.push(
