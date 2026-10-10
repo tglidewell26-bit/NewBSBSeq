@@ -67,18 +67,21 @@ for (const legacy of [false, true]) {
       ).not.toContainText("https");
     }
     for (const title of ["LinkedIn Message 1", "LinkedIn Message 2"]) {
-      const article = page
-        .locator("article")
-        .filter({
-          has: page.getByRole("heading", { name: title, exact: true }),
-        });
+      const article = page.locator("article").filter({
+        has: page.getByRole("heading", { name: title, exact: true }),
+      });
       await expect(article.getByLabel("Subject", { exact: true })).toHaveValue(
         "An email subject",
       );
       await expect(
         article.getByLabel(`${title} formatted preview`).getByRole("link"),
       ).toHaveCount(2);
-      await expect(article.getByRole("combobox")).toHaveCount(1);
+      await expect(
+        article.getByText("Browse Knowledge Base images", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        article.getByText("Browse Knowledge Base documents", { exact: true }),
+      ).toBeVisible();
     }
     await expect(page.getByLabel("Email 1 formatted preview")).toContainText(
       "Hi {{first_name}}",
