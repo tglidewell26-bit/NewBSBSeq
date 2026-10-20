@@ -150,3 +150,44 @@ test("tabs preserve drafts; changed dates cannot silently reuse an old result", 
     ),
   ).toBe(true);
 });
+
+test("New Sequence saves the finished sequence and carries both trips forward", async ({
+  page,
+}) => {
+  const savedBodies: any[] = [];
+  await page.route("**/api/bsb-v2/finished", async (route) => {
+    if (route.request().method() === "POST") {
+      savedBodies.push(route.request().postDataJSON());
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/workspace");
+  await page.getByLabel("Company", { exact: true }).fill("Earli");
+  await page.getByLabel("Visit location", { exact: false }).fill("San Francisco");
+  await page.getByLabel("Sequence from ChatGPT", { exact: true }).fill("Email 1\nHi there.");
+  await page.getByLabel("Time zone").selectOption("America/Denver");
+  await selectTwoTrips(page);
+  await page.getByRole("button", { name: "Finish sequence", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save to History", exact: true })).toBeEnabled();
+
+  await page.getByRole("button", { name: "New sequence", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Previous sequence saved to History");
+  expect(savedBodies).toHaveLength(1);
+  expect(savedBodies[0].input).toMatchObject({
+    company: "Earli",
+    location: "San Francisco",
+    source: "Email 1\nHi there.",
+    timezone: "America/Denver",
+    trip1: [{ date: "2027-01-12", start: "10:00", end: "13:00" }],
+    trip2: [{ date: "2027-01-26", start: "10:00", end: "13:00" }],
+  });
+
+  await expect(page.getByLabel("Company", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Visit location", { exact: false })).toHaveValue("");
+  await expect(page.getByLabel("Sequence from ChatGPT", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Time zone")).toHaveValue("America/Denver");
+  await expect(page.getByLabel("First visit start date")).toHaveValue("2027-01-12");
+  await expect(page.getByLabel("Second visit start date")).toHaveValue("2027-01-26");
+});

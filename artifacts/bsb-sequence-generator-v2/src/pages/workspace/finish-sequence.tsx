@@ -193,8 +193,8 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
       setBusy(false);
     }
   }
-  async function save() {
-    if (!result || stale) return;
+  async function save(): Promise<boolean> {
+    if (!result || stale) return false;
     setBusy(true);
     setError("");
     setStatus("");
@@ -213,11 +213,60 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
       setDirty(false);
       setStatus("Saved to History.");
       void cache.invalidateQueries({ queryKey: ["finished-history"] });
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+  async function startNewSequence() {
+    if (locked) return;
+
+    let savedPrevious = false;
+    if (result && !stale && dirty) {
+      // Save the completed sequence (or its edits) before clearing the editor.
+      // If saving fails, keep the current sequence on screen so it can be retried.
+      if (!(await save())) return;
+      savedPrevious = true;
+    } else if (stale) {
+      if (
+        !window.confirm(
+          "The current sequence inputs changed after it was finished. Start a new sequence and discard those unfinished changes? The last saved sequence will remain unchanged.",
+        )
+      )
+        return;
+    } else if (!result && dirty) {
+      if (
+        !window.confirm(
+          "Start a new sequence and discard the unsaved name, location, and pasted text?",
+        )
+      )
+        return;
+    }
+
+    // Carry both visits and the timezone into the next sequence. The company,
+    // location, pasted source, finished output, and selected resources are new.
+    const nextInput = {
+      ...blank(),
+      timezone: input.timezone,
+      trip1: input.trip1.map((slot) => ({ ...slot })),
+      trip2: input.trip2.map((slot) => ({ ...slot })),
+    };
+    setEditorKey((k) => k + 1);
+    setInput(nextInput);
+    setResult(undefined);
+    setSaved(undefined);
+    setFinishedInput("");
+    setEditingMessages([]);
+    setDirty(false);
+    setError("");
+    setStatus(
+      savedPrevious
+        ? "Previous sequence saved to History. Both trips and the time zone were carried forward."
+        : "New sequence started. Both trips and the time zone were carried forward.",
+    );
   }
   async function copy(messages: FinishMessage[], bodyOnly = false) {
     try {
@@ -260,22 +309,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
         <Button
           variant="outline"
           disabled={locked}
-          onClick={() => {
-            if (
-              dirty &&
-              !window.confirm(
-                "Start a new sequence and discard unsaved changes?",
-              )
-            )
-              return;
-            setEditorKey((k) => k + 1);
-            setInput(blank());
-            setResult(undefined);
-            setSaved(undefined);
-            setDirty(false);
-            setError("");
-            setStatus("");
-          }}
+          onClick={() => void startNewSequence()}
         >
           New sequence
         </Button>
