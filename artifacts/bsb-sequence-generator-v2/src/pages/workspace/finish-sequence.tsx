@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Copy,
   Download,
@@ -57,6 +57,7 @@ const blank = (): FinishInput => ({
 });
 export default function FinishSequence({ savedId }: { savedId?: string }) {
   const cache = useQueryClient();
+  const [, navigate] = useLocation();
   const [input, setInput] = useState<FinishInput>(blank);
   const [result, setResult] = useState<FinishResult>();
   const [saved, setSaved] = useState<SavedFinish>();
@@ -267,6 +268,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
         ? "Previous sequence saved to History. Both trips and the time zone were carried forward."
         : "New sequence started. Both trips and the time zone were carried forward.",
     );
+    if (savedId) navigate("/workspace");
   }
   async function copy(messages: FinishMessage[], bodyOnly = false) {
     try {

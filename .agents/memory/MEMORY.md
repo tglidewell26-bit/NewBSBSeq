@@ -1,2 +1,3 @@
 - [Workflow secret restart](workflow-secret-restart.md) — restart artifact servers after secret changes so they pick up environment and rebuilt routes.
 - [Dependency links after sync](dependency-links-after-sync.md) — upstream manifest changes can leave workspace links stale; restore the frozen-lockfile installation before diagnosing imports.
+- [Repeat sequence entry](repeat-sequence-entry.md) — New Sequence should save completed work and reuse the same trips; only name, city, and pasted text should need re-entry.

@@ -190,4 +190,39 @@ test("New Sequence saves the finished sequence and carries both trips forward", 
   await expect(page.getByLabel("Time zone")).toHaveValue("America/Denver");
   await expect(page.getByLabel("First visit start date")).toHaveValue("2027-01-12");
   await expect(page.getByLabel("Second visit start date")).toHaveValue("2027-01-26");
+
+  await page.getByLabel("Company", { exact: true }).fill("Second account");
+  await page.getByLabel("Visit location", { exact: false }).fill("Palo Alto");
+  await page.getByLabel("Sequence from ChatGPT", { exact: true }).fill("Email 1\nA second draft.");
+  await page.getByRole("button", { name: "Finish sequence", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save to History", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "New sequence", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Previous sequence saved to History");
+  expect(savedBodies).toHaveLength(2);
+  expect(savedBodies[1].input.company).toBe("Second account");
+  expect(savedBodies[1].input.trip1).toEqual(savedBodies[0].input.trip1);
+  expect(savedBodies[1].input.trip2).toEqual(savedBodies[0].input.trip2);
+});
+
+test("New Sequence does not clear the editor if automatic saving fails", async ({
+  page,
+}) => {
+  await page.route("**/api/bsb-v2/finished", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({ status: 500, json: { error: "Could not save this sequence." } });
+    } else {
+      await route.fallback();
+    }
+  });
+  await page.goto("/workspace");
+  await page.getByLabel("Company", { exact: true }).fill("Keep this account");
+  await page.getByLabel("Sequence from ChatGPT", { exact: true }).fill("Email 1\nKeep this draft.");
+  await selectTwoTrips(page);
+  await page.getByRole("button", { name: "Finish sequence", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save to History", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "New sequence", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not save this sequence.");
+  await expect(page.getByLabel("Company", { exact: true })).toHaveValue("Keep this account");
+  await expect(page.getByRole("textbox", { name: "Sequence from ChatGPT", exact: true })).toHaveValue("Email 1\nKeep this draft.");
+  await expect(page.getByLabel("Email 1 formatted preview")).toBeVisible();
 });
