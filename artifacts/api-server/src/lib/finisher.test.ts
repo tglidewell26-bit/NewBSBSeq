@@ -9,6 +9,8 @@ import {
 import { finishText, fallbackSuggestions, suggestResources } from "./finisher";
 const input: FinishInput = {
   company: "Earli",
+  sequenceType: "company",
+  lastName: "",
   source:
     "Instrument: CellScape\n\n## Email 1\nSubject: A question\n\nHi Tim,\nCould immune profiling help? I’m in {{LOCATION}} on {{TRIP_1_AVAILABILITY}}.\nResource note: A related immune panel or instrument image would help.\n\n## Email 2\nSubject: Another idea\n\nNext visit: {{TRIP_2_AVAILABILITY}}.",
   location: "Palo Alto",

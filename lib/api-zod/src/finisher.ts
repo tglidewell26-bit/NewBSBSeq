@@ -7,6 +7,8 @@ export const slotSchema = z.object({
 });
 export const finishInputSchema = z.object({
   company: z.string().trim().min(1).max(200),
+  sequenceType: z.enum(["company", "researcher", "lab_core"]).default("company"),
+  lastName: z.string().trim().max(200).default(""),
   source: z.string().min(1).max(120000),
   timezone: z.string().max(100).default("America/Los_Angeles"),
   location: z.string().max(200).default(""),
@@ -16,6 +18,11 @@ export const finishInputSchema = z.object({
 export type FinishInput = z.infer<typeof finishInputSchema>;
 // Require both visits for new finishing requests, without invalidating saved history.
 export const finishRequestSchema = finishInputSchema.superRefine((input, ctx) => {
+  if (input.sequenceType === "researcher") {
+    if (!input.lastName) ctx.addIssue({ code: "custom", path: ["lastName"], message: "Enter the researcher’s last name." });
+    if (/\{\{?\s*first[ _-]?name\s*\}\}?|\[\s*first[ _-]?name\s*\]/i.test(input.source))
+      ctx.addIssue({ code: "custom", path: ["source"], message: "Individual researcher sequences cannot use a first-name placeholder. Use Dr. {{last_name}} or the researcher’s actual name." });
+  }
   for (const key of ["trip1", "trip2"] as const) {
     if (!input[key].length) ctx.addIssue({
       code: "custom", path: [key],

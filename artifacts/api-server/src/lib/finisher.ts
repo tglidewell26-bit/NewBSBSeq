@@ -133,6 +133,8 @@ export function finishText(raw: unknown, now = new Date()) {
     TRIP_2_DATES: tripDates(input.trip2) ? `**${tripDates(input.trip2)}**` : "",
     LOCATION: input.location,
     TIMEZONE: input.timezone,
+    LAB_OR_CORE_NAME: input.sequenceType === "lab_core" ? input.company : "",
+    LAST_NAME: input.sequenceType === "researcher" ? input.lastName : "",
   };
   const substitute = (text: string, block = false, allowTrip = true) => {
     const expanded =
@@ -150,11 +152,12 @@ export function finishText(raw: unknown, now = new Date()) {
           )
         : text;
     return expanded
-      .replace(/\{\{\s*([A-Z_0-9]+)\s*\}\}/g, (original, key) =>
-        !allowTrip && key.startsWith("TRIP_")
+      .replace(/\{\{\s*([A-Z_0-9]+)\s*\}\}/gi, (original, rawKey) => {
+        const key = rawKey.toUpperCase();
+        return !allowTrip && key.startsWith("TRIP_")
           ? original
-          : replacements[key] || original,
-      )
+          : replacements[key] || original;
+      })
       .trim();
   };
   const messages = parseSequence(input.source).map((m) => {

@@ -49,6 +49,8 @@ export async function finishApi<T>(
 }
 const blank = (): FinishInput => ({
   company: "",
+  sequenceType: "company",
+  lastName: "",
   source: "",
   location: "",
   timezone: "America/Los_Angeles",
@@ -336,14 +338,22 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
         <legend className="px-2 text-lg font-semibold">
           1. Paste from ChatGPT
         </legend>
+        <label className="block text-sm font-medium">
+          Sequence type
+          <select aria-label="Sequence type" className="block mt-1 rounded-md border p-2 bg-background w-full max-w-sm" value={input.sequenceType ?? "company"} onChange={(e) => update({ sequenceType: e.target.value as FinishInput["sequenceType"] })}>
+            <option value="company">Company</option>
+            <option value="researcher">Individual researcher</option>
+            <option value="lab_core">University lab or core</option>
+          </select>
+        </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium">
-            Company
+            {input.sequenceType === "researcher" ? "Researcher name (for History)" : input.sequenceType === "lab_core" ? "Lab or core name" : "Company"}
             <Input
               value={input.company}
               maxLength={200}
               onChange={(e) => update({ company: e.target.value })}
-              placeholder="e.g. Earli"
+              placeholder={input.sequenceType === "researcher" ? "e.g. Christina Curtis" : input.sequenceType === "lab_core" ? "e.g. Stanford Genomics Core" : "e.g. Earli"}
             />
           </label>
           <label className="text-sm font-medium">
@@ -359,6 +369,12 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
             />
           </label>
         </div>
+        {input.sequenceType === "researcher" && <label className="block text-sm font-medium max-w-sm">
+          Researcher last name
+          <Input value={input.lastName ?? ""} maxLength={200} onChange={(e) => update({ lastName: e.target.value })} placeholder="e.g. Curtis" />
+          <span className="text-muted-foreground">Replaces {"{{last_name}}"} in the sequence.</span>
+        </label>}
+        {input.sequenceType === "lab_core" && <p className="text-sm text-muted-foreground">The lab or core name above replaces {"{{LAB_OR_CORE_NAME}}"}. Recipient merge fields stay available for your sending tool.</p>}
         <label className="block text-sm font-medium">
           Sequence from ChatGPT
           <Textarea
@@ -378,8 +394,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
           <p className="mt-2">
             Use Email 1–6, LinkedIn Connection Request, LinkedIn Message 1, and
             LinkedIn Message 2 headings. Add Subject: for emails and LinkedIn
-            Messages, but not the Connection Request. Use {"{{first_name}}"} for
-            Outreach. Use {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the
+            Messages, but not the Connection Request. For individual researchers, use Dr. {"{{last_name}}"}; for company and lab/core outreach, recipient merge fields may be used. Use {"{{TRIP_1_DATES}}"} or {"{{TRIP_2_DATES}}"} in the
             visit sentence. Put {"{{TRIP_1_AVAILABILITY}}"} or
             {" {{TRIP_2_AVAILABILITY}}"} alone on the next line for a daily
             list, followed by your meeting question. Use {"{{LOCATION}}"} and
@@ -462,6 +477,7 @@ export default function FinishSequence({ savedId }: { savedId?: string }) {
           disabled={
             locked ||
             !input.company.trim() ||
+            (input.sequenceType === "researcher" && !(input.lastName ?? "").trim()) ||
             !input.source.trim() ||
             !input.trip1.length ||
             !input.trip2.length

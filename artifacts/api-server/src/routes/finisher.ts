@@ -4,6 +4,7 @@ import { pool } from "@workspace/db";
 import {
   saveFinishedSchema,
   finishRequestSchema,
+  finishInputSchema,
   type Resource,
   type SavedFinish,
   type FinishMessage,
@@ -56,6 +57,7 @@ async function resources(): Promise<Resource[]> {
 }
 const record = (r: any): SavedFinish => ({
   ...r.payload,
+  input: finishInputSchema.parse(r.payload.input),
   id: r.id,
   createdAt: new Date(r.created_at).toISOString(),
   updatedAt: new Date(r.updated_at).toISOString(),
@@ -106,6 +108,8 @@ function legacyRecord(row: any): SavedFinish {
     legacy: true,
     input: {
       company: row.company ?? row.authority?.companyName ?? "Earlier sequence",
+      sequenceType: "company",
+      lastName: "",
       source,
       timezone: settings.timezone ?? "America/Los_Angeles",
       location: "",

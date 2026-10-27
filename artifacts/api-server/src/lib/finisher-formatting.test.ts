@@ -18,6 +18,8 @@ const slot = (date: string, start = "13:00", end = "16:00") => ({
 const now = new Date("2026-10-08T18:00:00Z");
 const input: FinishInput = {
   company: "Earli",
+  sequenceType: "company",
+  lastName: "",
   location: "Palo Alto",
   timezone: "America/Los_Angeles",
   source:
